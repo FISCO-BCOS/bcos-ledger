@@ -30,3 +30,21 @@
 *.exe
 *.out
 *.app
+
+# ignore some directory
+build**
+deps
+deps/**
+
+# vs
+*.sln
+*.vcxproj*
+.vs/
+.vscode/
+
+# idea
+.idea
+cmake-build-debug/
+
+# macOS
+.DS_Store
