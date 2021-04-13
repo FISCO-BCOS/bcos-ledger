@@ -40,11 +40,11 @@ deps/**
 *.sln
 *.vcxproj*
 .vs/
-.vscode/
+.vscode/**
 
-# idea
+# jetbrain
 .idea
-cmake-build-debug/
+build/**
 
 # macOS
 .DS_Store
