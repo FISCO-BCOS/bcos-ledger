@@ -19,3 +19,7 @@
  */
 
 #include "Ledger.h"
+
+using namespace bcos;
+using namespace bcos::ledger;
+using namespace bcos::protocol;

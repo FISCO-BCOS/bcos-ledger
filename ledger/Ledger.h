@@ -17,13 +17,15 @@
  * @author: kyonRay
  * @date 2021-04-13
  */
+#pragma once
+#include <bcos-framework/interfaces/ledger/ledgerInterface.h>
 
-#ifndef BCOS_LEDGER_LEDGER_H
-#define BCOS_LEDGER_LEDGER_H
+namespace bcos
+{
+    namespace ledger
+    {
+        class Ledger: public LedgerInterface {
 
-class Ledger {
-
-};
-
-
-#endif //BCOS_LEDGER_LEDGER_H
+        };
+    } // namespace ledger
+} // namespace bcos
