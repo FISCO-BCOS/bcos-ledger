@@ -30,21 +30,3 @@
 *.exe
 *.out
 *.app
-
-# ignore some directory
-build**
-deps
-deps/**
-
-# vs
-*.sln
-*.vcxproj*
-.vs/
-.vscode/**
-
-# jetbrain
-.idea
-build/**
-
-# macOS
-.DS_Store
