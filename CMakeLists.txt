@@ -19,17 +19,17 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
-#include(FetchContent)
-#FetchContent_Declare(bcos-cmake-scripts
-#        GIT_REPOSITORY https://github.com/FISCO-BCOS/bcos-cmake-scripts.git
-#        GIT_TAG dev
-#        SOURCE_DIR bcos-cmake-scripts
-#        )
-#FetchContent_MakeAvailable(bcos-cmake-scripts)
+include(FetchContent)
+FetchContent_Declare(bcos-cmake-scripts
+        GIT_REPOSITORY https://github.com/FISCO-BCOS/bcos-cmake-scripts.git
+        GIT_TAG dev
+        SOURCE_DIR bcos-cmake-scripts
+        )
+FetchContent_MakeAvailable(bcos-cmake-scripts)
 
 # cmake settings
-set(BCOS_CMAKE_SCRIPTS "bcos-cmake-scripts")
-set(BCOS_CMAKE_SCRIPTS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${BCOS_CMAKE_SCRIPTS}" CACHE PATH "The path for the ${BCOS_CMAKE_SCRIPTS} subtree")
+set(BCOS_CMAKE_SCRIPTS "${CMAKE_BINARY_DIR}/bcos-cmake-scripts")
+set(BCOS_CMAKE_SCRIPTS_DIR "${CMAKE_BINARY_DIR}/bcos-cmake-scripts")
 set(BCOS_LEDGER_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake" CACHE PATH "The cmake path for the library")
 list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
 list(APPEND CMAKE_MODULE_PATH ${BCOS_LEDGER_CMAKE_DIR})
