@@ -18,8 +18,6 @@
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
 # cmake settings
-#set(BCOS_CMAKE_SCRIPTS "${CMAKE_BINARY_DIR}/bcos-cmake-scripts")
-#set(BCOS_CMAKE_SCRIPTS_DIR "${CMAKE_BINARY_DIR}/bcos-cmake-scripts")
 list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
 include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-ledger)
