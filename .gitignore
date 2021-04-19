@@ -46,5 +46,9 @@ deps/**
 .idea
 build/**
 
+# submodules
+test/bcos-test/**
+test/bcos-test/
+
 # macOS
 .DS_Store
