@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Ledger.cpp.cpp
+ * @file Ledger.cpp
  * @author: kyonRay
  * @date 2021-04-13
  */
@@ -23,3 +23,4 @@
 using namespace bcos;
 using namespace bcos::ledger;
 using namespace bcos::protocol;
+

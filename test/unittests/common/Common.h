@@ -13,31 +13,12 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Ledger.h
+ * @file Common.h
  * @author: kyonRay
- * @date 2021-04-13
+ * @date 2021-04-14
  */
-#pragma once
-#include <bcos-framework/interfaces/ledger/ledgerInterface.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
 
-#include "BlockCache.h"
-
-#include <utility>
-
-#define LEDGER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
-
-namespace bcos
-{
-namespace ledger
-{
-using namespace bcos;
-using namespace bcos::protocol;
-class Ledger: public LedgerInterface {
-public:
-    Ledger(){};
-
-};
-} // namespace ledger
-} // namespace bcos
+#include "MockBlock.h"
+#include "MockBlockFactory.h"
+#include "MockBlockHeader.h"
+#include "MockBlockHeaderFactory.h"

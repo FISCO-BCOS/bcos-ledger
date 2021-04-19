@@ -37,8 +37,8 @@ list(APPEND CMAKE_MODULE_PATH ${BCOS_LEDGER_CMAKE_DIR})
 # init hunter
 include(HunterGate)
 HunterGate(
-        URL "https://github.com/FISCO-BCOS/hunter/archive/1adbd8a1ddb8a84a018d1b7439d4a517a0aa6da3.tar.gz"
-        SHA1 "e725030439b26a6b997223b360e8d8c01d6c68c3"
+        URL "https://github.com/FISCO-BCOS/hunter/archive/4ba91e1dc10bd74cb757be4ea40d2b3657d808ac.tar.gz"
+        SHA1 "9d92a895063ce5f174593686c5f0b0f52377e39d"
 )
 
 project(bcos-ledger VERSION "3.0")
@@ -64,11 +64,13 @@ set(INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 # set library target name
 set(BCOS_LEDGER_TARGET "bcos-ledger")
+set(BCOS_EVENT_FILTER_TARGET "bcos-event-filter")
 
 # add subdirectories to build the libraries
 add_subdirectory(ledger)
+add_subdirectory(eventfilter)
 
-# test releated
+# test related
 if (TESTS)
     hunter_add_package(Boost COMPONENTS test)
     enable_testing()
@@ -93,5 +95,5 @@ include(BuildDocs)
 # for code coverage
 if (COVERAGE)
     include(Coverage)
-    config_coverage("'/usr*' '${CMAKE_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/bcos-test*'")
+    config_coverage("'/usr*' '${CMAKE_SOURCE_DIR}/test/bcos-test*'")
 endif ()
