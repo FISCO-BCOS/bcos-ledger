@@ -40,6 +40,7 @@ include(HunterGate)
 HunterGate(
         URL "https://${FETCH_URL_BASE}/FISCO-BCOS/hunter/archive/4ba91e1dc10bd74cb757be4ea40d2b3657d808ac.tar.gz"
         SHA1 "9d92a895063ce5f174593686c5f0b0f52377e39d"
+        FILEPATH "${CMAKE_SOURCE_DIR}/cmake/config.cmake"
 )
 
 project(bcos-ledger VERSION "3.0")

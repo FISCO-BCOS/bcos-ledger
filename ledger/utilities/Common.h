@@ -20,9 +20,10 @@
 #pragma once
 #include <tbb/concurrent_unordered_map.h>
 
+#define LEDGER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
+
 namespace bcos::ledger
 {
-
 using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 
@@ -54,10 +55,10 @@ static const std::string SYS_NUMBER_2_RECEIPTS = "_sys_number_2_receipts";
 struct SystemConfigRecordCache
 {
     std::string value;
-    BlockNumber enableNumber;
-    BlockNumber curBlockNum = -1;  // at which block gets the configuration value
+    bcos::protocol::BlockNumber enableNumber;
+    bcos::protocol::BlockNumber curBlockNum = -1;  // at which block gets the configuration value
     SystemConfigRecordCache(
-        std::string&& _value, BlockNumber const& _enableNumber, BlockNumber const& _num)
+        std::string&& _value, bcos::protocol::BlockNumber const& _enableNumber, bcos::protocol::BlockNumber const& _num)
       : value(_value), enableNumber(_enableNumber), curBlockNum(_num){};
 };
 

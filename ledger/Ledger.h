@@ -19,7 +19,7 @@
  */
 #pragma once
 #include "interfaces/ledger/ledgerInterface.h"
-#include "interfaces/storage/Table.h"
+#include "interfaces/storage/TableInterface.h"
 #include "libutilities/Common.h"
 #include "libutilities/ThreadPool.h"
 #include "utilities/BlockCache.h"
@@ -38,30 +38,29 @@ public:
         m_blockCache.setDestructorThread(m_destructorThread);
     };
     void asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
+        bcos::protocol::SignatureListPtr _signList,
         std::function<void(Error::Ptr)> _onCommitBlock) override;
-    void asyncGetTxByHash(const h256& _txHash,
+    void asyncGetTxByHash(const bcos::crypto::HashType& _txHash,
         std::function<void(Error::Ptr, bcos::protocol::Transaction::ConstPtr)> _onGetTx) override;
-    void asyncGetTransactionReceiptByHash(const h256& _txHash,
+    void asyncGetTransactionReceiptByHash(const bcos::crypto::HashType& _txHash,
         std::function<void(Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr)> _onGetTx)
         override;
-    void asyncGetTotalTransactionCount(std::function<void(
-            Error::Ptr, std::shared_ptr<std::pair<int64_t, bcos::protocol::BlockNumber>>)>
-            _callback) override;
-    void asyncGetTotalFailedTransactionCount(std::function<void(
-            Error::Ptr, std::shared_ptr<const std::pair<int64_t, bcos::protocol::BlockNumber>>)>
-            _callback) override;
-    void asyncGetTransactionReceiptProof(const bcos::protocol::Block::Ptr _block,
-        const uint64_t& _index,
+    void asyncPreStoreTxs(
+        const protocol::Blocks& _txsToStore, std::function<void(Error::Ptr)> _onTxsStored) override;
+    void asyncGetTotalTransactionCount(
+        std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)> _callback)
+        override;
+    void asyncGetTransactionReceiptProof(const crypto::HashType& _blockHash, const int64_t& _index,
         std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof) override;
-    void getTransactionProof(const bcos::protocol::Block::Ptr _block, const uint64_t& _index,
+    void getTransactionProof(const crypto::HashType& _blockHash, const int64_t& _index,
         std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof) override;
     void asyncGetTransactionProofByHash(
-        const h256& _txHash, std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof) override;
+        const bcos::crypto::HashType& _txHash, std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof) override;
     void asyncGetBlockNumber(
         std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock) override;
     void asyncGetBlockHashByNumber(bcos::protocol::BlockNumber number,
-        std::function<void(Error::Ptr, std::shared_ptr<const h256>)> _onGetBlock) override;
-    void asyncGetBlockByHash(const h256& _blockHash,
+        std::function<void(Error::Ptr, std::shared_ptr<const bcos::crypto::HashType>)> _onGetBlock) override;
+    void asyncGetBlockByHash(const bcos::crypto::HashType& _blockHash,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock) override;
     void asyncGetBlockByNumber(bcos::protocol::BlockNumber _blockNumber,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock) override;
@@ -72,7 +71,7 @@ public:
             Error::Ptr, std::shared_ptr<const std::pair<bcos::protocol::BlockHeader::Ptr,
                             bcos::protocol::SignatureListPtr>>)>
             _onGetBlock) override;
-    void asyncGetBlockHeaderByHash(const h256& _blockHash,
+    void asyncGetBlockHeaderByHash(const bcos::crypto::HashType& _blockHash,
         std::function<void(
             Error::Ptr, std::shared_ptr<const std::pair<bcos::protocol::BlockHeader::Ptr,
                             bcos::protocol::SignatureListPtr>>)>
@@ -91,8 +90,10 @@ private:
     bool buildGenesisBlock();
 
     /****** base block data getter ******/
-    bcos::protocol::Block::Ptr getBlock(bcos::protocol::BlockNumber _number);
-    bcos::protocol::Block::Ptr getBlock(h256 const& _blockHash);
+    bcos::protocol::Block::Ptr getBlock(bcos::protocol::BlockNumber const& _blockNumber);
+    bcos::protocol::Block::Ptr getBlock(bcos::crypto::HashType const& _blockHash, bcos::protocol::BlockNumber const& _blockNumber);
+    std::shared_ptr<bcos::crypto::HashType>  getBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber) const;
+    bcos::protocol::BlockNumber getBlockNumberByHash(bcos::crypto::HashType const& _hash);
     bcos::protocol::BlockNumber getLatestBlockNumber();
     bcos::protocol::BlockHeader::Ptr getBlockHeaderFromBlock(bcos::protocol::Block::Ptr _block);
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByReceipt(
@@ -110,9 +111,9 @@ private:
 
 
     /****** data writer ******/
-    void writeBytesToField(std::shared_ptr<bytes> _data, bcos::storage::Entry::Ptr _entry,
+    void writeBytesToField(std::shared_ptr<bytes> _data, bcos::storage::EntryInterface::Ptr _entry,
                            std::string const& _fieldName);
-    void writeBlockToField(bcos::protocol::Block const& _block, bcos::storage::Entry::Ptr _entry);
+    void writeBlockToField(bcos::protocol::Block const& _block, bcos::storage::EntryInterface::Ptr _entry);
     void writeNumber(const bcos::protocol::Block& _block,
                      bcos::storage::TableFactory::Ptr _tableFactory);
     void writeTotalTransactionCount(const bcos::protocol::Block& block,
@@ -130,6 +131,9 @@ private:
     /****** runtime cache ******/
     BlockCache m_blockCache;
     bcos::ThreadPool::Ptr m_destructorThread;
+
+    mutable SharedMutex m_blockNumberMutex;
+    bcos::protocol::BlockNumber m_blockNumber = -1;
 
     std::map<std::string, SystemConfigRecordCache> m_systemConfigRecord;
     mutable SharedMutex m_systemConfigMutex;
@@ -150,5 +154,8 @@ private:
     std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>> m_txsChild2ParentCache;
     mutable SharedMutex x_txsChild2ParentCache;
 
+    bcos::storage::TableFactory::Ptr m_tableFactory;
+
+    long long int getBlockNumberByHash();
 };
 } // namespace bcos
