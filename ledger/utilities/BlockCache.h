@@ -27,17 +27,13 @@
 
 #define LEDGER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
 
-namespace bcos
+namespace bcos::ledger
 {
-namespace ledger
-{
-using namespace bcos;
-using namespace bcos::protocol;
 class BlockCache{
 public:
     BlockCache() = default;
-    Block::Ptr add(Block::Ptr _block);
-    std::pair<Block::Ptr, h256>get(h256 const& _hash);
+    bcos::protocol::Block::Ptr add(const bcos::protocol::Block::Ptr& _block);
+    std::pair<bcos::protocol::Block::Ptr, bcos::crypto::HashType>get(bcos::crypto::HashType const& _hash);
     void setDestructorThread(ThreadPool::Ptr _destructorThread)
     {
         m_destructorThread = std::move(_destructorThread);
@@ -45,12 +41,11 @@ public:
 
 private:
     mutable boost::shared_mutex m_sharedMutex;
-    mutable std::map<h256, Block::Ptr> m_blockCacheMap;
-    mutable std::deque<h256> m_blockCacheFIFO;
+    mutable std::map<bcos::crypto::HashType, bcos::protocol::Block::Ptr> m_blockCacheMap;
+    mutable std::deque<bcos::crypto::HashType> m_blockCacheFIFO;
     const unsigned c_blockCacheMaxSize = 10;
     ThreadPool::Ptr m_destructorThread;
 };
-} // namespace ledger
 } // namespace bcos
 
 

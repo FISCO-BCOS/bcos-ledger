@@ -21,16 +21,16 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment ve
 
 set(FETCH_URL_BASE "github.com")
 include(FetchContent)
+
+set(BCOS_CMAKE_SCRIPTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts)
 FetchContent_Declare(bcos-cmake-scripts
         GIT_REPOSITORY https://${FETCH_URL_BASE}/FISCO-BCOS/bcos-cmake-scripts.git
         GIT_TAG dev
-        SOURCE_DIR bcos-cmake-scripts
+        SOURCE_DIR ${BCOS_CMAKE_SCRIPTS_DIR}
         )
 FetchContent_MakeAvailable(bcos-cmake-scripts)
 
 # cmake settings
-set(BCOS_CMAKE_SCRIPTS "${CMAKE_BINARY_DIR}/bcos-cmake-scripts")
-set(BCOS_CMAKE_SCRIPTS_DIR "${CMAKE_BINARY_DIR}/bcos-cmake-scripts")
 set(BCOS_LEDGER_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake" CACHE PATH "The cmake path for the library")
 list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
 list(APPEND CMAKE_MODULE_PATH ${BCOS_LEDGER_CMAKE_DIR})
@@ -38,7 +38,7 @@ list(APPEND CMAKE_MODULE_PATH ${BCOS_LEDGER_CMAKE_DIR})
 # init hunter
 include(HunterGate)
 HunterGate(
-        URL "https://github.com/FISCO-BCOS/hunter/archive/4ba91e1dc10bd74cb757be4ea40d2b3657d808ac.tar.gz"
+        URL "https://${FETCH_URL_BASE}/FISCO-BCOS/hunter/archive/4ba91e1dc10bd74cb757be4ea40d2b3657d808ac.tar.gz"
         SHA1 "9d92a895063ce5f174593686c5f0b0f52377e39d"
 )
 
@@ -56,8 +56,6 @@ include(CopyInclude)
 
 # install dependencies
 include(InstallBcosFrameworkDependencies)
-# install tbb dependency
-#hunter_add_package(tbb)
 
 include_directories(${CMAKE_INSTALL_INCLUDEDIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)

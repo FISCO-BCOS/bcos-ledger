@@ -23,9 +23,8 @@
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::ledger;
-using namespace std;
 
-Block::Ptr BlockCache::add(Block::Ptr _block)
+Block::Ptr BlockCache::add(const Block::Ptr& _block)
 {
     {
         WriteGuard guard(m_sharedMutex);
@@ -59,7 +58,7 @@ Block::Ptr BlockCache::add(Block::Ptr _block)
 
     }
 }
-std::pair<Block::Ptr, h256> BlockCache::get(const h256& _hash)
+std::pair<Block::Ptr, bcos::crypto::HashType> BlockCache::get(const bcos::crypto::HashType& _hash)
 {
     {
         ReadGuard guard(m_sharedMutex);
@@ -67,7 +66,7 @@ std::pair<Block::Ptr, h256> BlockCache::get(const h256& _hash)
         auto it = m_blockCacheMap.find(_hash);
         if (it == m_blockCacheMap.end())
         {
-            return std::make_pair(nullptr, h256(0));
+            return std::make_pair(nullptr, bcos::crypto::HashType(0));
         }
 
         return std::make_pair(it->second, _hash);
