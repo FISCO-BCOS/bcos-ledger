@@ -19,6 +19,7 @@
  */
 
 #include "BlockCache.h"
+#include "Common.h"
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -48,27 +49,27 @@ Block::Ptr BlockCache::add(const Block::Ptr& _block)
                 m_blockCacheFIFO.clear();
             }
         }
-        auto blockHash = _block->blockHeader()->hash();
+        auto blockNumber = _block->blockHeader()->number();
         auto block = _block;
-        m_blockCacheMap.insert(std::make_pair(blockHash, block));
+        m_blockCacheMap.insert(std::make_pair(blockNumber, block));
         // add hash index to the blockCache queue, use to remove first element when the cache is full
-        m_blockCacheFIFO.push_back(blockHash);
+        m_blockCacheFIFO.push_back(blockNumber);
 
         return block;
 
     }
 }
-std::pair<Block::Ptr, bcos::crypto::HashType> BlockCache::get(const bcos::crypto::HashType& _hash)
+std::pair<BlockNumber, Block::Ptr> BlockCache::get(const bcos::protocol::BlockNumber& _number)
 {
     {
         ReadGuard guard(m_sharedMutex);
 
-        auto it = m_blockCacheMap.find(_hash);
+        auto it = m_blockCacheMap.find(_number);
         if (it == m_blockCacheMap.end())
         {
-            return std::make_pair(nullptr, bcos::crypto::HashType(0));
+            return std::make_pair(-1, nullptr);
         }
 
-        return std::make_pair(it->second, _hash);
+        return std::make_pair(_number, it->second);
     }
 }

@@ -19,44 +19,38 @@
  */
 
 #pragma once
+#include "unittests/common/MockBlockHeaderFactory.h"
 #include <bcos-framework/libprotocol/Exceptions.h>
 #include <bcos-framework/libprotocol/protobuf/PBBlockHeaderFactory.h>
 #include <bcos-framework/libutilities/Common.h>
 #include <boost/test/unit_test.hpp>
-using namespace bcos;
-using namespace bcos::protocol;
-using namespace bcos::crypto;
 
-inline BlockHeader::Ptr fakeBlockHeader(
-    h256 const& _txsRoot, h256 const& _receiptRoot,h256 const& _stateRoot,
-    int64_t _number, u256 const& _gasUsed, int64_t _timestamp, bytes const& _extraData)
+inline bcos::protocol::BlockHeader::Ptr fakeBlockHeader(
+    bcos::crypto::HashType const& _txsRoot, bcos::crypto::HashType const& _receiptRoot,bcos::crypto::HashType const& _stateRoot,
+    int64_t _number, u256 const& _gasUsed, bytes const& _extraData)
 {
-    BlockHeaderFactory::Ptr blockHeaderFactory =
-        std::make_shared<MockBlockHeaderFactory>();
-    BlockHeader::Ptr blockHeader = blockHeaderFactory->createBlockHeader();
+    bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory =
+        std::make_shared<bcos::test::MockBlockHeaderFactory>();
+    bcos::protocol::BlockHeader::Ptr blockHeader = blockHeaderFactory->createBlockHeader();
     blockHeader->setTxsRoot(_txsRoot);
     blockHeader->setReceiptRoot(_receiptRoot);
     blockHeader->setStateRoot(_stateRoot);
     blockHeader->setNumber(_number);
     blockHeader->setGasUsed(_gasUsed);
-    blockHeader->setTimestamp(_timestamp);
     blockHeader->setExtraData(_extraData);
-    WeightListPtr weights = std::make_shared<WeightList>();
-    weights->push_back(0);
     return blockHeader;
 }
 
-inline BlockHeader::Ptr getBlockHeader()
+inline bcos::protocol::BlockHeader::Ptr getBlockHeader()
 {
-    auto txsRoot = h256(1);
-    auto receiptRoot = h256(2);
-    auto stateRoot = h256(3);
-    int64_t number = 12312312412;
+    auto txsRoot = bcos::crypto::HashType(1);
+    auto receiptRoot = bcos::crypto::HashType(2);
+    auto stateRoot = bcos::crypto::HashType(3);
+    bcos::protocol::BlockNumber number = 1231231;
     u256 gasUsed = 3453456346534;
-    int64_t timestamp = 9234234234;
     bytes extraData = stateRoot.asBytes();
 
     auto blockHeader =
-        fakeBlockHeader(txsRoot, receiptRoot, stateRoot, number, gasUsed, timestamp, extraData);
+        fakeBlockHeader(txsRoot, receiptRoot, stateRoot, number, gasUsed, extraData);
     return blockHeader;
 }

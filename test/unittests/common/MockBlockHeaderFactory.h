@@ -20,22 +20,21 @@
 
 #pragma once
 #include <bcos-framework/interfaces/protocol/BlockHeaderFactory.h>
-using namespace bcos;
-namespace bcos::protocol
+namespace bcos::test
 {
-class MockBlockHeaderFactory : public BlockHeaderFactory{
+class MockBlockHeaderFactory : public bcos::protocol::BlockHeaderFactory{
 public:
     using Ptr = std::shared_ptr<MockBlockHeaderFactory>;
     MockBlockHeaderFactory()= default;
     ~MockBlockHeaderFactory() override {}
-    BlockHeader::Ptr createBlockHeader() override {
+    bcos::protocol::BlockHeader::Ptr createBlockHeader() override {
         return std::make_shared<MockBlockHeader>();
     }
-    BlockHeader::Ptr createBlockHeader(const bytes& ) override
+    bcos::protocol::BlockHeader::Ptr createBlockHeader(const bytes& ) override
     {
         return bcos::protocol::BlockHeader::Ptr();
     }
-    BlockHeader::Ptr createBlockHeader(bytesConstRef ) override
+    bcos::protocol::BlockHeader::Ptr createBlockHeader(bytesConstRef ) override
     {
         return bcos::protocol::BlockHeader::Ptr();
     }

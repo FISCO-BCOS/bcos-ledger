@@ -19,26 +19,21 @@
  */
 
 #pragma once
-#include "unittests/common/Common.h"
 #include "unittests/common/MockBlockFactory.h"
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include "unittests/ledger/FakeBlockHeader.h"
+#include <bcos-framework/interfaces/protocol/BlockFactory.h>
+#include <unittests/common/MockBlockHeaderFactory.h>
 
-using namespace bcos;
-using namespace bcos::protocol;
-
-namespace bcos
-{
-namespace test
+namespace bcos::test
 {
 
-inline BlockFactory::Ptr createBlockFactory()
+inline bcos::protocol::BlockFactory::Ptr createBlockFactory()
 {
     auto blockHeaderFactory = std::make_shared<MockBlockHeaderFactory>();
     return std::make_shared<MockBlockFactory>(blockHeaderFactory);
 }
 
-inline Block::Ptr fakeBlock(BlockFactory::Ptr _blockFactory, size_t _txsHashNum, size_t _receiptsHashNum)
+inline bcos::protocol::Block::Ptr fakeBlock(bcos::protocol::BlockFactory::Ptr _blockFactory, size_t _txsHashNum, size_t _receiptsHashNum)
 {
     auto block = _blockFactory->createBlock();
     auto blockHeader = getBlockHeader();
@@ -60,5 +55,4 @@ inline Block::Ptr fakeBlock(BlockFactory::Ptr _blockFactory, size_t _txsHashNum,
 
 
 
-} // namespace test
 } // namespace bcos

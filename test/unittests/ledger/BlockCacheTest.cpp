@@ -18,9 +18,8 @@
  * @date 2021-04-14
  */
 
-#include "unittests/common/Common.h"
 #include "unittests/ledger/FakeBlock.h"
-#include <bcos-ledger/ledger/BlockCache.h>
+#include "bcos-ledger/ledger/utilities/BlockCache.h"
 #include <bcos-test/libutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
@@ -43,9 +42,9 @@ BOOST_AUTO_TEST_CASE(testBlockCacheAdd)
     auto block2 = fakeBlock(blockFactory, 10,10);
     auto block3 = fakeBlock(blockFactory, 10,10);
     _blockCache.add(block1);
-    auto block1_get = _blockCache.get(block1->blockHeader()->hash());
-    BOOST_CHECK_EQUAL(block1_get.second,block1->blockHeader()->hash());
-    BOOST_CHECK_EQUAL(block1_get.first->transactionsHashSize(),10);
+    auto block1_get = _blockCache.get(block1->blockHeader()->number());
+    BOOST_CHECK_EQUAL(block1_get.first,block1->blockHeader()->number());
+    BOOST_CHECK_EQUAL(block1_get.second->transactionsHashSize(),10);
 }
 }
 } // namespace test

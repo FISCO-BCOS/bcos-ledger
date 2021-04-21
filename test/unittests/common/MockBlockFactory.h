@@ -26,24 +26,23 @@
 #include <utility>
 #include "unittests/common/MockBlock.h"
 
-using namespace bcos;
-namespace bcos::protocol{
-class MockBlockFactory : public BlockFactory{
+namespace bcos::test{
+class MockBlockFactory : public bcos::protocol::BlockFactory{
 public:
     using Ptr = std::shared_ptr<MockBlockFactory>;
     MockBlockFactory() = default;
-    explicit MockBlockFactory(BlockHeaderFactory::Ptr _blockHeaderFactory) : BlockFactory(), m_blockHeaderFactory(std::move(_blockHeaderFactory))
+    explicit MockBlockFactory(bcos::protocol::BlockHeaderFactory::Ptr _blockHeaderFactory) : BlockFactory(), m_blockHeaderFactory(std::move(_blockHeaderFactory))
     {
         assert(m_blockHeaderFactory);
     }
     virtual ~MockBlockFactory() override {}
-    Block::Ptr createBlock() override {
-        return std::make_shared<MockBlock>();
+    bcos::protocol::Block::Ptr createBlock() override {
+        return std::make_shared<bcos::test::MockBlock>();
     }
-    Block::Ptr createBlock(const bytes& , bool , bool ) override { return Block::Ptr(); }
+    bcos::protocol::Block::Ptr createBlock(const bytes& , bool , bool ) override { return bcos::protocol::Block::Ptr(); }
 
 private:
-    BlockHeaderFactory::Ptr m_blockHeaderFactory;
+    bcos::protocol::BlockHeaderFactory::Ptr m_blockHeaderFactory;
 };
 
 } // namespace bcos::protocol

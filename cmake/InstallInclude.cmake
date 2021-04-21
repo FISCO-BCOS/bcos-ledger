@@ -5,3 +5,9 @@ install(
         DESTINATION "${DESTINATION_INCLUDE_DIR}"
         FILES_MATCHING PATTERN "*.h"
 )
+
+install(
+        DIRECTORY "eventfilter"
+        DESTINATION "${DESTINATION_INCLUDE_DIR}"
+        FILES_MATCHING PATTERN "*.h"
+)
