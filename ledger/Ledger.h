@@ -98,6 +98,8 @@ private:
     /****** base block data getter ******/
     bcos::protocol::Block::Ptr getBlock(bcos::protocol::BlockNumber const& _blockNumber, bcos::crypto::HashType const& _blockHash);
     bcos::protocol::Block::Ptr getBlock(bcos::crypto::HashType const& _blockHash);
+    bytesPointer getEncodeBlock(const bcos::protocol::BlockNumber& _blockNumber);
+    bytesPointer getEncodeBlock(const bcos::crypto::HashType& _blockHash);
     bcos::protocol::BlockNumber getBlockNumberByHash(bcos::crypto::HashType const& _hash);
     bcos::protocol::BlockNumber getLatestBlockNumber();
     bcos::protocol::BlockHeader::Ptr getBlockHeaderFromBlock(bcos::protocol::Block::Ptr _block);
@@ -118,7 +120,10 @@ private:
         return m_tableFactory;
     }
 
+    /****** u ******/
+
     bcos::protocol::Block::Ptr decodeBlock(bcos::storage::EntryInterface::ConstPtr _entry);
+    bool isBlockShouldCommit(bcos::protocol::BlockNumber const& _blockNumber);
 
 
     /****** data writer ******/

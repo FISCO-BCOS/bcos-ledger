@@ -53,6 +53,7 @@ void Ledger::getTransactionProof(const crypto::HashType& _blockHash, const int64
 void Ledger::asyncGetTransactionProofByHash(
     const bcos::crypto::HashType& _txHash, std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof)
 {}
+
 void Ledger::asyncGetBlockNumber(
     std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock)
 {
@@ -62,22 +63,82 @@ void Ledger::asyncGetBlockNumber(
         bcos::protocol::BlockNumber num = getLatestBlockNumber();
         UpgradeGuard l(ul);
         m_blockNumber = num;
+        if(num == -1){
+            // TODO: to add errorCode and message
+            auto error = std::make_shared<Error>(-1, "");
+            _onGetBlock(error, -1);
+        }
     }
     _onGetBlock(nullptr, m_blockNumber);
-    //TODO: Error
 }
 void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber number,
     std::function<void(Error::Ptr, std::shared_ptr<const bcos::crypto::HashType>)> _onGetBlock)
 {}
 void Ledger::asyncGetBlockByHash(
     const bcos::crypto::HashType& _blockHash, std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock)
-{}
+{
+    if(_blockHash == bcos::crypto::HashType(""))
+    {
+        // TODO: to add errorCode and message
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetBlock(error, nullptr);
+    }
+    auto block = getBlock(_blockHash);
+    if(block){
+        _onGetBlock(nullptr, block);
+    } else{
+        LEDGER_LOG(TRACE) << LOG_DESC("[#asyncGetBlockByHash]Can't find block, return nullptr")
+                              << LOG_KV("blockHash", _blockHash);
+
+        // TODO: to add errorCode and message
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetBlock(error, nullptr);
+    }
+}
 void Ledger::asyncGetBlockByNumber(bcos::protocol::BlockNumber _blockNumber,
     std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock)
-{}
+{
+    auto currentNum = getLatestBlockNumber();
+    if(_blockNumber > currentNum) {
+        // TODO: to add errorCode and message
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetBlock(error, nullptr);
+    }
+    auto block = getBlock(_blockNumber);
+    if(block){
+        _onGetBlock(nullptr, block);
+    } else{
+        LEDGER_LOG(TRACE) << LOG_DESC("[#asyncGetBlockByNumber]Can't find block, return nullptr")
+                          << LOG_KV("blockNumber", _blockNumber);
+
+        // TODO: to add errorCode and message
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetBlock(error, nullptr);
+    }
+}
 void Ledger::asyncGetBlockEncodedByNumber(bcos::protocol::BlockNumber _blockNumber,
     std::function<void(Error::Ptr, std::shared_ptr<const bytes>)> _onGetBlock)
-{}
+{
+    if (_blockNumber > getLatestBlockNumber())
+    {
+        // TODO: to add errorCode and message
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetBlock(error, nullptr);
+    }
+    auto block = getEncodeBlock(_blockNumber);
+    if (bool(block))
+    {
+        _onGetBlock(nullptr, block);
+    }
+    else
+    {
+        LEDGER_LOG(TRACE) << LOG_DESC("[#asyncGetBlockEncodedByNumber]Can't find block, return nullptr");
+
+        // TODO: to add errorCode and message
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetBlock(error, nullptr);
+    }
+}
 void Ledger::asyncGetBlockHeaderByNumber(bcos::protocol::BlockNumber _blockNumber,
     std::function<void(Error::Ptr, std::shared_ptr<const std::pair<bcos::protocol::BlockHeader::Ptr,
                                        bcos::protocol::SignatureListPtr>>)>
@@ -176,6 +237,74 @@ Block::Ptr Ledger::getBlock(const bcos::crypto::HashType& _blockHash)
     return nullptr;
 }
 
+bytesPointer Ledger::getEncodeBlock(const HashType& _blockHash)
+{
+    if(!_blockHash || _blockHash == HashType("")){
+        return nullptr;
+    }
+    TableInterface::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_NUMBER);
+    if(tb)
+    {
+        auto entry = tb->getRow(boost::lexical_cast<std::string>( _blockHash));
+        auto blockNumber = boost::lexical_cast<BlockNumber>(entry->getField(SYS_VALUE));
+        return getEncodeBlock(blockNumber);
+    }
+}
+bytesPointer Ledger::getEncodeBlock(const bcos::protocol::BlockNumber& _blockNumber)
+{
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+    auto cachedBlock = m_blockCache.get(_blockNumber);
+    auto getCache_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    if (_blockNumber > getLatestBlockNumber())
+    {
+        return nullptr;
+    }
+    if (bool(cachedBlock.first))
+    {
+        LEDGER_LOG(TRACE) << LOG_DESC("[#getEncodeBlock]Cache hit, read from cache");
+        std::shared_ptr<bytes> encodedBlock = std::make_shared<bytes>();
+        cachedBlock.second->encode(*encodedBlock);
+        LEDGER_LOG(DEBUG) << LOG_DESC("Get block from cache")
+                              << LOG_KV("getCacheTimeCost", getCache_time_cost)
+                              << LOG_KV("totalTimeCost", utcTime() - start_time);
+        return encodedBlock;
+    }
+    else
+    {
+        LEDGER_LOG(TRACE) << LOG_DESC("[#getEncodeBlock]Cache missed, read from storage");
+        TableInterface::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_BLOCK);
+        auto openTable_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+        if (tb)
+        {
+            auto entry = tb->getRow(boost::lexical_cast<std::string>(_blockNumber));
+            auto select_time_cost = utcTime() - record_time;
+            record_time = utcTime();
+            if (entry != nullptr)
+            {
+                record_time = utcTime();
+                auto encodedBlock = std::make_shared<bytes>(asBytes(entry->getField(SYS_VALUE)));
+
+                auto encode_time_cost = utcTime() - record_time;
+
+                LEDGER_LOG(DEBUG) << LOG_DESC("Get block RLP from db")
+                                      << LOG_KV("getCacheTimeCost", getCache_time_cost)
+                                      << LOG_KV("openTableTimeCost", openTable_time_cost)
+                                      << LOG_KV("getRowTimeCost", select_time_cost)
+                                      << LOG_KV("constructEncodeBytesTimeCost", encode_time_cost)
+                                      << LOG_KV("totalTimeCost", utcTime() - start_time);
+                return encodedBlock;
+            }
+        }
+
+        LEDGER_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the block")
+                              << LOG_KV("blockNumber", _blockNumber);
+        return nullptr;
+    }
+}
 bcos::protocol::BlockNumber Ledger::getBlockNumberByHash(bcos::crypto::HashType const& _hash)
 {
     BlockNumber number = -1;
@@ -190,7 +319,7 @@ bcos::protocol::BlockNumber Ledger::getBlockNumberByHash(bcos::crypto::HashType 
 
 BlockNumber Ledger::getLatestBlockNumber()
 {
-    BlockNumber num = 0;
+    BlockNumber num = -1;
     auto tb = m_tableFactory->openTable(SYS_CURRENT_STATE, false);
     if (tb)
     {
@@ -228,8 +357,8 @@ std::shared_ptr<Child2ParentMap> Ledger::getChild2ParentCache(SharedMutex& _mute
 }
 
 void Ledger::getMerkleProof(const bytes& _txHash,
-    const std::map<std::string, std::vector<std::string>>& parent2ChildList,
-    const Child2ParentMap& child2Parent,
+    std::map<std::string, std::vector<std::string>> const& parent2ChildList,
+    Child2ParentMap const& child2Parent,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof)
 {}
 
@@ -238,9 +367,23 @@ bcos::protocol::Block::Ptr Ledger::decodeBlock(bcos::storage::EntryInterface::Co
     Block::Ptr block = nullptr;
     auto _blockStr = _entry->getFieldConst(SYS_VALUE);
     block = m_blockFactory->createBlock(bytes((unsigned char*)_blockStr.data(),
-                                            (unsigned char*)(_blockStr.data()+_blockStr.size())) ,
+                                            (unsigned char*)(_blockStr.data() + _blockStr.size())) ,
         false, false);
     return block;
+}
+
+bool Ledger::isBlockShouldCommit(const BlockNumber& _blockNumber)
+{
+    auto number = getLatestBlockNumber();
+    if (_blockNumber != number + 1)
+    {
+        LEDGER_LOG(WARNING) << LOG_DESC(
+            "[#commitBlock]Commit fail due to incorrect block number")
+                                << LOG_KV("needNumber", number + 1)
+                                << LOG_KV("committedNumber", _blockNumber);
+        return false;
+    }
+    return true;
 }
 
 void Ledger::writeBlockToField(const Block::Ptr& _block, bcos::storage::EntryInterface::Ptr _entry)
