@@ -18,8 +18,8 @@
  * @date 2021-04-14
  */
 
+#include "bcos-ledger/ledger/utilities/FIFOCache.h"
 #include "unittests/ledger/FakeBlock.h"
-#include "bcos-ledger/ledger/utilities/BlockCache.h"
 #include <bcos-test/libutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
@@ -31,21 +31,20 @@ namespace bcos
 {
 namespace test
 {
-
-BOOST_FIXTURE_TEST_SUITE(BlockCacheTest, TestPromptFixture)
+BOOST_FIXTURE_TEST_SUITE(FIFOCacheTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(testBlockCacheAdd)
 {
-    BlockCache _blockCache;
+    FIFOCache<Block::Ptr, Block> _blockFIFOCache;
     auto blockFactory = createBlockFactory();
-    auto block1 = fakeBlock(blockFactory, 10,10);
-    auto block2 = fakeBlock(blockFactory, 10,10);
-    auto block3 = fakeBlock(blockFactory, 10,10);
-    _blockCache.add(block1);
-    auto block1_get = _blockCache.get(block1->blockHeader()->number());
-    BOOST_CHECK_EQUAL(block1_get.first,block1->blockHeader()->number());
-    BOOST_CHECK_EQUAL(block1_get.second->transactionsHashSize(),10);
+    auto block1 = fakeBlock(blockFactory, 10, 10);
+    auto block2 = fakeBlock(blockFactory, 10, 10);
+    auto block3 = fakeBlock(blockFactory, 10, 10);
+    _blockFIFOCache.add(block1->blockHeader()->number(), block1);
+    auto block1_get = _blockFIFOCache.get(block1->blockHeader()->number());
+    BOOST_CHECK_EQUAL(block1_get.first, block1->blockHeader()->number());
+    BOOST_CHECK_EQUAL(block1_get.second->transactionsHashSize(), 10);
 }
 }
-} // namespace test
-} // namespace bcos
+}  // namespace test
+}  // namespace bcos

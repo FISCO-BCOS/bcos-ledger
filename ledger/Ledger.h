@@ -19,13 +19,15 @@
  */
 #pragma once
 #include "interfaces/ledger/ledgerInterface.h"
-#include "interfaces/storage/TableInterface.h"
 #include "interfaces/protocol/BlockFactory.h"
+#include "interfaces/protocol/BlockHeaderFactory.h"
+#include "interfaces/storage/Common.h"
+#include "interfaces/storage/TableInterface.h"
 #include "libutilities/Common.h"
-#include "libutilities/ThreadPool.h"
 #include "libutilities/Exceptions.h"
-#include "utilities/BlockCache.h"
+#include "libutilities/ThreadPool.h"
 #include "utilities/Common.h"
+#include "utilities/FIFOCache.h"
 
 #include <utility>
 
@@ -37,11 +39,20 @@ DERIVE_BCOS_EXCEPTION(OpenSysTableFailed);
 
 class Ledger: public LedgerInterface {
 public:
-    Ledger(bcos::storage::TableFactory::Ptr _tableFactory, bcos::protocol::BlockFactory::Ptr _blockFactory)
-    : m_blockFactory(_blockFactory), m_tableFactory(_tableFactory)
+    Ledger(bcos::storage::TableFactoryInterface::Ptr _tableFactory,
+        bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::protocol::BlockHeaderFactory::Ptr _headerFactory)
+      : m_blockFactory(_blockFactory),
+        m_headerFactory(_headerFactory),
+        m_tableFactory(_tableFactory)
     {
-        m_destructorThread = std::make_shared<ThreadPool>("blockCache", 1);
-        m_blockCache.setDestructorThread(m_destructorThread);
+        assert(_blockFactory);
+        assert(_headerFactory);
+        assert(_tableFactory);
+        auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
+        m_blockCache.setDestructorThread(blockDestructorThread);
+        auto headerDestructorThread = std::make_shared<ThreadPool>("headerCache", 1);
+        m_blockHeaderCache.setDestructorThread(headerDestructorThread);
     };
     void asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
         bcos::protocol::SignatureListPtr _signList,
@@ -96,13 +107,20 @@ private:
     bool buildGenesisBlock();
 
     /****** base block data getter ******/
-    bcos::protocol::Block::Ptr getBlock(bcos::protocol::BlockNumber const& _blockNumber, bcos::crypto::HashType const& _blockHash);
+    bcos::protocol::Block::Ptr getFullBlock(bcos::protocol::BlockNumber const& _blockNumber);
+    bcos::protocol::Block::Ptr getBlock(bcos::protocol::BlockNumber const& _blockNumber);
     bcos::protocol::Block::Ptr getBlock(bcos::crypto::HashType const& _blockHash);
     bytesPointer getEncodeBlock(const bcos::protocol::BlockNumber& _blockNumber);
     bytesPointer getEncodeBlock(const bcos::crypto::HashType& _blockHash);
+
+    /****** block attribute getter ******/
     bcos::protocol::BlockNumber getBlockNumberByHash(bcos::crypto::HashType const& _hash);
     bcos::protocol::BlockNumber getLatestBlockNumber();
-    bcos::protocol::BlockHeader::Ptr getBlockHeaderFromBlock(bcos::protocol::Block::Ptr _block);
+    bcos::protocol::BlockNumber getNumberFromStorage();
+    bcos::protocol::BlockHeader::Ptr getBlockHeader(
+        const bcos::protocol::BlockNumber& _blockNumber);
+    bcos::protocol::BlockHeader::Ptr getBlockHeaderFromBlock(
+        const bcos::protocol::Block::Ptr& _block);
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByReceipt(
         std::shared_ptr<Parent2ChildListMap> _parent2ChildList, bcos::protocol::Block::Ptr _block);
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByTransaction(
@@ -116,41 +134,58 @@ private:
                         const Child2ParentMap& child2Parent,
                         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof);
 
-    inline std::shared_ptr<bcos::storage::TableFactory> getMemoryTableFactory(){
+    inline std::shared_ptr<bcos::storage::TableFactoryInterface> getMemoryTableFactory()
+    {
         return m_tableFactory;
     }
 
-    /****** u ******/
+    /****** base tx data getter ******/
+    bcos::protocol::TransactionsConstPtr getTxs(bcos::protocol::BlockNumber const& _blockNumber);
+    bcos::protocol::ReceiptsConstPtr getReceipts(bcos::protocol::BlockNumber const& _blockNumber);
 
-    bcos::protocol::Block::Ptr decodeBlock(bcos::storage::EntryInterface::ConstPtr _entry);
+    bcos::protocol::Block::Ptr decodeBlock(bcos::storage::Entry::ConstPtr _entry);
     bool isBlockShouldCommit(bcos::protocol::BlockNumber const& _blockNumber);
 
 
     /****** data writer ******/
-    void writeBytesToField(bcos::storage::EntryInterface::Ptr _entry, std::string const& _key, bytesConstRef _bytesValue);
-    void writeBlockToField(const bcos::protocol::Block::Ptr& _block, bcos::storage::EntryInterface::Ptr _entry);
+    void writeBytesToField(
+        bcos::storage::Entry::Ptr _entry, std::string const& _key, bytesConstRef _bytesValue);
+    void writeBlockToField(
+        const bcos::protocol::Block::Ptr& _block, bcos::storage::Entry::Ptr _entry);
     void writeNumber(const bcos::protocol::Block::Ptr& _block,
-                     bcos::storage::TableFactory::Ptr _tableFactory);
+        bcos::storage::TableFactoryInterface::Ptr _tableFactory);
     void writeTotalTransactionCount(const bcos::protocol::Block::Ptr& block,
-                                    bcos::storage::TableFactory::Ptr _tableFactory);
+        bcos::storage::TableFactoryInterface::Ptr _tableFactory);
     void writeTxToBlock(const bcos::protocol::Block::Ptr& block,
-                        bcos::storage::TableFactory::Ptr _tableFactory);
+        bcos::storage::TableFactoryInterface::Ptr _tableFactory);
     void writeHash2Number(const bcos::protocol::Block::Ptr& block,
-                          bcos::storage::TableFactory::Ptr _tableFactory);
-    void writeNumber2Block(
-        const bcos::protocol::Block::Ptr& block, bcos::storage::TableFactory::Ptr _tableFactory);
-    void writeNumber2BlockHeader(
-        const bcos::protocol::Block::Ptr& _block, bcos::storage::TableFactory::Ptr _tableFactory);
+        bcos::storage::TableFactoryInterface::Ptr _tableFactory);
+    // TODO: is it necessary?
+    void writeNumber2Block(const bcos::protocol::Block::Ptr& block,
+        bcos::storage::TableFactoryInterface::Ptr _tableFactory);
+    void writeNumber2BlockHeader(const bcos::protocol::Block::Ptr& _block,
+        bcos::storage::TableFactoryInterface::Ptr _tableFactory);
+    // transaction encoded in block
+    void writeNumber2Transactions(const bcos::protocol::Block::Ptr& _block,
+        const bcos::protocol::BlockNumber& _number,
+        bcos::storage::TableFactoryInterface::Ptr _tableFactory);
+    // receipts encoded in block
+    void writeNumber2Receipts(const bcos::protocol::Block::Ptr& _block,
+        const bcos::protocol::BlockNumber& _number,
+        bcos::storage::TableFactoryInterface::Ptr _tableFactory);
 
 
     /****** runtime cache ******/
-    BlockCache m_blockCache;
-    bcos::ThreadPool::Ptr m_destructorThread;
+    FIFOCache<bcos::protocol::Block::Ptr, bcos::protocol::Block> m_blockCache;
+    FIFOCache<bcos::protocol::BlockHeader::Ptr, bcos::protocol::BlockHeader> m_blockHeaderCache;
+    FIFOCache<bcos::protocol::TransactionsConstPtr, bcos::protocol::Transaction>
+        m_transactionsCache;
+    FIFOCache<bcos::protocol::ReceiptsConstPtr, bcos::protocol::TransactionReceipt> m_receiptCache;
 
     mutable SharedMutex m_blockNumberMutex;
     bcos::protocol::BlockNumber m_blockNumber = -1;
 
-    std::map<std::string, SystemConfigRecordCache> m_systemConfigRecord;
+    std::map<std::string, SystemConfigRecordCache> m_systemConfigRecordMap;
     mutable SharedMutex m_systemConfigMutex;
 
     std::pair<bcos::protocol::BlockNumber,
@@ -171,6 +206,7 @@ private:
 
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    bcos::storage::TableFactory::Ptr m_tableFactory;
+    bcos::protocol::BlockHeaderFactory::Ptr m_headerFactory;
+    bcos::storage::TableFactoryInterface::Ptr m_tableFactory;
 };
 } // namespace bcos

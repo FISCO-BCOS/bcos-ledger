@@ -37,6 +37,7 @@ static const std::string SYS_KEY_TOTAL_FAILED_TRANSACTION = "total_failed_transa
 static const std::string SYS_VALUE = "value";
 static const std::string SYS_SIG_LIST = "sigs";
 static const std::string SYS_KEY = "key";
+static const std::string SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_block_num";
 
 static const std::string SYS_TABLES = "_sys_tables_";
 static const std::string SYS_CONSENSUS = "_sys_consensus_";
@@ -57,8 +58,8 @@ struct SystemConfigRecordCache
     std::string value;
     bcos::protocol::BlockNumber enableNumber;
     bcos::protocol::BlockNumber curBlockNum = -1;  // at which block gets the configuration value
-    SystemConfigRecordCache(
-        std::string&& _value, bcos::protocol::BlockNumber const& _enableNumber, bcos::protocol::BlockNumber const& _num)
+    SystemConfigRecordCache(std::string& _value, bcos::protocol::BlockNumber const& _enableNumber,
+        bcos::protocol::BlockNumber const& _num)
       : value(_value), enableNumber(_enableNumber), curBlockNum(_num){};
 };
 
