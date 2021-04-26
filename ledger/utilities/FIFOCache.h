@@ -19,11 +19,12 @@
  */
 
 #pragma once
+#include "libutilities/ThreadPool.h"
 #include "Common.h"
 
 namespace bcos::ledger
 {
-template <class T, class T2>
+template <typename T, typename T2>
 class FIFOCache
 {
 public:
@@ -41,9 +42,9 @@ public:
 
                 m_CacheMap.erase(firstNumber);
                 // Destruct the block in m_destructorThread
-                // TODO
-                HolderForDestructor<T2> holder(std::move(removedItem));
-                m_destructorThread->enqueue(std::move(holder));
+                // FIXME: type Transaction/Receipts compiled error
+                // HolderForDestructor<T2> holder(std::move(removedItem));
+                // m_destructorThread->enqueue(std::move(holder));
 
                 // in case something unexcept error
                 if (m_CacheMap.size() > c_CacheMaxSize)

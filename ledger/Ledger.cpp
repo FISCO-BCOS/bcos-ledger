@@ -31,7 +31,81 @@ using namespace bcos::crypto;
 
 void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
                               bcos::protocol::SignatureListPtr _signList, std::function<void(Error::Ptr)> _onCommitBlock)
-{}
+{
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+    if (!isBlockShouldCommit(_blockNumber))
+    {
+        // TODO: add error code and msg
+        auto error = std::make_shared<Error>(-1, "error number");
+        _onCommitBlock(error);
+        return;
+    }
+    // TODO: check parentHash
+    auto parentHash = boost::lexical_cast<HashType>(getLatestBlockHash());
+
+//    try
+//    {
+//        auto before_write_time_cost = utcTime() - record_time;
+//        record_time = utcTime();
+//        {
+//            // TODO: commit lock
+//            // std::lock_guard<std::mutex> l(commitMutex);
+//            auto write_record_time = utcTime();
+//            tbb::parallel_invoke([this, block, context]() { writeHash2Number(*block, context); },
+//                                 [this, block, context]() { writeNumber(*block, context); },
+//                                 [this, block, context]() { writeTotalTransactionCount(*block, context); },
+//                                 [this, block, context]() { writeTxToBlock(*block, context); },
+//                                 [this, block, context]() { writeHash2BlockHeader(*block, context); });
+//
+//            auto write_table_time = utcTime() - write_record_time;
+//
+//            write_record_time = utcTime();
+//            try
+//            {
+//                context->dbCommit(*block);
+//            }
+//            catch (std::exception& e)
+//            {
+//                BLOCKCHAIN_LOG(ERROR)
+//                    << LOG_DESC("Commit Block failed")
+//                    << LOG_KV("number", block->blockHeader().number()) << LOG_KV("what", e.what());
+//                return CommitResult::ERROR_COMMITTING;
+//            }
+//            auto dbCommit_time_cost = utcTime() - write_record_time;
+//            write_record_time = utcTime();
+//            {
+//                WriteGuard ll(m_blockNumberMutex);
+//                m_blockNumber = block->blockHeader().number();
+//            }
+//            auto updateBlockNumber_time_cost = utcTime() - write_record_time;
+//            BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("Commit")
+//                                  << LOG_DESC("Commit block time record(write)")
+//                                  << LOG_KV("writeTableTime", write_table_time)
+//                                  << LOG_KV("dbCommitTimeCost", dbCommit_time_cost)
+//                                  << LOG_KV(
+//                                      "updateBlockNumberTimeCost", updateBlockNumber_time_cost);
+//        }
+//        auto writeBlock_time_cost = utcTime() - record_time;
+//        record_time = utcTime();
+//
+//        m_blockCache.add(block);
+//        auto addBlockCache_time_cost = utcTime() - record_time;
+//        record_time = utcTime();
+//        m_onReady(m_blockNumber);
+//        auto noteReady_time_cost = utcTime() - record_time;
+//
+//        BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Commit block time record")
+//                              << LOG_KV("beforeTimeCost", before_write_time_cost)
+//                              << LOG_KV("writeBlockTimeCost", writeBlock_time_cost)
+//                              << LOG_KV("addBlockCacheTimeCost", addBlockCache_time_cost)
+//                              << LOG_KV("noteReadyTimeCost", noteReady_time_cost)
+//                              << LOG_KV("totalTimeCost", utcTime() - start_time);
+//    }
+//    catch (Exception& exception){
+//
+//    }
+}
 void Ledger::asyncGetTransactionByHash(const bcos::crypto::HashType& _txHash,
     std::function<void(Error::Ptr, bcos::protocol::Transaction::ConstPtr)> _onGetTx)
 {
@@ -107,7 +181,7 @@ void Ledger::asyncGetTotalTransactionCount(
 void Ledger::asyncGetTransactionReceiptProof(const crypto::HashType& _blockHash,
                                              const int64_t& _index, std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof)
 {}
-void Ledger::getTransactionProof(const crypto::HashType& _blockHash, const int64_t& _index,
+void Ledger::asyncGetTransactionProof(const crypto::HashType& _blockHash, const int64_t& _index,
                                  std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof)
 {}
 void Ledger::asyncGetTransactionProofByHash(
@@ -175,7 +249,7 @@ void Ledger::asyncGetBlockByNumber(bcos::protocol::BlockNumber _blockNumber,
     }
 }
 void Ledger::asyncGetBlockEncodedByNumber(bcos::protocol::BlockNumber _blockNumber,
-    std::function<void(Error::Ptr, std::shared_ptr<const bytes>)> _onGetBlock)
+    std::function<void(Error::Ptr, bytesPointer)> _onGetBlock)
 {
     if (_blockNumber > getLatestBlockNumber())
     {
@@ -424,12 +498,13 @@ Block::Ptr Ledger::getBlock(BlockNumber const& _blockNumber)
 
         if (header && constTxs && constReceipts)
         {
-            auto txs = std::make_shared<Transactions>(*constTxs);
-            auto receipts = std::make_shared<Receipts>(*constReceipts);
             auto block = m_blockFactory->createBlock();
             block->setBlockHeader(header);
-            block->setTransactions(txs);
-            block->setReceipts(receipts);
+            if(constTxs->size() != blockTransactionListSetter(block, constTxs)
+                || constReceipts->size() != blockReceiptListSetter(block, constReceipts) ){
+                LEDGER_LOG(TRACE) << LOG_DESC("[#getBlock] insert block transaction and receipts error")
+                                  << LOG_KV("blockNumber", _blockNumber);
+            }
 
             auto assemble_block = utcTime() - record_time;
             record_time = utcTime();
@@ -488,65 +563,27 @@ bytesPointer Ledger::getEncodeBlock(const HashType& _blockHash)
     return nullptr;
 }
 
-// FIXME: drop main logic, use getBlock
 bytesPointer Ledger::getEncodeBlock(const bcos::protocol::BlockNumber& _blockNumber)
 {
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-    auto cachedBlock = m_blockCache.get(_blockNumber);
-    auto getCache_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
     if (_blockNumber > getLatestBlockNumber())
     {
         return nullptr;
     }
-    if (bool(cachedBlock.first))
-    {
-        LEDGER_LOG(TRACE) << LOG_DESC("[#getEncodeBlock]Cache hit, read from cache");
-        std::shared_ptr<bytes> encodedBlock = std::make_shared<bytes>();
-        cachedBlock.second->encode(*encodedBlock);
-        LEDGER_LOG(DEBUG) << LOG_DESC("Get block from cache")
-                              << LOG_KV("getCacheTimeCost", getCache_time_cost)
-                              << LOG_KV("totalTimeCost", utcTime() - start_time);
-        return encodedBlock;
+    auto block = getBlock(_blockNumber);
+    if(block){
+        auto blockBytes = std::make_shared<bytes>();
+        block->encode(*blockBytes);
+        return blockBytes;
     }
-    else
-    {
-        LEDGER_LOG(TRACE) << LOG_DESC("[#getEncodeBlock]Cache missed, read from storage");
-        TableInterface::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_BLOCK);
-        auto openTable_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-        if (tb)
-        {
-            auto entry = tb->getRow(boost::lexical_cast<std::string>(_blockNumber));
-            auto select_time_cost = utcTime() - record_time;
-            if (entry != nullptr)
-            {
-                record_time = utcTime();
-                auto encodedBlock = std::make_shared<bytes>(asBytes(entry->getField(SYS_VALUE)));
 
-                auto encode_time_cost = utcTime() - record_time;
-
-                LEDGER_LOG(DEBUG) << LOG_DESC("Get encoded block from db")
-                                  << LOG_KV("getCacheTimeCost", getCache_time_cost)
-                                  << LOG_KV("openTableTimeCost", openTable_time_cost)
-                                  << LOG_KV("getRowTimeCost", select_time_cost)
-                                  << LOG_KV("constructEncodeBytesTimeCost", encode_time_cost)
-                                  << LOG_KV("totalTimeCost", utcTime() - start_time);
-                return encodedBlock;
-            }
-        }
-
-        LEDGER_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the block")
-                              << LOG_KV("blockNumber", _blockNumber);
-        return nullptr;
-    }
+    LEDGER_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the block")
+                      << LOG_KV("blockNumber", _blockNumber);
+    return nullptr;
 }
 bcos::protocol::BlockNumber Ledger::getBlockNumberByHash(bcos::crypto::HashType const& _hash)
 {
     BlockNumber number = -1;
-    auto tb = m_tableFactory->openTable(SYS_HASH_2_NUMBER);
+    auto tb = getMemoryTableFactory()->openTable(SYS_HASH_2_NUMBER);
     if (tb)
     {
         auto entry = tb->getRow(boost::lexical_cast<std::string>(_hash));
@@ -570,7 +607,7 @@ BlockNumber Ledger::getLatestBlockNumber()
 BlockNumber Ledger::getNumberFromStorage()
 {
     BlockNumber num = -1;
-    auto tb = m_tableFactory->openTable(SYS_CURRENT_STATE);
+    auto tb = getMemoryTableFactory()->openTable(SYS_CURRENT_STATE);
     if (tb)
     {
         auto entry = tb->getRow(SYS_KEY_CURRENT_NUMBER);
@@ -580,6 +617,28 @@ BlockNumber Ledger::getNumberFromStorage()
     return num;
 }
 
+std::string Ledger::getLatestBlockHash(){
+    UpgradableGuard ul(m_blockHashMutex);
+    if(m_blockHash.empty())
+    {
+        auto hashStr = getHashFromStorage();
+        UpgradeGuard l(ul);
+        m_blockHash = hashStr;
+    }
+    return m_blockHash;
+}
+
+std::string Ledger::getHashFromStorage()
+{
+    std::string hash = "";
+    auto table = getMemoryTableFactory()->openTable(SYS_CURRENT_STATE);
+    if(table)
+    {
+        auto entry = table->getRow(SYS_KEY_CURRENT_HASH);
+        hash = entry->getField(SYS_VALUE);
+    }
+    return hash;
+}
 
 BlockHeader::Ptr Ledger::getBlockHeader(const bcos::protocol::BlockNumber& _blockNumber)
 {
@@ -594,8 +653,7 @@ BlockHeader::Ptr Ledger::getBlockHeader(const bcos::protocol::BlockNumber& _bloc
     auto getCache_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    if (bool(cachedBlock.second) && cachedBlock.second->transactions() &&
-        !cachedBlock.second->transactions()->empty())
+    if (bool(cachedBlock.second) && bool( cachedBlock.second->blockHeader()))
     {
         LEDGER_LOG(TRACE) << LOG_DESC("[#getBlockHeader]CacheBlock hit, read from cache")
                           << LOG_KV("blockNumber", _blockNumber);
@@ -649,16 +707,6 @@ BlockHeader::Ptr Ledger::getBlockHeader(const bcos::protocol::BlockNumber& _bloc
     }
 }
 
-
-BlockHeader::Ptr Ledger::getBlockHeaderFromBlock(const Block::Ptr& _block)
-{
-    //TODO: check this return
-    if (!_block)
-    {
-        return nullptr;
-    }
-    return _block->blockHeader();
-}
 std::shared_ptr<Child2ParentMap> Ledger::getChild2ParentCacheByReceipt(
     std::shared_ptr<Parent2ChildListMap> _parent2ChildList, Block::Ptr _block)
 {
@@ -682,7 +730,7 @@ void Ledger::getMerkleProof(const bytes& _txHash,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof)
 {}
 
-bcos::protocol::TransactionsConstPtr Ledger::getTxs(bcos::protocol::BlockNumber const& _blockNumber)
+bcos::protocol::TransactionsPtr Ledger::getTxs(bcos::protocol::BlockNumber const& _blockNumber)
 {
     if (_blockNumber > getLatestBlockNumber())
     {
@@ -695,12 +743,11 @@ bcos::protocol::TransactionsConstPtr Ledger::getTxs(bcos::protocol::BlockNumber 
     auto getCache_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    if (bool(cachedBlock.second) && cachedBlock.second->transactions() &&
-        !cachedBlock.second->transactions()->empty())
+    if (bool(cachedBlock.second) && cachedBlock.second->transactionsSize() != 0)
     {
         LEDGER_LOG(TRACE) << LOG_DESC("[#getTxs]CacheBlock hit, read from cache")
                           << LOG_KV("blockNumber", _blockNumber);
-        return cachedBlock.second->transactions();
+        return  blockTransactionListGetter(cachedBlock.second);
     }
     else if (bool(cachedTransactions.second))
     {
@@ -723,7 +770,7 @@ bcos::protocol::TransactionsConstPtr Ledger::getTxs(bcos::protocol::BlockNumber 
             {
                 record_time = utcTime();
                 auto block = decodeBlock(entry);
-                auto constTxs = block->transactions();
+                auto constTxs = blockTransactionListGetter(block);
                 auto decode_txs_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
@@ -744,7 +791,7 @@ bcos::protocol::TransactionsConstPtr Ledger::getTxs(bcos::protocol::BlockNumber 
         return nullptr;
     }
 }
-bcos::protocol::ReceiptsConstPtr Ledger::getReceipts(
+bcos::protocol::ReceiptsPtr Ledger::getReceipts(
     bcos::protocol::BlockNumber const& _blockNumber)
 {
     if (_blockNumber > getLatestBlockNumber())
@@ -758,12 +805,11 @@ bcos::protocol::ReceiptsConstPtr Ledger::getReceipts(
     auto getCache_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    if (bool(cachedBlock.second) && cachedBlock.second->transactions() &&
-        !cachedBlock.second->transactions()->empty())
+    if (bool(cachedBlock.second) && cachedBlock.second->receiptsSize() != 0)
     {
         LEDGER_LOG(TRACE) << LOG_DESC("[#getReceipts]CacheBlock hit, read from cache")
                           << LOG_KV("blockNumber", _blockNumber);
-        return cachedBlock.second->receipts();
+        return blockReceiptListGetter( cachedBlock.second);
     }
     else if (bool(cachedReceipts.second))
     {
@@ -786,7 +832,7 @@ bcos::protocol::ReceiptsConstPtr Ledger::getReceipts(
             {
                 record_time = utcTime();
                 auto block = decodeBlock(entry);
-                auto constReceipts = block->receipts();
+                auto constReceipts = blockReceiptListGetter(block);
                 auto decode_receipts_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
@@ -873,7 +919,7 @@ void Ledger::writeTxToBlock(
 
     if (tb && tb_nonces)
     {
-        auto txs = block->transactions();
+        auto txs = blockTransactionListGetter(block);
         auto constructVector_time_cost = utcTime() - record_time;
         record_time = utcTime();
         auto blockNumberStr = boost::lexical_cast<std::string>(block->blockHeader()->number());
@@ -925,7 +971,6 @@ void Ledger::writeHash2Number(
     TableInterface::Ptr tb = _tableFactory->openTable(SYS_HASH_2_NUMBER);
     if (tb)
     {
-        // Entry::Ptr entry = std::make_shared<Entry>();
         auto entry = tb->newEntry();
         entry->setField(SYS_VALUE, boost::lexical_cast<std::string>(block->blockHeader()->number()));
         tb->setRow(block->blockHeader()->hash().hex(), entry);
@@ -985,7 +1030,7 @@ void Ledger::writeTotalTransactionCount(
         if (entry != nullptr)
         {
             auto currentCount = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
-            currentCount += block->transactions()->size();
+            currentCount += block->transactionsSize();
 
             auto updateEntry = tb->newEntry();
             updateEntry->setField(SYS_VALUE, boost::lexical_cast<std::string>(currentCount));
@@ -995,11 +1040,11 @@ void Ledger::writeTotalTransactionCount(
         else
         {
             auto insertEntry = tb->newEntry();
-            entry->setField(SYS_VALUE, boost::lexical_cast<std::string>(block->transactions()->size()));
+            entry->setField(SYS_VALUE, boost::lexical_cast<std::string>(block->transactionsSize()));
             // TODO: judge setRow result
             tb->setRow(SYS_KEY_TOTAL_TRANSACTION_COUNT, insertEntry);
         }
-        auto receipts = block->receipts();
+        auto receipts = blockReceiptListGetter(block);
         int64_t failedTransactions = 0;
         for (auto& receipt : *receipts)
         {

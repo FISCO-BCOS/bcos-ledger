@@ -18,7 +18,10 @@
  * @date 2021-04-13
  */
 #pragma once
+#include "interfaces/protocol/Block.h"
+#include "libutilities/ThreadPool.h"
 #include <tbb/concurrent_unordered_map.h>
+#include <map>
 
 #define LEDGER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
 
@@ -31,6 +34,7 @@ static const std::string ID_FIELD = "_id_";
 static const std::string NUM_FIELD = "_num_";
 static const std::string STATUS = "_status_";
 static const std::string SYS_KEY_CURRENT_NUMBER = "current_number";
+static const std::string SYS_KEY_CURRENT_HASH = "current_hash";
 static const std::string SYS_KEY_CURRENT_ID = "current_id";
 static const std::string SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
 static const std::string SYS_KEY_TOTAL_FAILED_TRANSACTION = "total_failed_transaction_count";
@@ -62,5 +66,63 @@ struct SystemConfigRecordCache
         bcos::protocol::BlockNumber const& _num)
       : value(_value), enableNumber(_enableNumber), curBlockNum(_num){};
 };
+
+protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr& _block)
+{
+    auto size = _block->transactionsSize();
+    if(size == 0){
+        LEDGER_LOG(DEBUG)<<LOG_DESC("Block transactions size is 0, return nullptr");
+        return nullptr;
+    }
+    auto txs = std::make_shared<std::vector<protocol::Transaction::Ptr>>();
+    for (size_t i = 0; i < size; ++i)
+    {
+        auto tx = std::const_pointer_cast<protocol::Transaction>(_block->transaction(i));
+        txs->emplace_back(tx);
+    }
+    return txs;
+}
+
+size_t blockTransactionListSetter(const protocol::Block::Ptr& _block, const protocol::TransactionsConstPtr& _txs){
+    auto size = _txs->size();
+    if(size == 0){
+        LEDGER_LOG(DEBUG)<<LOG_DESC("Block transactions size is 0");
+        return -1;
+    }
+    for (size_t i = 0; i < size; ++i)
+    {
+        _block->appendTransaction(_txs->at(i));
+    }
+    return _block->transactionsSize();
+}
+
+protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block)
+{
+    auto size = _block->receiptsSize();
+    if(size == 0){
+        LEDGER_LOG(DEBUG)<<LOG_DESC("Block receipts size is 0, return nullptr");
+        return nullptr;
+    }
+    auto receipts = std::make_shared<std::vector<protocol::TransactionReceipt::Ptr>>();
+    for (size_t i = 0; i < size; ++i)
+    {
+        auto receipt = std::const_pointer_cast<protocol::TransactionReceipt>(_block->receipt(i));
+        receipts->emplace_back(receipt);
+    }
+    return receipts;
+}
+
+size_t blockReceiptListSetter(const protocol::Block::Ptr& _block, const protocol::ReceiptsConstPtr& _receipts)
+{
+    auto size = _receipts->size();
+    if(size == 0){
+        LEDGER_LOG(DEBUG)<<LOG_DESC("Block receipts size is 0");
+        return -1;
+    }
+    for (size_t i =0; i<size; ++i){
+        _block->appendReceipt(_receipts->at(i));
+    }
+    return _block->receiptsSize();
+}
 
 } // namespace bcos

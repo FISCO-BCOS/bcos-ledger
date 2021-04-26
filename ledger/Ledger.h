@@ -18,11 +18,12 @@
  * @date 2021-04-13
  */
 #pragma once
-#include "interfaces/ledger/ledgerInterface.h"
+#include "interfaces/ledger/LedgerInterface.h"
 #include "interfaces/protocol/BlockFactory.h"
 #include "interfaces/protocol/BlockHeaderFactory.h"
 #include "interfaces/storage/Common.h"
-#include "interfaces/storage/TableInterface.h"
+#include "interfaces/storage/StorageInterface.h"
+#include "libtable/TableFactory.h"
 #include "libutilities/Common.h"
 #include "libutilities/Exceptions.h"
 #include "libutilities/ThreadPool.h"
@@ -50,9 +51,13 @@ public:
         assert(_headerFactory);
         assert(_tableFactory);
         auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
-        m_blockCache.setDestructorThread(blockDestructorThread);
         auto headerDestructorThread = std::make_shared<ThreadPool>("headerCache", 1);
+        auto txsDestructorThread = std::make_shared<ThreadPool>("txsCache", 1);
+        auto rcptDestructorThread = std::make_shared<ThreadPool>("receiptsCache", 1);
+        m_blockCache.setDestructorThread(blockDestructorThread);
         m_blockHeaderCache.setDestructorThread(headerDestructorThread);
+        m_transactionsCache.setDestructorThread(txsDestructorThread);
+        m_receiptCache.setDestructorThread(rcptDestructorThread);
     };
     void asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
         bcos::protocol::SignatureListPtr _signList,
@@ -69,7 +74,7 @@ public:
         override;
     void asyncGetTransactionReceiptProof(const crypto::HashType& _blockHash, const int64_t& _index,
         std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof) override;
-    void getTransactionProof(const crypto::HashType& _blockHash, const int64_t& _index,
+    void asyncGetTransactionProof(const crypto::HashType& _blockHash, const int64_t& _index,
         std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof) override;
     void asyncGetTransactionProofByHash(
         const bcos::crypto::HashType& _txHash, std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof) override;
@@ -82,7 +87,7 @@ public:
     void asyncGetBlockByNumber(bcos::protocol::BlockNumber _blockNumber,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock) override;
     void asyncGetBlockEncodedByNumber(bcos::protocol::BlockNumber _blockNumber,
-        std::function<void(Error::Ptr, std::shared_ptr<const bytes>)> _onGetBlock) override;
+        std::function<void(Error::Ptr, bytesPointer)> _onGetBlock) override;
     void asyncGetBlockHeaderByNumber(bcos::protocol::BlockNumber _blockNumber,
         std::function<void(
             Error::Ptr, std::shared_ptr<const std::pair<bcos::protocol::BlockHeader::Ptr,
@@ -117,10 +122,10 @@ private:
     bcos::protocol::BlockNumber getBlockNumberByHash(bcos::crypto::HashType const& _hash);
     bcos::protocol::BlockNumber getLatestBlockNumber();
     bcos::protocol::BlockNumber getNumberFromStorage();
+    std::string getLatestBlockHash();
+    std::string getHashFromStorage();
     bcos::protocol::BlockHeader::Ptr getBlockHeader(
         const bcos::protocol::BlockNumber& _blockNumber);
-    bcos::protocol::BlockHeader::Ptr getBlockHeaderFromBlock(
-        const bcos::protocol::Block::Ptr& _block);
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByReceipt(
         std::shared_ptr<Parent2ChildListMap> _parent2ChildList, bcos::protocol::Block::Ptr _block);
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByTransaction(
@@ -139,9 +144,13 @@ private:
         return m_tableFactory;
     }
 
+//    inline std::shared_ptr<bcos::storage::TableFactory> getMemoryTableFactory(){
+//        return
+//    }
+
     /****** base tx data getter ******/
-    bcos::protocol::TransactionsConstPtr getTxs(bcos::protocol::BlockNumber const& _blockNumber);
-    bcos::protocol::ReceiptsConstPtr getReceipts(bcos::protocol::BlockNumber const& _blockNumber);
+    bcos::protocol::TransactionsPtr getTxs(bcos::protocol::BlockNumber const& _blockNumber);
+    bcos::protocol::ReceiptsPtr getReceipts(bcos::protocol::BlockNumber const& _blockNumber);
 
     bcos::protocol::Block::Ptr decodeBlock(bcos::storage::Entry::ConstPtr _entry);
     bool isBlockShouldCommit(bcos::protocol::BlockNumber const& _blockNumber);
@@ -178,12 +187,15 @@ private:
     /****** runtime cache ******/
     FIFOCache<bcos::protocol::Block::Ptr, bcos::protocol::Block> m_blockCache;
     FIFOCache<bcos::protocol::BlockHeader::Ptr, bcos::protocol::BlockHeader> m_blockHeaderCache;
-    FIFOCache<bcos::protocol::TransactionsConstPtr, bcos::protocol::Transaction>
+    FIFOCache<bcos::protocol::TransactionsPtr, bcos::protocol::Transaction>
         m_transactionsCache;
-    FIFOCache<bcos::protocol::ReceiptsConstPtr, bcos::protocol::TransactionReceipt> m_receiptCache;
+    FIFOCache<bcos::protocol::ReceiptsPtr, bcos::protocol::TransactionReceipt> m_receiptCache;
 
     mutable SharedMutex m_blockNumberMutex;
     bcos::protocol::BlockNumber m_blockNumber = -1;
+
+    mutable SharedMutex m_blockHashMutex;
+    std::string m_blockHash = "";
 
     std::map<std::string, SystemConfigRecordCache> m_systemConfigRecordMap;
     mutable SharedMutex m_systemConfigMutex;
