@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,12 +13,18 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Common.h
+ * @file EventFilter.h
  * @author: kyonRay
- * @date 2021-04-13
+ * @date 2021-04-14
  */
 
-#ifndef BCOS_LEDGER_COMMON_H
-#define BCOS_LEDGER_COMMON_H
+#ifndef BCOS_LEDGER_EVENTFILTER_H
+#define BCOS_LEDGER_EVENTFILTER_H
 
-#endif //BCOS_LEDGER_COMMON_H
+
+class EventFilter
+{
+};
+
+
+#endif  // BCOS_LEDGER_EVENTFILTER_H

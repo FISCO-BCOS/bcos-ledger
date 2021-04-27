@@ -19,17 +19,18 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
+set(FETCH_URL_BASE "github.com")
 include(FetchContent)
+
+set(BCOS_CMAKE_SCRIPTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts)
 FetchContent_Declare(bcos-cmake-scripts
-        GIT_REPOSITORY https://github.com/FISCO-BCOS/bcos-cmake-scripts.git
+        GIT_REPOSITORY https://${FETCH_URL_BASE}/FISCO-BCOS/bcos-cmake-scripts.git
         GIT_TAG dev
-        SOURCE_DIR bcos-cmake-scripts
+        SOURCE_DIR ${BCOS_CMAKE_SCRIPTS_DIR}
         )
 FetchContent_MakeAvailable(bcos-cmake-scripts)
 
 # cmake settings
-set(BCOS_CMAKE_SCRIPTS "${CMAKE_BINARY_DIR}/bcos-cmake-scripts")
-set(BCOS_CMAKE_SCRIPTS_DIR "${CMAKE_BINARY_DIR}/bcos-cmake-scripts")
 set(BCOS_LEDGER_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake" CACHE PATH "The cmake path for the library")
 list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
 list(APPEND CMAKE_MODULE_PATH ${BCOS_LEDGER_CMAKE_DIR})
@@ -37,8 +38,9 @@ list(APPEND CMAKE_MODULE_PATH ${BCOS_LEDGER_CMAKE_DIR})
 # init hunter
 include(HunterGate)
 HunterGate(
-        URL "https://github.com/FISCO-BCOS/hunter/archive/1adbd8a1ddb8a84a018d1b7439d4a517a0aa6da3.tar.gz"
-        SHA1 "e725030439b26a6b997223b360e8d8c01d6c68c3"
+        URL "https://${FETCH_URL_BASE}/FISCO-BCOS/hunter/archive/d73ee00ba165b521f0e63161119fbf18a7eb6e60.tar.gz"
+        SHA1 "baeb7665f6755232e86bb1c86974b2000a1c4c8e"
+        FILEPATH "${BCOS_LEDGER_CMAKE_DIR}/config.cmake"
 )
 
 project(bcos-ledger VERSION "3.0")
@@ -55,8 +57,6 @@ include(CopyInclude)
 
 # install dependencies
 include(InstallBcosFrameworkDependencies)
-# install tbb dependency
-#hunter_add_package(tbb)
 
 include_directories(${CMAKE_INSTALL_INCLUDEDIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
@@ -64,13 +64,22 @@ set(INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 # set library target name
 set(BCOS_LEDGER_TARGET "bcos-ledger")
+set(BCOS_EVENT_FILTER_TARGET "bcos-event-filter")
 
 # add subdirectories to build the libraries
 add_subdirectory(ledger)
+add_subdirectory(eventfilter)
 
-# test releated
+# test related
 if (TESTS)
     hunter_add_package(Boost COMPONENTS test)
+    set(BCOS_TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test)
+    FetchContent_Declare(bcos-test
+            GIT_REPOSITORY https://${FETCH_URL_BASE}/FISCO-BCOS/bcos-test.git
+            GIT_TAG dev
+            SOURCE_DIR ${BCOS_TEST_DIR})
+    FetchContent_MakeAvailable(bcos-test)
+
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
@@ -93,5 +102,5 @@ include(BuildDocs)
 # for code coverage
 if (COVERAGE)
     include(Coverage)
-    config_coverage("'/usr*' '${CMAKE_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/bcos-test*'")
+    config_coverage("'/usr*' '${CMAKE_SOURCE_DIR}/test/bcos-test*'")
 endif ()
