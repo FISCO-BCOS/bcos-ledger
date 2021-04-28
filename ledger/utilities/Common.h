@@ -69,13 +69,16 @@ struct SystemConfigRecordCache
 
 protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr& _block)
 {
-    auto size = _block->transactionsSize();
-    if(size == 0){
+    auto txs = std::make_shared<std::vector<protocol::Transaction::Ptr>>();
+    if(_block == nullptr){
+        return txs;
+    }
+    auto txSize = _block->transactionsSize();
+    if(txSize == 0){
         LEDGER_LOG(DEBUG)<<LOG_DESC("Block transactions size is 0, return nullptr");
         return nullptr;
     }
-    auto txs = std::make_shared<std::vector<protocol::Transaction::Ptr>>();
-    for (size_t i = 0; i < size; ++i)
+    for (size_t i = 0; i < txSize; ++i)
     {
         auto tx = std::const_pointer_cast<protocol::Transaction>(_block->transaction(i));
         txs->emplace_back(tx);
@@ -83,28 +86,31 @@ protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr&
     return txs;
 }
 
-size_t blockTransactionListSetter(const protocol::Block::Ptr& _block, const protocol::TransactionsConstPtr& _txs){
-    auto size = _txs->size();
-    if(size == 0){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block transactions size is 0");
+size_t blockTransactionListSetter(const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs){
+
+    if(_block == nullptr || _txs == nullptr || _txs->empty()){
+        LEDGER_LOG(DEBUG)<<LOG_DESC("blockTransactionListSetter set error");
         return -1;
     }
-    for (size_t i = 0; i < size; ++i)
+    for (const auto& tx : *_txs)
     {
-        _block->appendTransaction(_txs->at(i));
+        _block->appendTransaction(tx);
     }
     return _block->transactionsSize();
 }
 
 protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block)
 {
-    auto size = _block->receiptsSize();
-    if(size == 0){
+    auto receipts = std::make_shared<std::vector<protocol::TransactionReceipt::Ptr>>();
+    if(_block == nullptr){
+        return receipts;
+    }
+    auto receiptSize = _block->receiptsSize();
+    if(receiptSize == 0){
         LEDGER_LOG(DEBUG)<<LOG_DESC("Block receipts size is 0, return nullptr");
         return nullptr;
     }
-    auto receipts = std::make_shared<std::vector<protocol::TransactionReceipt::Ptr>>();
-    for (size_t i = 0; i < size; ++i)
+    for (size_t i = 0; i < receiptSize; ++i)
     {
         auto receipt = std::const_pointer_cast<protocol::TransactionReceipt>(_block->receipt(i));
         receipts->emplace_back(receipt);
@@ -112,15 +118,15 @@ protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block)
     return receipts;
 }
 
-size_t blockReceiptListSetter(const protocol::Block::Ptr& _block, const protocol::ReceiptsConstPtr& _receipts)
+size_t blockReceiptListSetter(const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts)
 {
-    auto size = _receipts->size();
-    if(size == 0){
+    if(_block == nullptr || _receipts == nullptr || _receipts->empty()){
         LEDGER_LOG(DEBUG)<<LOG_DESC("Block receipts size is 0");
         return -1;
     }
-    for (size_t i =0; i<size; ++i){
-        _block->appendReceipt(_receipts->at(i));
+    for (const auto& rcpt : *_receipts)
+    {
+        _block->appendReceipt(rcpt);
     }
     return _block->receiptsSize();
 }
