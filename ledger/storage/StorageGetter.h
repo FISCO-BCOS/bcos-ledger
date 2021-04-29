@@ -114,8 +114,17 @@ public:
      * @param _hash hash string, it can be blockHash
      * @return return string data of block number
      */
-    std::string getBlockNumberByHash(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        const std::string& _tableName, const std::string& _hash);
+    std::string getBlockNumberByHash(
+        const std::string& _hash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+
+    /**
+     * @brief get block hash by number
+     * @param _num
+     * @param _tableFactory
+     * @return return string hash
+     */
+    std::string getBlockHashByNumber(
+        const std::string& _num, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
 
     /**
      * @brief get current state in row
@@ -123,8 +132,8 @@ public:
      * @param _row
      * @return
      */
-    std::string getCurrentState(const bcos::storage::TableFactoryInterface::Ptr & _tableFactory,
-        const std::string& _row);
+    std::string getCurrentState(
+        const std::string& _row, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
 
     /**
      * @brief get sys config in table SYS_CONFIG
@@ -133,7 +142,7 @@ public:
      * @return return a string pair <value, enableBlockNumber>
      */
     std::shared_ptr<stringsPair> getSysConfig(
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _key);
+        const std::string& _key, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
 
     /**
      * @brief get block number and index by tx hash in table SYS_TX_HASH_2_BLOCK_NUMBER
@@ -142,7 +151,7 @@ public:
      * @return return a string pair <number, transaction index>
      */
     std::shared_ptr<stringsPair> getBlockNumberAndIndexByHash(
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _hash);
+        const std::string& _hash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
 
     /**
      * @brief select field from tableName where row=_row
@@ -154,6 +163,9 @@ public:
      */
     std::string tableGetterByRowAndField(const bcos::storage::TableFactoryInterface::Ptr & _tableFactory,
         const std::string& _tableName, const std::string& _row, const std::string& _field);
+
+    std::string getKeyByValue(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const std::string& _tableName, const std::string& _keyValue);
 
     /**
      * @brief select field1, field2 from tableName where row=_row

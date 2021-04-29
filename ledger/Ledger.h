@@ -29,8 +29,8 @@
 #include "libutilities/ThreadPool.h"
 #include "utilities/Common.h"
 #include "utilities/FIFOCache.h"
-#include "storage-cli/StorageGetter.h"
-#include "storage-cli/StorageSetter.h"
+#include "storage/StorageGetter.h"
+#include "storage/StorageSetter.h"
 
 #include <utility>
 
@@ -137,6 +137,7 @@ private:
 
     /****** block attribute getter ******/
     bcos::protocol::BlockNumber getBlockNumberByHash(bcos::crypto::HashType const& _hash);
+    std::shared_ptr<std::pair<bcos::protocol::BlockNumber, int64_t>> getBlockNumberAndIndexByTxHash(bcos::crypto::HashType const& _txHash);
     bcos::protocol::BlockNumber getLatestBlockNumber();
     bcos::protocol::BlockNumber getNumberFromStorage();
     std::string getLatestBlockHash();
@@ -144,26 +145,29 @@ private:
     bcos::protocol::BlockHeader::Ptr getBlockHeader(
         const bcos::protocol::BlockNumber& _blockNumber);
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByReceipt(
-        std::shared_ptr<Parent2ChildListMap> _parent2ChildList, bcos::protocol::Block::Ptr _block);
+        std::shared_ptr<Parent2ChildListMap> _parent2ChildList, long long int _blockNumber);
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByTransaction(
-        std::shared_ptr<Parent2ChildListMap> _parent2Child, bcos::protocol::Block::Ptr _block);
+        std::shared_ptr<Parent2ChildListMap> _parent2Child, long long int _blockNumber);
 
     std::shared_ptr<Child2ParentMap> getChild2ParentCache(SharedMutex& _mutex,
-                                                          std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
-                                                          std::shared_ptr<Parent2ChildListMap> _parent2Child, bcos::protocol::Block::Ptr _block);
+        std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
+        std::shared_ptr<Parent2ChildListMap> _parent2Child, long long int _blockNumber);
+
+    std::shared_ptr<Parent2ChildListMap> getParent2ChildListByReceiptProofCache(
+        protocol::BlockNumber _blockNumber, protocol::ReceiptsPtr _receipts);
+
+    std::shared_ptr<Parent2ChildListMap> getParent2ChildListByTxsProofCache(
+        protocol::BlockNumber _blockNumber, protocol::TransactionsPtr _txs);
+
     void getMerkleProof(const crypto::HashType& _txHash,
-                        const std::map<std::string, std::vector<std::string>>& parent2ChildList,
+                        const Parent2ChildListMap & parent2ChildList,
                         const Child2ParentMap& child2Parent,
-                        const std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof);
+                        MerkleProof& merkleProof);
 
     inline storage::TableFactoryInterface::Ptr getMemoryTableFactory()
     {
         return m_tableFactory;
     }
-
-//    inline std::shared_ptr<bcos::storage::TableFactory> getMemoryTableFactory(){
-//        return
-//    }
 
     inline StorageGetter::Ptr getStorageGetter(){
         return m_storageGetter;
@@ -227,12 +231,12 @@ private:
     mutable SharedMutex m_systemConfigMutex;
 
     std::pair<bcos::protocol::BlockNumber,
-        std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
+        std::shared_ptr<Parent2ChildListMap>>
         m_transactionWithProof = std::make_pair(0, nullptr);
     mutable SharedMutex m_transactionWithProofMutex;
 
     std::pair<bcos::protocol::BlockNumber,
-        std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
+        std::shared_ptr<Parent2ChildListMap>>
         m_receiptWithProof = std::make_pair(0, nullptr);
     mutable SharedMutex m_receiptWithProofMutex;
 

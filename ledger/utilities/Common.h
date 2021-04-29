@@ -21,13 +21,16 @@
 #include "interfaces/protocol/Block.h"
 #include "libutilities/ThreadPool.h"
 #include <tbb/concurrent_unordered_map.h>
+#include <tbb/parallel_for_each.h>
 #include <map>
 
 #define LEDGER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
 
 namespace bcos::ledger
 {
+// parent=>children
 using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
+// child=>parent
 using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 
 static const std::string ID_FIELD = "_id_";
@@ -39,7 +42,6 @@ static const std::string SYS_KEY_CURRENT_ID = "current_id";
 static const std::string SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
 static const std::string SYS_KEY_TOTAL_FAILED_TRANSACTION = "total_failed_transaction_count";
 static const std::string SYS_VALUE = "value";
-static const std::string SYS_SIG_LIST = "sigs";
 static const std::string SYS_KEY = "key";
 static const std::string SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_block_num";
 
@@ -129,6 +131,29 @@ size_t blockReceiptListSetter(const protocol::Block::Ptr& _block, const protocol
         _block->appendReceipt(rcpt);
     }
     return _block->receiptsSize();
+}
+
+void parseMerkleMap(
+    const std::shared_ptr<Parent2ChildListMap>& parent2ChildList,
+    Child2ParentMap& child2Parent)
+{
+    // trans parent2ChildList into child2Parent concurrently
+    tbb::parallel_for_each(parent2ChildList->begin(), parent2ChildList->end(),
+        [&](std::pair<const std::string, std::vector<std::string>>& _childListIterator) {
+            auto childList = _childListIterator.second;
+            auto parent = _childListIterator.first;
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, childList.size()),
+                [&](const tbb::blocked_range<size_t>& range) {
+                    for (size_t i = range.begin(); i < range.end(); i++)
+                    {
+                        std::string child = childList[i];
+                        if (!child.empty())
+                        {
+                            child2Parent[child] = parent;
+                        }
+                    }
+                });
+        });
 }
 
 } // namespace bcos
