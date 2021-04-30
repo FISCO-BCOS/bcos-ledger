@@ -44,6 +44,12 @@ BOOST_AUTO_TEST_CASE(testBlockCacheAdd)
     auto block1_get = _blockFIFOCache.get(block1->blockHeader()->number());
     BOOST_CHECK_EQUAL(block1_get.first, block1->blockHeader()->number());
     BOOST_CHECK_EQUAL(block1_get.second->transactionsHashSize(), 10);
+//    static const int FULL_BLOCK = 0x0FFF;
+    static const int32_t HEADER = 0x0F00;
+    static const int TRANSACTIONS = 0x00F0;
+//    static const int RECEIPTS = 0x000F;
+    int t = HEADER | TRANSACTIONS;
+    BOOST_CHECK(t | HEADER);
 }
 }
 }  // namespace test

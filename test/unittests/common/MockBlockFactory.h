@@ -40,6 +40,7 @@ public:
         return std::make_shared<bcos::test::MockBlock>();
     }
     bcos::protocol::Block::Ptr createBlock(const bytes& , bool , bool ) override { return bcos::protocol::Block::Ptr(); }
+    bcos::crypto::CryptoSuite::Ptr cryptoSuite() override { return bcos::crypto::CryptoSuite::Ptr(); }
 
 private:
     bcos::protocol::BlockHeaderFactory::Ptr m_blockHeaderFactory;

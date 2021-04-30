@@ -43,8 +43,8 @@ public:
                 m_CacheMap.erase(firstNumber);
                 // Destruct the block in m_destructorThread
                 // FIXME: type Transaction/Receipts compiled error
-                // HolderForDestructor<T2> holder(std::move(removedItem));
-                // m_destructorThread->enqueue(std::move(holder));
+                 HolderForDestructor<T2> holder(std::move(removedItem));
+                 m_destructorThread->enqueue(std::move(holder));
 
                 // in case something unexcept error
                 if (m_CacheMap.size() > c_CacheMaxSize)

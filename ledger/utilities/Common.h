@@ -133,27 +133,5 @@ size_t blockReceiptListSetter(const protocol::Block::Ptr& _block, const protocol
     return _block->receiptsSize();
 }
 
-void parseMerkleMap(
-    const std::shared_ptr<Parent2ChildListMap>& parent2ChildList,
-    Child2ParentMap& child2Parent)
-{
-    // trans parent2ChildList into child2Parent concurrently
-    tbb::parallel_for_each(parent2ChildList->begin(), parent2ChildList->end(),
-        [&](std::pair<const std::string, std::vector<std::string>>& _childListIterator) {
-            auto childList = _childListIterator.second;
-            auto parent = _childListIterator.first;
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, childList.size()),
-                [&](const tbb::blocked_range<size_t>& range) {
-                    for (size_t i = range.begin(); i < range.end(); i++)
-                    {
-                        std::string child = childList[i];
-                        if (!child.empty())
-                        {
-                            child2Parent[child] = parent;
-                        }
-                    }
-                });
-        });
-}
 
 } // namespace bcos
