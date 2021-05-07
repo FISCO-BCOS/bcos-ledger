@@ -1038,11 +1038,10 @@ void Ledger::writeHash2Number(
 void Ledger::writeNumber2Block(
     const Block::Ptr& _block, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
-    auto encodedBlockHeader = std::make_shared<bytes>();
-    _block->blockHeader()->encode(*encodedBlockHeader);
+    auto encodedBlock = std::make_shared<bytes>();
+    _block->encode(*encodedBlock);
     bool ret = getStorageSetter()->setNumber2Block(_tableFactory,
-                                                    boost::lexical_cast<std::string>(_block->blockHeader()->number()),
-                                                    asString(*encodedBlockHeader));
+        boost::lexical_cast<std::string>(_block->blockHeader()->number()), asString(*encodedBlock));
     if(!ret){
         LEDGER_LOG(DEBUG) << LOG_BADGE("WriteNumber2Block")
                           << LOG_DESC("Write row in SYS_NUMBER_2_BLOCK error")

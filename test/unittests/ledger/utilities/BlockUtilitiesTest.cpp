@@ -31,7 +31,7 @@ using namespace bcos::protocol;
 
 namespace bcos::test
 {
-BOOST_FIXTURE_TEST_SUITE(CommonTest, TestPromptFixture)
+BOOST_FIXTURE_TEST_SUITE(BlockUtilitiesTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(testBlockTxListSetterGetter)
 {

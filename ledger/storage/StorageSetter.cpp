@@ -31,7 +31,6 @@ using namespace bcos::storage;
 
 namespace bcos::ledger
 {
-
 bool StorageSetter::tableSetterByRowAndField(
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName,
     const std::string& _row, const std::string& _fieldName, const std::string& _fieldValue)
@@ -99,6 +98,34 @@ bool StorageSetter::setNumber2Nonces(const TableFactoryInterface::Ptr& _tableFac
 {
     return tableSetterByRowAndField(
         _tableFactory, SYS_BLOCK_NUMBER_2_NONCES, _row, SYS_VALUE, _noncesValue);
+}
+
+bool StorageSetter::setSysConfig(const TableFactoryInterface::Ptr& _tableFactory,
+                                 const std::string& _key, const std::string& _value, const std::string& _enableBlock)
+{
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+
+    auto table = _tableFactory->openTable(SYS_CONFIG);
+    auto openTable_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    if(table){
+        auto entry = table->newEntry();
+        entry->setField(SYS_KEY, _key);
+        entry->setField(SYS_VALUE, _value);
+        entry->setField(SYS_CONFIG_ENABLE_BLOCK_NUMBER, _enableBlock);
+        auto ret = table->setRow(_key, entry);
+        auto insertTable_time_cost = utcTime() - record_time;
+
+        LEDGER_LOG(DEBUG) << LOG_BADGE("Write data to DB")
+                          << LOG_KV("openTable", SYS_CONFIG)
+                          << LOG_KV("openTableTimeCost", openTable_time_cost)
+                          << LOG_KV("insertTableTimeCost", insertTable_time_cost)
+                          << LOG_KV("totalTimeCost", utcTime() - start_time);
+        return ret;
+    }
+    return false;
 }
 
 void StorageSetter::writeTxToBlock(

@@ -38,8 +38,8 @@ list(APPEND CMAKE_MODULE_PATH ${BCOS_LEDGER_CMAKE_DIR})
 # init hunter
 include(HunterGate)
 HunterGate(
-        URL "https://${FETCH_URL_BASE}/FISCO-BCOS/hunter/archive/d73ee00ba165b521f0e63161119fbf18a7eb6e60.tar.gz"
-        SHA1 "baeb7665f6755232e86bb1c86974b2000a1c4c8e"
+        URL "https://${FETCH_URL_BASE}/FISCO-BCOS/hunter/archive/8c81ea454c0c268b257da1fe3e3f2f69bd59a67d.tar.gz"
+        SHA1 "13292adf48c4c053ff2ceb7173631a296c08d1ac"
         FILEPATH "${BCOS_LEDGER_CMAKE_DIR}/config.cmake"
 )
 

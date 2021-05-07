@@ -122,6 +122,17 @@ public:
         const std::string& _row, const std::string& _noncesValue);
 
     /**
+     * @brief update SYS_CONFIG set SYS_KEY=_key,SYS_VALUE=_value,SYSTEM_CONFIG_ENABLE_NUM=_enableBlock where row=_row
+     * @param _tableFactory
+     * @param _key
+     * @param _value
+     * @param _enableBlock
+     * @return
+     */
+    bool setSysConfig(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const std::string& _key, const std::string& _value, const std::string& _enableBlock);
+
+    /**
      * @brief tbb:parallel_for update SYS_TX_HASH_2_BLOCK_NUMBER set SYS_VALUE=blockNumber, index=txIndex where row=_row
      * @param _block
      * @param _tableFactory

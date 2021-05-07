@@ -20,6 +20,7 @@
 #pragma once
 
 #include "unittests/mock/MockStorage.h"
+#include "unittests/mock/MockTable.h"
 #include "bcos-framework/libtable/TableFactory.h"
 #include "bcos-framework/libtable/Table.h"
 #include "bcos-test/libutils/HashImpl.h"
@@ -29,6 +30,11 @@ inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockN
     auto hashImpl = std::make_shared<Keccak256Hash>();
     auto storage = std::make_shared<MockStorage>();
     auto tableFactory = std::make_shared<TableFactory>(storage,hashImpl, _blockNumber);
+    return tableFactory;
+}
+
+inline storage::TableFactory::Ptr fakeErrorTableFactory(){
+    auto tableFactory = std::make_shared<MockErrorTableFactory>();
     return tableFactory;
 }
 }

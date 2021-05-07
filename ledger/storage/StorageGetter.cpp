@@ -96,12 +96,12 @@ std::string StorageGetter::getterByBlockHash(const std::string& _blockHash,
 std::string StorageGetter::getBlockNumberByHash(
     const std::string& _hash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
-    auto hashStr = getterByBlockHash(_hash, _tableFactory, SYS_HASH_2_NUMBER);
-    if (hashStr.empty())
+    auto numberStr = getterByBlockHash(_hash, _tableFactory, SYS_HASH_2_NUMBER);
+    if (numberStr.empty())
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("[#getBlockNumberByHash] Cannot get nonces, return empty.");
+        LEDGER_LOG(DEBUG) << LOG_DESC("[#getBlockNumberByHash] Cannot get numberStr, return empty.");
     }
-    return hashStr;
+    return numberStr;
 }
 
 std::string StorageGetter::getBlockHashByNumber(
