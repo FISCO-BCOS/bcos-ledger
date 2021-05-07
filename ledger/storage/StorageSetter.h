@@ -129,27 +129,5 @@ public:
     void writeTxToBlock(const protocol::Block::Ptr& _block,
         const storage::TableFactoryInterface::Ptr& _tableFactory);
 
-
-private:
-    std::string tableName;
-    std::vector<stringsPair> setterPair{};
-    std::string row;
-
-
-    StorageSetter& update(const std::string& _tableName){
-        this->tableName = _tableName;
-        return *this;
-    }
-
-    StorageSetter& set(const std::string& _fieldName, const std::string & _fieldValue){
-        this->setterPair.emplace_back(std::make_pair(_fieldName,_fieldValue));
-        return *this;
-    }
-    StorageSetter& whereRowIs(const std::string & _row){
-        this->row=_row;
-        return *this;
-    }
-    bool exec(const bcos::storage::TableFactoryInterface::Ptr & _tableFactory);
-
 };
 }

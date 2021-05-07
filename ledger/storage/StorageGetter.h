@@ -164,6 +164,13 @@ public:
     std::string tableGetterByRowAndField(const bcos::storage::TableFactoryInterface::Ptr & _tableFactory,
         const std::string& _tableName, const std::string& _row, const std::string& _field);
 
+    /**
+     * @brief select key from tableName where value=_keyValue
+     * @param _tableFactory
+     * @param _tableName
+     * @param _keyValue
+     * @return string of key
+     */
     std::string getKeyByValue(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _tableName, const std::string& _keyValue);
 

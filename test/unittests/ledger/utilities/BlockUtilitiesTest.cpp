@@ -43,6 +43,7 @@ BOOST_AUTO_TEST_CASE(testBlockTxListSetterGetter)
     BOOST_CHECK_EQUAL(block1->transactionsSize(), 10);
     auto txs_get = bcos::ledger::blockTransactionListGetter(block1);
     BOOST_CHECK_EQUAL(txs_get->size(), 10);
+    BOOST_CHECK_EQUAL(txs_get->at(5)->hash().hex(),txs->at(5)->hash().hex());
 }
 BOOST_AUTO_TEST_CASE(testNullTxSetter){
     auto txs = fakeTransactions(10);
@@ -82,6 +83,7 @@ BOOST_AUTO_TEST_CASE(testBlockReceiptListSetterGetter)
     BOOST_CHECK_EQUAL(block1->receiptsSize(), 10);
     auto receipts_get = bcos::ledger::blockReceiptListGetter(block1);
     BOOST_CHECK_EQUAL(receipts_get->size(), 10);
+    BOOST_CHECK_EQUAL(receipts_get->at(5)->hash().hex(),receipts->at(5)->hash().hex());
 }
 
 BOOST_AUTO_TEST_CASE(testNullReceiptSetter){

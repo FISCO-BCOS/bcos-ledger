@@ -20,74 +20,16 @@
 
 #pragma once
 #include "bcos-ledger/ledger/utilities/Common.h"
-#include <bcos-framework/interfaces/protocol/Block.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
 
 namespace bcos::ledger
 {
-protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr& _block)
-{
-    auto txs = std::make_shared<protocol::Transactions>();
-    if(_block == nullptr){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block is null, return nullptr");
-        return nullptr;
-    }
-    auto txSize = _block->transactionsSize();
-    if(txSize == 0){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block transactions size is 0, return empty");
-        return txs;
-    }
-    for (size_t i = 0; i < txSize; ++i)
-    {
-        auto tx = std::const_pointer_cast<protocol::Transaction>(_block->transaction(i));
-        txs->emplace_back(tx);
-    }
-    return txs;
-}
+protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr& _block);
 
-size_t blockTransactionListSetter(const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs){
+size_t blockTransactionListSetter(
+    const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs);
 
-    if(_block == nullptr || _txs == nullptr || _txs->empty()){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("blockTransactionListSetter set error");
-        return -1;
-    }
-    for (const auto& tx : *_txs)
-    {
-        _block->appendTransaction(tx);
-    }
-    return _block->transactionsSize();
-}
+protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block);
 
-protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block)
-{
-    auto receipts = std::make_shared<protocol::Receipts>();
-    if(_block == nullptr){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block is null, return nullptr");
-        return nullptr;
-    }
-    auto receiptSize = _block->receiptsSize();
-    if(receiptSize == 0){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block receipts size is 0, return empty");
-        return receipts;
-    }
-    for (size_t i = 0; i < receiptSize; ++i)
-    {
-        auto receipt = std::const_pointer_cast<protocol::TransactionReceipt>(_block->receipt(i));
-        receipts->emplace_back(receipt);
-    }
-    return receipts;
-}
-
-size_t blockReceiptListSetter(const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts)
-{
-    if(_block == nullptr || _receipts == nullptr || _receipts->empty()){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block receipts size is 0");
-        return -1;
-    }
-    for (const auto& rcpt : *_receipts)
-    {
-        _block->appendReceipt(rcpt);
-    }
-    return _block->receiptsSize();
-}
+size_t blockReceiptListSetter(
+    const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts);
 }

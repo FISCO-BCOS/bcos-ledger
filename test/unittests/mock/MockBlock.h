@@ -53,13 +53,13 @@ public:
     void setVersion(int32_t ) override {}
     bcos::protocol::BlockType blockType() const override { return bcos::protocol::CompleteBlock; }
     bcos::protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
-    bcos::protocol::Transaction::ConstPtr transaction(size_t ) const override
+    bcos::protocol::Transaction::ConstPtr transaction(size_t _index) const override
     {
-        return bcos::protocol::Transaction::ConstPtr();
+        return m_transactions->at(_index);
     }
-    bcos::protocol::TransactionReceipt::ConstPtr receipt(size_t ) const override
+    bcos::protocol::TransactionReceipt::ConstPtr receipt(size_t _index) const override
     {
-        return bcos::protocol::TransactionReceipt::ConstPtr();
+        return m_receipts->at(_index);
     }
     const crypto::HashType& transactionHash(size_t _index) const override { return (*m_transactionsHash)[_index]; }
     const crypto::HashType& receiptHash(size_t _index) const override { return (*m_receiptsHash)[_index]; }

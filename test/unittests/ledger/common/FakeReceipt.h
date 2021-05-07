@@ -22,6 +22,7 @@
 #include "libprotocol/protobuf/PBTransactionReceiptFactory.h"
 #include "libutilities/Common.h"
 #include <bcos-test/libutils/HashImpl.h>
+#include <bcos-test/libutils/SignatureImpl.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
