@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include "unittests/common/MockBlockHeaderFactory.h"
+#include "../../mock/MockBlockHeaderFactory.h"
 #include <bcos-framework/libprotocol/Exceptions.h>
 #include <bcos-framework/libprotocol/protobuf/PBBlockHeaderFactory.h>
 #include <bcos-framework/libutilities/Common.h>
@@ -46,7 +46,7 @@ inline bcos::protocol::BlockHeader::Ptr getBlockHeader()
     auto txsRoot = bcos::crypto::HashType(1);
     auto receiptRoot = bcos::crypto::HashType(2);
     auto stateRoot = bcos::crypto::HashType(3);
-    bcos::protocol::BlockNumber number = 1231231;
+    bcos::protocol::BlockNumber number = rand();
     u256 gasUsed = 3453456346534;
     bytes extraData = stateRoot.asBytes();
 

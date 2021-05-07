@@ -13,13 +13,13 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file BlockCacheTest.cpp
+ * @file FIFOCacheTest.cpp
  * @author: kyonRay
  * @date 2021-04-14
  */
 
 #include "bcos-ledger/ledger/utilities/FIFOCache.h"
-#include "unittests/ledger/FakeBlock.h"
+#include "unittests/ledger/common/FakeBlock.h"
 #include <bcos-test/libutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
@@ -27,24 +27,53 @@ using namespace bcos;
 using namespace bcos::ledger;
 using namespace bcos::protocol;
 
-namespace bcos
-{
-namespace test
+namespace bcos::test
 {
 BOOST_FIXTURE_TEST_SUITE(FIFOCacheTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(testBlockCacheAdd)
 {
     FIFOCache<Block::Ptr, Block> _blockFIFOCache;
+    auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
+    _blockFIFOCache.setDestructorThread(blockDestructorThread);
+
     auto blockFactory = createBlockFactory();
     auto block1 = fakeBlock(blockFactory, 10, 10);
-    auto block2 = fakeBlock(blockFactory, 10, 10);
-    auto block3 = fakeBlock(blockFactory, 10, 10);
     _blockFIFOCache.add(block1->blockHeader()->number(), block1);
     auto block1_get = _blockFIFOCache.get(block1->blockHeader()->number());
     BOOST_CHECK_EQUAL(block1_get.first, block1->blockHeader()->number());
     BOOST_CHECK_EQUAL(block1_get.second->transactionsHashSize(), 10);
 }
+
+BOOST_AUTO_TEST_CASE(testBlockCacheAddMax)
+{
+    FIFOCache<Block::Ptr, Block> _blockFIFOCache;
+    auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
+    _blockFIFOCache.setDestructorThread(blockDestructorThread);
+
+    auto blockFactory = createBlockFactory();
+    auto blocks = fakeBlocks(blockFactory, 1, 1, 11);
+    for (auto & block :blocks)
+    {
+        _blockFIFOCache.add(block->blockHeader()->number(), block);
+    }
+    auto block1_get = _blockFIFOCache.get(blocks.at(0)->blockHeader()->number());
+    BOOST_CHECK_EQUAL(block1_get.first, -1);
+    BOOST_CHECK(block1_get.second == nullptr);
+    auto block2_get = _blockFIFOCache.get(blocks.at(1)->blockHeader()->number());
+    BOOST_CHECK_EQUAL(block2_get.second->transactionsHashSize(),2);
 }
-}  // namespace test
+
+BOOST_AUTO_TEST_CASE(testGetEmpty)
+{
+    FIFOCache<Block::Ptr, Block> _blockFIFOCache;
+    auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
+    _blockFIFOCache.setDestructorThread(blockDestructorThread);
+
+    auto block1_get = _blockFIFOCache.get(0);
+    BOOST_CHECK_EQUAL(block1_get.first, -1);
+    BOOST_CHECK(block1_get.second == nullptr);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos

@@ -24,7 +24,7 @@
 #include <bcos-framework/interfaces/protocol/BlockHeaderFactory.h>
 
 #include <utility>
-#include "unittests/common/MockBlock.h"
+#include "unittests/mock/MockBlock.h"
 
 namespace bcos::test{
 class MockBlockFactory : public bcos::protocol::BlockFactory{
@@ -40,6 +40,7 @@ public:
         return std::make_shared<bcos::test::MockBlock>();
     }
     bcos::protocol::Block::Ptr createBlock(const bytes& , bool , bool ) override { return bcos::protocol::Block::Ptr(); }
+    bcos::crypto::CryptoSuite::Ptr cryptoSuite() override { return bcos::crypto::CryptoSuite::Ptr(); }
 
 private:
     bcos::protocol::BlockHeaderFactory::Ptr m_blockHeaderFactory;

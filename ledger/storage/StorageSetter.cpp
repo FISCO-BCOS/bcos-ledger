@@ -19,7 +19,8 @@
  */
 
 #include "StorageSetter.h"
-#include "../utilities/Common.h"
+#include "bcos-ledger/ledger/utilities/Common.h"
+#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
 #include <tbb/parallel_invoke.h>
 #include <tbb/parallel_for.h>
 #include <boost/lexical_cast.hpp>
@@ -30,7 +31,6 @@ using namespace bcos::storage;
 
 namespace bcos::ledger
 {
-
 bool StorageSetter::tableSetterByRowAndField(
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName,
     const std::string& _row, const std::string& _fieldName, const std::string& _fieldValue)
@@ -62,10 +62,6 @@ bool StorageSetter::tableSetterByRowAndField(
 bool StorageSetter::setNumber2Block(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _blockValue)
 {
-    // return update(SYS_NUMBER_2_BLOCK)
-    //     .set(SYS_VALUE, _blockValue)
-    //     .whereRowIs(_row)
-    //    .exec(_tableFactory);
     return tableSetterByRowAndField(
         _tableFactory, SYS_NUMBER_2_BLOCK, _row, SYS_VALUE, _blockValue);
 }
@@ -73,44 +69,63 @@ bool StorageSetter::setNumber2Block(const TableFactoryInterface::Ptr& _tableFact
 bool StorageSetter::setCurrentState(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _stateValue)
 {
-    // return update(SYS_CURRENT_STATE).set(SYS_VALUE,_stateValue).whereRowIs(_row).exec(_tableFactory);
     return tableSetterByRowAndField(_tableFactory, SYS_CURRENT_STATE, _row, SYS_VALUE, _stateValue);
 }
 bool StorageSetter::setNumber2Header(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _headerValue)
 {
-    // return update(SYS_NUMBER_2_BLOCK_HEADER).set(SYS_VALUE,_headerValue).whereRowIs(_row).exec(_tableFactory);
     return tableSetterByRowAndField(
         _tableFactory, SYS_NUMBER_2_BLOCK_HEADER, _row, SYS_VALUE, _headerValue);
 }
 bool StorageSetter::setNumber2Txs(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _txsValue)
 {
-    // return update(SYS_NUMBER_2_TXS).set(SYS_VALUE,_txsValue).whereRowIs(_row).exec(_tableFactory);
     return tableSetterByRowAndField(_tableFactory, SYS_NUMBER_2_TXS, _row, SYS_VALUE, _txsValue);
 }
 bool StorageSetter::setNumber2Receipts(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _receiptsValue)
 {
-    // return update(SYS_NUMBER_2_RECEIPTS).set(SYS_VALUE,_receiptsValue).whereRowIs(_row).exec(_tableFactory);
     return tableSetterByRowAndField(_tableFactory, SYS_NUMBER_2_RECEIPTS,_row,SYS_VALUE,_receiptsValue);
 }
 bool StorageSetter::setHash2Number(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _numberValue)
 {
-    // return update(SYS_HASH_2_NUMBER).set(SYS_VALUE,_numberValue).whereRowIs(_row).exec(_tableFactory);
     return tableSetterByRowAndField(_tableFactory, SYS_HASH_2_NUMBER, _row, SYS_VALUE, _numberValue);
 }
 
 bool StorageSetter::setNumber2Nonces(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _noncesValue)
 {
-    // return update(SYS_BLOCK_NUMBER_2_NONCES)
-    //    .set(SYS_VALUE, _noncesValue)
-    //    .whereRowIs(_row)
-    //    .exec(_tableFactory);
     return tableSetterByRowAndField(
         _tableFactory, SYS_BLOCK_NUMBER_2_NONCES, _row, SYS_VALUE, _noncesValue);
+}
+
+bool StorageSetter::setSysConfig(const TableFactoryInterface::Ptr& _tableFactory,
+                                 const std::string& _key, const std::string& _value, const std::string& _enableBlock)
+{
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+
+    auto table = _tableFactory->openTable(SYS_CONFIG);
+    auto openTable_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    if(table){
+        auto entry = table->newEntry();
+        entry->setField(SYS_KEY, _key);
+        entry->setField(SYS_VALUE, _value);
+        entry->setField(SYS_CONFIG_ENABLE_BLOCK_NUMBER, _enableBlock);
+        auto ret = table->setRow(_key, entry);
+        auto insertTable_time_cost = utcTime() - record_time;
+
+        LEDGER_LOG(DEBUG) << LOG_BADGE("Write data to DB")
+                          << LOG_KV("openTable", SYS_CONFIG)
+                          << LOG_KV("openTableTimeCost", openTable_time_cost)
+                          << LOG_KV("insertTableTimeCost", insertTable_time_cost)
+                          << LOG_KV("totalTimeCost", utcTime() - start_time);
+        return ret;
+    }
+    return false;
 }
 
 void StorageSetter::writeTxToBlock(
@@ -149,33 +164,6 @@ void StorageSetter::writeTxToBlock(
     else
     {
         BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_TX_HASH_2_BLOCK_NUMBER));
-    }
-}
-
-bool StorageSetter::exec(const TableFactoryInterface::Ptr& _tableFactory)
-{
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-
-    auto table = _tableFactory->openTable(this->tableName);
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
-    if(table){
-        auto entry = table->newEntry();
-        for(stringsPair& pair: this->setterPair){
-            entry->setField(pair.first,pair.second);
-        }
-        auto ret = table->setRow(this->row, entry);
-        auto insertTable_time_cost = utcTime() - record_time;
-        LEDGER_LOG(DEBUG) << LOG_BADGE("Write data to DB")
-                          << LOG_KV("openTable", this->tableName)
-                          << LOG_KV("openTableTimeCost", openTable_time_cost)
-                          << LOG_KV("insertTableTimeCost", insertTable_time_cost)
-                          << LOG_KV("totalTimeCost", utcTime() - start_time);
-        return ret;
-    } else{
-        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_CURRENT_STATE));
     }
 }
 } // namespace bcos::ledger

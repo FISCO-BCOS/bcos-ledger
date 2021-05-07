@@ -13,12 +13,23 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file MockTableFactory.h
+ * @file BlockUtilities.h
  * @author: kyonRay
- * @date 2021-04-22
+ * @date 2021-05-06
  */
 
-#ifndef BCOS_LEDGER_MOCKTABLEFACTORY_H
-#define BCOS_LEDGER_MOCKTABLEFACTORY_H
+#pragma once
+#include "bcos-ledger/ledger/utilities/Common.h"
 
-#endif  // BCOS_LEDGER_MOCKTABLEFACTORY_H
+namespace bcos::ledger
+{
+protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr& _block);
+
+size_t blockTransactionListSetter(
+    const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs);
+
+protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block);
+
+size_t blockReceiptListSetter(
+    const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts);
+}

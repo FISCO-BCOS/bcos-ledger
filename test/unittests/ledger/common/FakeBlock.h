@@ -19,10 +19,10 @@
  */
 
 #pragma once
-#include "unittests/common/MockBlockFactory.h"
-#include "unittests/ledger/FakeBlockHeader.h"
+#include "../../mock/MockBlockFactory.h"
+#include "../../mock/MockBlockHeaderFactory.h"
+#include "FakeBlockHeader.h"
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <unittests/common/MockBlockHeaderFactory.h>
 
 namespace bcos::test
 {
@@ -53,6 +53,15 @@ inline bcos::protocol::Block::Ptr fakeBlock(bcos::protocol::BlockFactory::Ptr _b
     return block;
 }
 
-
+inline bcos::protocol::Blocks fakeBlocks(bcos::protocol::BlockFactory::Ptr _blockFactory, size_t _txsHashNumBegin, size_t _receiptsHashNumBegin, size_t _vectorSize)
+{
+    bcos::protocol::Blocks blocks;
+    for (size_t i = 0; i < _vectorSize; ++i)
+    {
+        auto block = fakeBlock(_blockFactory, _txsHashNumBegin + i,_receiptsHashNumBegin + i);
+        blocks.emplace_back(block);
+    }
+    return blocks;
+}
 
 } // namespace bcos

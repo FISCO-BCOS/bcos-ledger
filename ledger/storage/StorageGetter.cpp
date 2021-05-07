@@ -19,7 +19,7 @@
  */
 
 #include "StorageGetter.h"
-#include "../utilities/Common.h"
+#include "bcos-ledger/ledger/utilities/Common.h"
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -94,28 +94,38 @@ std::string StorageGetter::getterByBlockHash(const std::string& _blockHash,
 }
 
 std::string StorageGetter::getBlockNumberByHash(
-    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName,
-    const std::string& _hash)
+    const std::string& _hash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
-    return tableGetterByRowAndField(_tableFactory, _tableName, _hash, SYS_VALUE);
+    auto numberStr = getterByBlockHash(_hash, _tableFactory, SYS_HASH_2_NUMBER);
+    if (numberStr.empty())
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("[#getBlockNumberByHash] Cannot get numberStr, return empty.");
+    }
+    return numberStr;
+}
+
+std::string StorageGetter::getBlockHashByNumber(
+    const std::string& _num, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
+{
+    return getKeyByValue(_tableFactory,SYS_HASH_2_NUMBER,_num);
 }
 
 std::string StorageGetter::getCurrentState(
-    const bcos::storage::TableFactoryInterface::Ptr & _tableFactory, const std::string& _row)
+    const std::string& _row, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
     return tableGetterByRowAndField(_tableFactory, SYS_CURRENT_STATE, _row, SYS_VALUE);
 }
 
 std::shared_ptr<stringsPair> StorageGetter::getBlockNumberAndIndexByHash(
-    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _hash)
+    const std::string& _hash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
     return stringsPairGetterByRowAndFields(
         _tableFactory, SYS_TX_HASH_2_BLOCK_NUMBER, _hash, SYS_VALUE, "index");
 }
 std::shared_ptr<stringsPair> StorageGetter::getSysConfig(
-   const TableFactoryInterface::Ptr& _tableFactory, const std::string& _key)
+    const std::string& _key, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
-    return stringsPairGetterByRowAndFields(_tableFactory,SYS_CONFIG, _key, SYS_VALUE, SYS_CONFIG_ENABLE_BLOCK_NUMBER);
+    return stringsPairGetterByRowAndFields(_tableFactory, SYS_CONFIG, _key, SYS_VALUE, SYS_CONFIG_ENABLE_BLOCK_NUMBER);
 }
 
 std::string StorageGetter::tableGetterByRowAndField(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName, const std::string& _row, const std::string& _field)
@@ -182,5 +192,36 @@ std::shared_ptr<stringsPair> StorageGetter::stringsPairGetterByRowAndFields(
     }
     return ret;
 }
+
+std::string StorageGetter::getKeyByValue(const TableFactoryInterface::Ptr& _tableFactory,
+    const std::string& _tableName, const std::string& _keyValue)
+{
+    std::string ret;
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+
+    auto table = _tableFactory->openTable(_tableName);
+
+    auto openTable_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    if(table){
+        auto condition = std::make_shared<Condition>();
+        condition->GE(_keyValue);
+        condition->LE(_keyValue);
+        auto keyVector = table->getPrimaryKeys(condition);
+        auto select_time_cost = utcTime() - record_time;
+
+        if(!keyVector.empty()){
+            ret = keyVector.at(0);
+            LEDGER_LOG(DEBUG) << LOG_DESC("Get string from db") << LOG_KV("openTable", _tableName)
+                              << LOG_KV("openTableTimeCost", openTable_time_cost)
+                              << LOG_KV("selectTimeCost", select_time_cost)
+                              << LOG_KV("totalTimeCost", utcTime() - start_time);
+        }
+    }
+    return ret;
+}
+
 
 } // namespace bcos::ledger

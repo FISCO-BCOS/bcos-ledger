@@ -21,6 +21,7 @@
 #pragma once
 
 #include <bcos-framework/interfaces/protocol/BlockHeader.h>
+#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 
 namespace bcos::test{
 class MockBlockHeader : public bcos::protocol::BlockHeader{
@@ -30,13 +31,16 @@ public:
     virtual ~MockBlockHeader() override {}
     void decode(bytesConstRef ) override { }
     void encode(bytes& ) const override { }
-    const crypto::HashType& hash() const override { return m_hash; }
+    crypto::HashType const& hash() const override { return m_hash; }
     void populateFromParents(BlockHeadersPtr, bcos::protocol::BlockNumber) override {}
     void clear() override {}
     void verifySignatureList() const override {}
     void populateEmptyBlock(int64_t ) override {}
     int32_t version() const override { return 0; }
-    bcos::protocol::ParentInfoListPtr parentInfo() const override { return bcos::protocol::ParentInfoListPtr(); }
+    gsl::span<const protocol::ParentInfo> parentInfo() const override
+    {
+        return gsl::span<const protocol::ParentInfo>();
+    }
     const crypto::HashType& txsRoot() const override { return m_txsRoot; }
     const crypto::HashType& receiptRoot() const override { return m_receiptRoot; }
     const crypto::HashType& stateRoot() const override { return m_stateRoot; }
@@ -44,24 +48,34 @@ public:
     const u256& gasUsed() override { return m_gasUsed; }
     int64_t timestamp() override { return 0; }
     int64_t sealer() override { return 0; }
-    bcos::protocol::BytesListPtr sealerList() const override { return bcos::protocol::BytesListPtr(); }
-    const bytes& extraData() const override { return m_extraData; }
-    bcos::protocol:: SignatureListPtr signatureList() const override { return bcos::protocol::SignatureListPtr(); }
-    const bcos::protocol::WeightList& consensusWeights() const override { return *m_consensusWeights; }
+    gsl::span<const bytes> sealerList() const override { return gsl::span<const bytes>(); }
+    bytesConstRef extraData() const override { return bcos::bytesConstRef(); }
+    gsl::span<const protocol::Signature> signatureList() const override
+    {
+        return gsl::span<const protocol::Signature>();
+    }
+    gsl::span<const uint64_t> consensusWeights() const override
+    {
+        return m_consensusWeights;
+    }
     void setVersion(int32_t ) override {}
-    void setParentInfo(bcos::protocol::ParentInfoListPtr ) override {}
+    void setParentInfo(const gsl::span<const protocol::ParentInfo>&) override {}
     void setTxsRoot(const crypto::HashType& _txsRoot) override { m_txsRoot=_txsRoot; }
     void setReceiptRoot(const crypto::HashType& _receiptRoot) override { m_receiptRoot = _receiptRoot; }
     void setStateRoot(const crypto::HashType& _stateRoot) override { m_stateRoot = _stateRoot; }
     void setNumber(bcos::protocol::BlockNumber _number) override { m_number = _number; }
     void setGasUsed(const u256& _gas) override { m_gasUsed = _gas; }
-    void setTimestamp(const int64_t& ) override {}
+    void setTimestamp(int64_t) override {}
     void setSealer(int64_t ) override {}
-    void setSealerList(const bcos::protocol::BytesList& ) override {}
-    void setConsensusWeights(bcos::protocol::WeightListPtr ) override {}
+    void setSealerList(const gsl::span<const bytes>&) override {}
     void setExtraData(const bytes& _extraData) override { m_extraData = _extraData; }
     void setExtraData(bytes&& _extraData) override { m_extraData = _extraData; }
-    void setSignatureList(bcos::protocol::SignatureListPtr _sigList) override { m_sigList = _sigList; }
+    void setParentInfo(protocol::ParentInfoList&&) override {}
+    void setSealerList(std::vector<bytes>&&) override {}
+    void setConsensusWeights(const gsl::span<const uint64_t>&) override {}
+    void setConsensusWeights(std::vector<uint64_t>&&) override {}
+    void setSignatureList(const gsl::span<const protocol::Signature>& _signatureList) override { m_sigList = _signatureList; }
+    void setSignatureList(protocol::SignatureList&& _signatureList) override { m_sigList = _signatureList; }
 
 private:
     bcos::crypto::HashType m_hash;
@@ -70,8 +84,8 @@ private:
     bcos::crypto::HashType m_stateRoot;
     u256 m_gasUsed;
     bytes m_extraData;
-    bcos::protocol::WeightListPtr m_consensusWeights;
+    gsl::span<const uint64_t> m_consensusWeights;
     bcos::protocol::BlockNumber m_number = 0;
-    bcos::protocol::SignatureListPtr m_sigList;
+    gsl::span<const protocol::Signature> m_sigList;
 };
 } // namespace bcos::protocol

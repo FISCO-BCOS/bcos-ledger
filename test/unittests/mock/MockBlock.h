@@ -31,7 +31,9 @@ public:
     MockBlock()
       :m_blockHeader(std::make_shared<bcos::test::MockBlockHeader>()),
        m_transactionsHash(std::make_shared<bcos::protocol::HashList>()),
-       m_receiptsHash(std::make_shared<bcos::protocol::HashList>())
+       m_receiptsHash(std::make_shared<bcos::protocol::HashList>()),
+        m_transactions(std::make_shared<bcos::protocol::Transactions>()),
+        m_receipts(std::make_shared<bcos::protocol::Receipts>())
     {
         assert(m_transactionsHash);
         assert(m_receiptsHash);
@@ -51,22 +53,28 @@ public:
     void setVersion(int32_t ) override {}
     bcos::protocol::BlockType blockType() const override { return bcos::protocol::CompleteBlock; }
     bcos::protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
-    bcos::protocol::Transaction::ConstPtr transaction(size_t ) const override
+    bcos::protocol::Transaction::ConstPtr transaction(size_t _index) const override
     {
-        return bcos::protocol::Transaction::ConstPtr();
+        return m_transactions->at(_index);
     }
-    bcos::protocol::TransactionReceipt::ConstPtr receipt(size_t ) const override
+    bcos::protocol::TransactionReceipt::ConstPtr receipt(size_t _index) const override
     {
-        return bcos::protocol::TransactionReceipt::ConstPtr();
+        return m_receipts->at(_index);
     }
     const crypto::HashType& transactionHash(size_t _index) const override { return (*m_transactionsHash)[_index]; }
     const crypto::HashType& receiptHash(size_t _index) const override { return (*m_receiptsHash)[_index]; }
     void setBlockType(bcos::protocol::BlockType ) override {}
     void setBlockHeader(bcos::protocol::BlockHeader::Ptr _header) override {m_blockHeader = _header;}
     void setTransaction(size_t , bcos::protocol::Transaction::Ptr ) override {}
-    void appendTransaction(bcos::protocol::Transaction::Ptr ) override {}
+    void appendTransaction(bcos::protocol::Transaction::Ptr _transaction) override
+    {
+        m_transactions->push_back(_transaction);
+    }
     void setReceipt(size_t , bcos::protocol::TransactionReceipt::Ptr ) override {}
-    void appendReceipt(bcos::protocol::TransactionReceipt::Ptr ) override {}
+    void appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt) override
+    {
+        m_receipts->push_back(_receipt);
+    }
     void setTransactionHash(size_t , const crypto::HashType& ) override {}
     void appendTransactionHash(const crypto::HashType& _txHash ) override {
         m_transactionsHash->push_back(_txHash);
@@ -76,14 +84,16 @@ public:
         m_receiptsHash->push_back(_receiptHash);
     }
     bcos::protocol::NonceListPtr nonces() override { return bcos::protocol::NonceListPtr(); }
-    size_t transactionsSize() override { return 0; }
+    size_t transactionsSize() override { return m_transactions->size(); }
     size_t transactionsHashSize() override { return m_transactionsHash->size(); }
-    size_t receiptsSize() override { return 0; }
+    size_t receiptsSize() override { return m_receipts->size(); }
     size_t receiptsHashSize() override { return m_receiptsHash->size(); }
 
 private:
     bcos::protocol::BlockHeader::Ptr m_blockHeader;
     bcos::protocol::HashListPtr m_transactionsHash;
     bcos::protocol::HashListPtr m_receiptsHash;
+    bcos::protocol::TransactionsPtr m_transactions;
+    bcos::protocol::ReceiptsPtr m_receipts;
 };
 }

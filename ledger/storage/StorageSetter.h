@@ -19,13 +19,13 @@
  */
 
 #pragma once
-#include "interfaces/protocol/Block.h"
-#include "interfaces/protocol/BlockFactory.h"
-#include "interfaces/protocol/Transaction.h"
-#include "interfaces/protocol/TransactionReceipt.h"
-#include "interfaces/protocol/BlockHeader.h"
-#include "interfaces/protocol/BlockHeaderFactory.h"
-#include "interfaces/storage/TableInterface.h"
+#include "bcos-framework/interfaces/protocol/Block.h"
+#include "bcos-framework/interfaces/protocol/BlockFactory.h"
+#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
+#include "bcos-framework/interfaces/protocol/BlockHeader.h"
+#include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/interfaces/storage/TableInterface.h"
 
 namespace bcos::ledger
 {
@@ -122,34 +122,23 @@ public:
         const std::string& _row, const std::string& _noncesValue);
 
     /**
+     * @brief update SYS_CONFIG set SYS_KEY=_key,SYS_VALUE=_value,SYSTEM_CONFIG_ENABLE_NUM=_enableBlock where row=_row
+     * @param _tableFactory
+     * @param _key
+     * @param _value
+     * @param _enableBlock
+     * @return
+     */
+    bool setSysConfig(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const std::string& _key, const std::string& _value, const std::string& _enableBlock);
+
+    /**
      * @brief tbb:parallel_for update SYS_TX_HASH_2_BLOCK_NUMBER set SYS_VALUE=blockNumber, index=txIndex where row=_row
      * @param _block
      * @param _tableFactory
      */
     void writeTxToBlock(const protocol::Block::Ptr& _block,
         const storage::TableFactoryInterface::Ptr& _tableFactory);
-
-
-private:
-    std::string tableName;
-    std::vector<stringsPair> setterPair{};
-    std::string row;
-
-
-    StorageSetter& update(const std::string& _tableName){
-        this->tableName = _tableName;
-        return *this;
-    }
-
-    StorageSetter& set(const std::string& _fieldName, const std::string & _fieldValue){
-        this->setterPair.emplace_back(std::make_pair(_fieldName,_fieldValue));
-        return *this;
-    }
-    StorageSetter& whereRowIs(const std::string & _row){
-        this->row=_row;
-        return *this;
-    }
-    bool exec(const bcos::storage::TableFactoryInterface::Ptr & _tableFactory);
 
 };
 }
