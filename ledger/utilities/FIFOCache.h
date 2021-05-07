@@ -19,8 +19,8 @@
  */
 
 #pragma once
-#include "libutilities/ThreadPool.h"
-#include "Common.h"
+#include "bcos-framework/libutilities/ThreadPool.h"
+#include "./Common.h"
 
 namespace bcos::ledger
 {
@@ -33,7 +33,7 @@ public:
     {
         {
             WriteGuard guard(m_sharedMutex);
-            if (m_CacheMap.size() > c_CacheMaxSize)
+            if (m_CacheMap.size() + 1 > c_CacheMaxSize)
             {
                 LEDGER_LOG(TRACE) << LOG_DESC("[add]Cache full, start to remove old item...");
                 auto firstNumber = m_CacheQueue.front();
@@ -42,11 +42,10 @@ public:
 
                 m_CacheMap.erase(firstNumber);
                 // Destruct the block in m_destructorThread
-                // FIXME: type Transaction/Receipts compiled error
                  HolderForDestructor<T2> holder(std::move(removedItem));
                  m_destructorThread->enqueue(std::move(holder));
 
-                // in case something unexcept error
+                // in case something unexpect error
                 if (m_CacheMap.size() > c_CacheMaxSize)
                 {
                     // meet error, cache and cacheFIFO not sync, clear the cache

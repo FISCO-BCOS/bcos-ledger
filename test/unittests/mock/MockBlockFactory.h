@@ -24,7 +24,7 @@
 #include <bcos-framework/interfaces/protocol/BlockHeaderFactory.h>
 
 #include <utility>
-#include "unittests/common/MockBlock.h"
+#include "unittests/mock/MockBlock.h"
 
 namespace bcos::test{
 class MockBlockFactory : public bcos::protocol::BlockFactory{

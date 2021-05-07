@@ -18,19 +18,19 @@
  * @date 2021-04-13
  */
 #pragma once
-#include "interfaces/ledger/LedgerInterface.h"
-#include "interfaces/protocol/BlockFactory.h"
-#include "interfaces/protocol/BlockHeaderFactory.h"
-#include "interfaces/storage/Common.h"
-#include "interfaces/storage/StorageInterface.h"
-#include "libtable/TableFactory.h"
-#include "libutilities/Common.h"
-#include "libutilities/Exceptions.h"
-#include "libutilities/ThreadPool.h"
-#include "utilities/Common.h"
-#include "utilities/FIFOCache.h"
-#include "storage/StorageGetter.h"
-#include "storage/StorageSetter.h"
+#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
+#include "bcos-framework/interfaces/protocol/BlockFactory.h"
+#include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/interfaces/storage/Common.h"
+#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework/libtable/TableFactory.h"
+#include "bcos-framework/libutilities/Common.h"
+#include "bcos-framework/libutilities/Exceptions.h"
+#include "bcos-framework/libutilities/ThreadPool.h"
+#include "bcos-ledger/ledger/utilities/Common.h"
+#include "bcos-ledger/ledger/utilities/FIFOCache.h"
+#include "bcos-ledger/ledger/storage/StorageGetter.h"
+#include "bcos-ledger/ledger/storage/StorageSetter.h"
 
 #include <utility>
 
@@ -68,7 +68,7 @@ public:
     };
     void asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
         const gsl::span<const protocol::Signature>& _signList,
-        std::function<void(Error::Ptr)> _onCommitBlock) override;
+        std::function<void(Error::Ptr,  LedgerConfig::Ptr)> _onCommitBlock) override;
 
     void asyncPreStoreTransactions(
         bcos::protocol::Block::Ptr _txsToStore,

@@ -31,7 +31,7 @@ public:
     virtual ~MockBlockHeader() override {}
     void decode(bytesConstRef ) override { }
     void encode(bytes& ) const override { }
-    crypto::HashType hash() const override { return m_hash; }
+    crypto::HashType const& hash() const override { return m_hash; }
     void populateFromParents(BlockHeadersPtr, bcos::protocol::BlockNumber) override {}
     void clear() override {}
     void verifySignatureList() const override {}

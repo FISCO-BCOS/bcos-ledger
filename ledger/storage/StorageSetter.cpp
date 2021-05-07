@@ -19,7 +19,8 @@
  */
 
 #include "StorageSetter.h"
-#include "../utilities/Common.h"
+#include "bcos-ledger/ledger/utilities/Common.h"
+#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
 #include <tbb/parallel_invoke.h>
 #include <tbb/parallel_for.h>
 #include <boost/lexical_cast.hpp>

@@ -19,7 +19,8 @@
  */
 
 #include "Ledger.h"
-#include "utilities/MerkleProofUtility.h"
+#include "bcos-ledger/ledger/utilities/MerkleProofUtility.h"
+#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
 #include <bcos-framework/libprotocol/ParallelMerkleProof.h>
 #include <boost/lexical_cast.hpp>
 #include <tbb/parallel_invoke.h>
@@ -33,7 +34,7 @@ using namespace bcos::crypto;
 
 void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
     const gsl::span<const protocol::Signature>& _signList,
-    std::function<void(Error::Ptr)> _onCommitBlock)
+    std::function<void(Error::Ptr, LedgerConfig::Ptr)> _onCommitBlock)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -41,7 +42,7 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
     {
         // TODO: add error code and msg
         auto error = std::make_shared<Error>(-1, "error number");
-        _onCommitBlock(error);
+        _onCommitBlock(error, nullptr);
         return;
     }
     // TODO: check parentHash
@@ -90,7 +91,7 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
                                   << LOG_KV("number", _blockNumber) << LOG_KV("what", e.what());
                 // TODO: add error code and error msg
                 auto error = std::make_shared<Error>(-1, "");
-                _onCommitBlock(error);
+                _onCommitBlock(error, nullptr);
                 return;
             }
             auto dbCommit_time_cost = utcTime() - write_record_time;
@@ -133,7 +134,8 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
 
     // TODO: add success code and msg
     auto success = std::make_shared<Error>(0, "");
-    _onCommitBlock(success);
+    // TODO: get ledger config
+    _onCommitBlock(success, nullptr);
 }
 
 void Ledger::asyncPreStoreTransactions(

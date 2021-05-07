@@ -21,6 +21,7 @@
 #include <bcos-framework/libcodec/scale/Scale.h>
 #include <bcos-framework/libprotocol/ParallelMerkleProof.h>
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_for_each.h>
 
 namespace bcos::ledger
 {

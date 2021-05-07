@@ -19,7 +19,7 @@
  */
 
 #include "StorageGetter.h"
-#include "../utilities/Common.h"
+#include "bcos-ledger/ledger/utilities/Common.h"
 
 using namespace bcos;
 using namespace bcos::protocol;

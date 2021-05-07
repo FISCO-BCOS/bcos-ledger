@@ -20,13 +20,13 @@
  */
 
 #pragma once
-#include "interfaces/protocol/Block.h"
-#include "interfaces/protocol/BlockFactory.h"
-#include "interfaces/protocol/Transaction.h"
-#include "interfaces/protocol/TransactionReceipt.h"
-#include "interfaces/protocol/BlockHeader.h"
-#include "interfaces/protocol/BlockHeaderFactory.h"
-#include "interfaces/storage/TableInterface.h"
+#include "bcos-framework/interfaces/protocol/Block.h"
+#include "bcos-framework/interfaces/protocol/BlockFactory.h"
+#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
+#include "bcos-framework/interfaces/protocol/BlockHeader.h"
+#include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/interfaces/storage/TableInterface.h"
 
 namespace bcos::ledger
 {

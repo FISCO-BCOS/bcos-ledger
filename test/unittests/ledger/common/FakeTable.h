@@ -13,12 +13,22 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file MockTableFactory.h
+ * @file FakeTable.h
  * @author: kyonRay
- * @date 2021-04-22
+ * @date 2021-05-06
  */
+#pragma once
 
-#ifndef BCOS_LEDGER_MOCKTABLEFACTORY_H
-#define BCOS_LEDGER_MOCKTABLEFACTORY_H
+#include "unittests/mock/MockStorage.h"
+#include "bcos-framework/libtable/TableFactory.h"
+#include "bcos-framework/libtable/Table.h"
+#include "bcos-test/libutils/HashImpl.h"
 
-#endif  // BCOS_LEDGER_MOCKTABLEFACTORY_H
+namespace bcos::test{
+inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockNumber){
+    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto storage = std::make_shared<MockStorage>();
+    auto tableFactory = std::make_shared<TableFactory>(storage,hashImpl, _blockNumber);
+    return tableFactory;
+}
+}
