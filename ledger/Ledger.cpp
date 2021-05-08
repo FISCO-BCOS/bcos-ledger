@@ -1135,3 +1135,29 @@ void Ledger::writeNumber2Receipts(const bcos::protocol::Block::Ptr& _block,
                           << LOG_KV("blockNumber", _number);
     }
 }
+bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig)
+{
+    LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
+    auto block = getBlock(0, HEADER);
+
+    // to build genesis block
+    if(block == nullptr)
+    {
+        auto txLimit = _ledgerConfig->blockTxCountLimit();
+        LEDGER_LOG(TRACE) << LOG_DESC("test") << LOG_KV("txLimit", txLimit);
+        // build a block
+        // write in HASH_2_NUMBER
+        // write in SYS_CONFIG
+        // write in SYS_CONSENSUS
+        // write in NUMBER_2_HEADER/TXS/RECEIPTS
+        // write in SYS_CURRENT_STATE
+        // db commit
+    }
+    else{
+        // TODO: check 0th block
+        LEDGER_LOG(INFO) << LOG_DESC(
+            "[#buildGenesisBlock]Already have the 0th block");
+        return true;
+    }
+    return true;
+}

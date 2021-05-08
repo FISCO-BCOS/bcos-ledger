@@ -117,7 +117,7 @@ public:
 
 private:
     /****** init ledger ******/
-    bool buildGenesisBlock();
+    bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig);
 
     /****** base block data getter ******/
     bcos::protocol::Block::Ptr getBlock(bcos::protocol::BlockNumber const& _blockNumber,  int32_t _blockFlag);
