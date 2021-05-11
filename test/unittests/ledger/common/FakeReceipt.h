@@ -49,27 +49,6 @@ inline LogEntriesPtr fakeLogEntries(Hash::Ptr _hashImpl, size_t _size)
     return logEntries;
 }
 
-inline void checkReceipts(
-    Hash::Ptr hashImpl, TransactionReceipt::ConstPtr receipt, TransactionReceipt::ConstPtr decodedReceipt)
-{
-    // check the decodedReceipt
-    BOOST_CHECK(decodedReceipt->version() == receipt->version());
-    BOOST_CHECK(decodedReceipt->stateRoot() == receipt->stateRoot());
-    BOOST_CHECK(decodedReceipt->gasUsed() == receipt->gasUsed());
-    BOOST_CHECK(decodedReceipt->contractAddress().toBytes() == receipt->contractAddress().toBytes());
-    BOOST_CHECK(decodedReceipt->status() == receipt->status());
-    BOOST_CHECK(decodedReceipt->output().toBytes() == receipt->output().toBytes());
-    // BOOST_CHECK(decodedReceipt->hash() == receipt->hash());
-    BOOST_CHECK(decodedReceipt->bloom() == receipt->bloom());
-    // check LogEntries
-    BOOST_CHECK(decodedReceipt->logEntries().size() == 2);
-    BOOST_CHECK(decodedReceipt->logEntries().size() == receipt->logEntries().size());
-    auto& logEntry = (decodedReceipt->logEntries())[1];
-    auto expectedTopic = hashImpl->hash(std::to_string(1));
-    BOOST_CHECK(logEntry.topics()[0] == expectedTopic);
-    BOOST_CHECK(logEntry.address().toBytes() == right160(expectedTopic).asBytes());
-    BOOST_CHECK(logEntry.data().toBytes() == expectedTopic.asBytes());
-}
 inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _cryptoSuite)
 {
     auto hashImpl = _cryptoSuite->hashImpl();
@@ -87,26 +66,7 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _crypto
     auto factory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
     auto receipt = factory->createReceipt(version, stateRoot, gasUsed, contractAddress.asBytes(),
                                           logEntries, (int32_t)status, output);
-    // encode
-    std::shared_ptr<bytes> encodedData = std::make_shared<bytes>();
-    auto start = utcTime();
-    for (size_t i = 0; i < 200; i++)
-    {
-        receipt->encode(*encodedData);
-    }
-    std::cout << "##### ScaleReceipt encodeT: " << (utcTime() - start)
-              << ", encodedData size:" << encodedData->size() << std::endl;
-
-    // decode
-    std::shared_ptr<TransactionReceipt> decodedReceipt;
-    start = utcTime();
-    for (size_t i = 0; i < 20000; i++)
-    {
-        decodedReceipt = factory->createReceipt(*encodedData);
-    }
-    std::cout << "##### ScaleReceipt decodeT: " << (utcTime() - start) << std::endl;
-    checkReceipts(hashImpl, receipt, decodedReceipt);
-    return decodedReceipt;
+    return receipt;
 }
 
 inline ReceiptsPtr fakeReceipts(int _size)

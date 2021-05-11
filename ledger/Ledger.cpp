@@ -19,8 +19,8 @@
  */
 
 #include "Ledger.h"
-#include "bcos-ledger/ledger/utilities/MerkleProofUtility.h"
-#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
+#include "utilities/MerkleProofUtility.h"
+#include "utilities/BlockUtilities.h"
 #include <bcos-framework/libprotocol/ParallelMerkleProof.h>
 #include <boost/lexical_cast.hpp>
 #include <tbb/parallel_invoke.h>
@@ -49,6 +49,7 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
     auto parentHash = HashType(getLatestBlockHash());
 
     // get block from storage cache
+    // TODO: check this getBlock
     auto block = getState()->getBlock(_blockNumber);
 
     try
@@ -65,7 +66,7 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
                 block->blockHeader()->setSignatureList(_signList);
             }
             // TODO: use storage cache
-            TableFactoryInterface::Ptr tableFactory = getState()->getStateCache(_blockNumber);
+            TableFactoryInterface::Ptr tableFactory = getMemoryTableFactory(_blockNumber);
             tbb::parallel_invoke(
                 [this, _blockNumber, tableFactory]() { writeNumber(_blockNumber, tableFactory); },
                 [this, block, tableFactory]() { writeTotalTransactionCount(block, tableFactory); },
@@ -157,7 +158,7 @@ void Ledger::asyncPreStoreTransactions(
 
             auto write_record_time = utcTime();
             // TODO: use storage cache
-            TableFactoryInterface::Ptr tableFactory = getState()->getStateCache(_number);
+            TableFactoryInterface::Ptr tableFactory = getMemoryTableFactory(_number);
             writeNumber2Transactions(_txsToStore, _number, tableFactory);
             auto write_table_time = utcTime() - write_record_time;
             LEDGER_LOG(DEBUG) << LOG_BADGE("PreStoreTxs") << LOG_DESC("PreStore Txs time record(write)")
@@ -231,8 +232,7 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
         _onGetBlock(error, HashType(""));
         return;
     }
-    auto hashStr = getStorageGetter()->getBlockHashByNumber(
-        boost::lexical_cast<std::string>(_blockNumber), getMemoryTableFactory());
+    auto hashStr = getStorageGetter()->getBlockHashByNumber(_blockNumber, getMemoryTableFactory(0));
     if (!hashStr.empty())
     {
         _onGetBlock(nullptr, HashType(hashStr));
@@ -258,7 +258,7 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
         return;
     }
     auto numberStr =
-        getStorageGetter()->getBlockNumberByHash(_blockHash.hex(), getMemoryTableFactory());
+        getStorageGetter()->getBlockNumberByHash(_blockHash.hex(), getMemoryTableFactory(0));
     if (!numberStr.empty())
     {
         _onGetBlock(nullptr, boost::lexical_cast<BlockNumber>(numberStr));
@@ -277,7 +277,7 @@ void Ledger::asyncGetTransactionByHash(crypto::HashType const& _txHash, bool _wi
     std::function<void(Error::Ptr, protocol::Transaction::ConstPtr, MerkleProofPtr)> _onGetTx)
 {
     auto numIndexPair =
-        getStorageGetter()->getBlockNumberAndIndexByHash(_txHash.hex(), getMemoryTableFactory());
+        getStorageGetter()->getBlockNumberAndIndexByHash(_txHash.hex(), getMemoryTableFactory(0));
     if (numIndexPair
         && !numIndexPair->first.empty()
         && !numIndexPair->second.empty())
@@ -322,7 +322,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
                                       std::function<void(Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr, MerkleProofPtr)> _onGetTx)
 {
     auto numIndexPair =
-        getStorageGetter()->getBlockNumberAndIndexByHash(_txHash.hex(), getMemoryTableFactory());
+        getStorageGetter()->getBlockNumberAndIndexByHash(_txHash.hex(), getMemoryTableFactory(0));
     if (numIndexPair
         && !numIndexPair->first.empty()
         && !numIndexPair->second.empty())
@@ -462,9 +462,9 @@ void Ledger::asyncGetTotalTransactionCount(
     std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)> _callback)
 {
     auto totalCountStr = getStorageGetter()->getCurrentState(
-        SYS_KEY_TOTAL_TRANSACTION_COUNT, getMemoryTableFactory());
+        SYS_KEY_TOTAL_TRANSACTION_COUNT, getMemoryTableFactory(0));
     auto totalFailedStr = getStorageGetter()->getCurrentState(
-        SYS_KEY_TOTAL_FAILED_TRANSACTION, getMemoryTableFactory());
+        SYS_KEY_TOTAL_FAILED_TRANSACTION, getMemoryTableFactory(0));
     if(!totalCountStr.empty() && !totalFailedStr.empty()){
         auto totalCount = boost::lexical_cast<int64_t>(totalCountStr);
         auto totalFailed = boost::lexical_cast<int64_t>(totalFailedStr);
@@ -495,7 +495,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
     // get value from db
     try
     {
-        auto ret = getStorageGetter()->getSysConfig(_key, getMemoryTableFactory());
+        auto ret = getStorageGetter()->getSysConfig(_key, getMemoryTableFactory(0));
         if (!ret)
         {
             LEDGER_LOG(ERROR) << LOG_DESC(
@@ -551,7 +551,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _blockNumber,
         _onGetList(error, nullptr);
         return;
     }
-    auto noncesStr = getStorageGetter()->getNoncesFromStorage(_blockNumber, getMemoryTableFactory());
+    auto noncesStr = getStorageGetter()->getNoncesFromStorage(_blockNumber, getMemoryTableFactory(0));
     if(!noncesStr.empty()){
         // FIXME: decode nonceList
         auto nonceList = std::make_shared<protocol::NonceList>();
@@ -565,6 +565,33 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _blockNumber,
     // TODO: add error code and msg
     auto error = std::make_shared<Error>(-1, "");
     _onGetList(error, nullptr);
+}
+
+void Ledger::asyncGetNodeListByType(const std::string& _type,
+    std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
+{
+    if (_type != CONSENSUS_SEALER || _type != CONSENSUS_OBSERVER)
+    {
+        // TODO: to add errorCode and message
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetConfig(error, nullptr);
+        return;
+    }
+    auto number = getLatestBlockNumber();
+    auto nodeList = getStorageGetter()->getConsensusConfig(
+        _type, number, getMemoryTableFactory(0), m_blockFactory->cryptoSuite()->keyFactory());
+    if (nodeList != nullptr && nodeList->size() != 0)
+    {
+        _onGetConfig(nullptr, nodeList);
+        return;
+    }
+    LEDGER_LOG(ERROR)
+            << LOG_DESC("[#asyncGetNodeListByType] error happened in open table or get entry")
+            << LOG_KV("blockNumber", number);
+
+    // TODO: add error code and msg
+    auto error = std::make_shared<Error>(-1, "");
+    _onGetConfig(error, nullptr);
 }
 
 Block::Ptr Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag)
@@ -599,6 +626,7 @@ Block::Ptr Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag)
             else{
                 LEDGER_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the header")
                                   << LOG_KV("blockNumber", _blockNumber);
+                return nullptr;
             }
         }
         if(_blockFlag & TRANSACTIONS)
@@ -614,6 +642,7 @@ Block::Ptr Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag)
             else{
                 LEDGER_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the Txs")
                                   << LOG_KV("blockNumber", _blockNumber);
+                return nullptr;
             }
         }
         if(_blockFlag & RECEIPTS)
@@ -627,6 +656,7 @@ Block::Ptr Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag)
             }else{
                 LEDGER_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the Txs")
                                   << LOG_KV("blockNumber", _blockNumber);
+                return nullptr;
             }
         }
         if(!(_blockFlag ^ FULL_BLOCK)){
@@ -647,7 +677,7 @@ Block::Ptr Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag)
 bcos::protocol::BlockNumber Ledger::getBlockNumberByHash(const bcos::crypto::HashType& _hash)
 {
     BlockNumber number = -1;
-    auto numberStr = getStorageGetter()->getBlockNumberByHash(_hash.hex(), getMemoryTableFactory());
+    auto numberStr = getStorageGetter()->getBlockNumberByHash(_hash.hex(), getMemoryTableFactory(0));
     if(!numberStr.empty()){
         number = boost::lexical_cast<BlockNumber>(numberStr);
     }
@@ -660,7 +690,7 @@ Ledger::getBlockNumberAndIndexByTxHash(bcos::crypto::HashType const& _txHash)
     BlockNumber number = -1;
     auto hashStr = boost::lexical_cast<std::string>(_txHash);
     auto numberIndexStrPair =
-        getStorageGetter()->getBlockNumberAndIndexByHash(hashStr, getMemoryTableFactory());
+        getStorageGetter()->getBlockNumberAndIndexByHash(hashStr, getMemoryTableFactory(0));
     auto numberIndexPair = std::make_shared<std::pair<protocol::BlockNumber, int64_t>>();
 
     if(!numberIndexStrPair->first.empty()&&!numberIndexStrPair->second.empty()){
@@ -686,7 +716,7 @@ BlockNumber Ledger::getNumberFromStorage()
 {
     BlockNumber num = -1;
     std::string currentNumber =
-        getStorageGetter()->getCurrentState(SYS_KEY_CURRENT_NUMBER, getMemoryTableFactory());
+        getStorageGetter()->getCurrentState(SYS_KEY_CURRENT_NUMBER, getMemoryTableFactory(0));
     if(!currentNumber.empty()){
         num = boost::lexical_cast<BlockNumber>(currentNumber);
     }
@@ -707,7 +737,7 @@ std::string Ledger::getLatestBlockHash(){
 std::string Ledger::getHashFromStorage()
 {
     auto currentHash =
-        getStorageGetter()->getCurrentState(SYS_KEY_CURRENT_HASH, getMemoryTableFactory());
+        getStorageGetter()->getCurrentState(SYS_KEY_CURRENT_HASH, getMemoryTableFactory(0));
     return currentHash;
 }
 
@@ -741,7 +771,7 @@ BlockHeader::Ptr Ledger::getBlockHeader(const bcos::protocol::BlockNumber& _bloc
         LEDGER_LOG(TRACE) << LOG_DESC("[#getBlockHeader]Cache missed, read from storage")
                           << LOG_KV("blockNumber", _blockNumber);
         auto headerStr =
-            getStorageGetter()->getBlockHeaderFromStorage(_blockNumber, getMemoryTableFactory());
+            getStorageGetter()->getBlockHeaderFromStorage(_blockNumber, getMemoryTableFactory(0));
         auto storage_getter_time = utcTime() - record_time;
         record_time = utcTime();
         if(!headerStr.empty()){
@@ -878,7 +908,7 @@ bcos::protocol::TransactionsPtr Ledger::getTxs(const bcos::protocol::BlockNumber
         LEDGER_LOG(TRACE) << LOG_DESC("[#getTxs]Cache missed, read from storage")
                           << LOG_KV("blockNumber", _blockNumber);
         auto blockStr =
-            getStorageGetter()->getTxsFromStorage(_blockNumber, getMemoryTableFactory());
+            getStorageGetter()->getTxsFromStorage(_blockNumber, getMemoryTableFactory(0));
         auto storage_getter_time = utcTime() - record_time;
         record_time = utcTime();
         if (!blockStr.empty())
@@ -934,7 +964,7 @@ bcos::protocol::ReceiptsPtr Ledger::getReceipts(
     else
     {
         auto blockStr =
-            getStorageGetter()->getReceiptsFromStorage(_blockNumber, getMemoryTableFactory());
+            getStorageGetter()->getReceiptsFromStorage(_blockNumber, getMemoryTableFactory(0));
         auto storage_getter_time = utcTime() - record_time;
         record_time = utcTime();
         LEDGER_LOG(TRACE) << LOG_DESC("[#getReceipts]Cache missed, read from storage")
@@ -1024,11 +1054,14 @@ void Ledger::writeNoncesToBlock(
     }
 }
 
-void Ledger::writeHash2Number(
+void Ledger:: writeHash2Number(
     const Block::Ptr& block, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
     bool ret = getStorageSetter()->setHash2Number(_tableFactory, block->blockHeader()->hash().hex(),
         boost::lexical_cast<std::string>(block->blockHeader()->number()));
+    ret = ret && getStorageSetter()->setNumber2Hash(_tableFactory,
+                     boost::lexical_cast<std::string>(block->blockHeader()->number()),
+                     block->blockHeader()->hash().hex());
     if(!ret){
         LEDGER_LOG(DEBUG) << LOG_BADGE("WriteHash2Number")
                           << LOG_DESC("Write row in SYS_HASH_2_NUMBER error")
@@ -1138,6 +1171,8 @@ void Ledger::writeNumber2Receipts(const bcos::protocol::Block::Ptr& _block,
 bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig)
 {
     LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
+    // TODO: to check NUMBER_2_HEADER table is created
+    // TODO: creat tables
     auto block = getBlock(0, HEADER);
 
     // to build genesis block
@@ -1145,13 +1180,50 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig)
     {
         auto txLimit = _ledgerConfig->blockTxCountLimit();
         LEDGER_LOG(TRACE) << LOG_DESC("test") << LOG_KV("txLimit", txLimit);
+        auto tableFactory = getMemoryTableFactory(0);
         // build a block
-        // write in HASH_2_NUMBER
-        // write in SYS_CONFIG
-        // write in SYS_CONSENSUS
-        // write in NUMBER_2_HEADER/TXS/RECEIPTS
-        // write in SYS_CURRENT_STATE
-        // db commit
+        block = m_blockFactory->createBlock();
+        auto header = m_headerFactory->createBlockHeader();
+        header->setNumber(0);
+        // TODO: add genesisMark
+        header->setExtraData(asBytes(""));
+        block->setBlockHeader(header);
+        try
+        {
+            // write in HASH_2_NUMBER
+            writeHash2Number(block, getMemoryTableFactory(0));
+            // write in SYS_CONFIG
+            // SYSTEM_KEY_TX_COUNT_LIMIT
+            getStorageSetter()->setSysConfig(getMemoryTableFactory(0), SYSTEM_KEY_TX_COUNT_LIMIT,
+                boost::lexical_cast<std::string>(_ledgerConfig->blockTxCountLimit()), "0");
+            // SYSTEM_KEY_CONSENSUS_TIMEOUT
+            getStorageSetter()->setSysConfig(getMemoryTableFactory(0), SYSTEM_KEY_CONSENSUS_TIMEOUT,
+                boost::lexical_cast<std::string>(_ledgerConfig->consensusTimeout()), "0");
+            // write in SYS_CONSENSUS
+            getStorageSetter()->setConsensusConfig(
+                getMemoryTableFactory(0), CONSENSUS_SEALER, _ledgerConfig->consensusNodeList(), "0");
+            getStorageSetter()->setConsensusConfig(
+                getMemoryTableFactory(0), CONSENSUS_OBSERVER, _ledgerConfig->observerNodeList(), "0");
+            // write in NUMBER_2_HEADER
+            writeNumber2Block(block, getMemoryTableFactory(0));
+            writeNumber2BlockHeader(block, getMemoryTableFactory(0));
+            // write in SYS_CURRENT_STATE
+            getStorageSetter()->setCurrentState(
+                getMemoryTableFactory(0), SYS_KEY_CURRENT_NUMBER, "0");
+            getStorageSetter()->setCurrentState(
+                getMemoryTableFactory(0), SYS_KEY_CURRENT_HASH, header->hash().hex());
+
+            // db commit
+            tableFactory->commit();
+        }
+        catch (OpenSysTableFailed const& e){
+            LEDGER_LOG(FATAL)
+                    << LOG_DESC("[commitBlock]System meets error when try to write block to storage")
+                    << LOG_KV("EINFO", boost::diagnostic_information(e));
+            raise(SIGTERM);
+            BOOST_THROW_EXCEPTION(
+                OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
+        }
     }
     else{
         // TODO: check 0th block

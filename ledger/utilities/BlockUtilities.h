@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include "bcos-ledger/ledger/utilities/Common.h"
+#include "Common.h"
 
 namespace bcos::ledger
 {

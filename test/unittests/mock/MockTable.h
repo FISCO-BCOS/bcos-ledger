@@ -19,12 +19,10 @@
  */
 #pragma once
 
-#include "bcos-ledger/ledger/utilities/Common.h"
+#include "../ledger/utilities/Common.h"
 #include "bcos-framework/libtable/Table.h"
 #include "bcos-framework/libtable/TableFactory.h"
 #include "bcos-framework/interfaces/storage/Common.h"
-#include "MockBlock.h"
-#include "MockBlockHeader.h"
 #include <tbb/concurrent_unordered_map.h>
 
 using namespace bcos::storage;
@@ -36,7 +34,7 @@ class MockTable : public Table
 public:
     using Ptr = std::shared_ptr<MockTable>;
 
-    MockTable(std::string const& _tableName):Table(nullptr, nullptr, nullptr, 0),
+    explicit MockTable(std::string const& _tableName):Table(nullptr, nullptr, nullptr, 0),
         m_tableName(_tableName) {}
 
     std::shared_ptr<Entry> getRow(const std::string &_key) override
@@ -93,7 +91,7 @@ private:
 class MockErrorTableFactory : public TableFactory
 {
 public:
-    MockErrorTableFactory(): TableFactory(nullptr, nullptr, 0){}
+    MockErrorTableFactory(): TableFactory(nullptr, nullptr, -1){}
     std::shared_ptr<TableInterface> openTable(const std::string &) override
     {
         return nullptr;

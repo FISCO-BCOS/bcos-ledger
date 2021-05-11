@@ -19,9 +19,7 @@
  */
 
 #include "BlockUtilities.h"
-#include "bcos-ledger/ledger/utilities/Common.h"
 #include <bcos-framework/interfaces/protocol/Block.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
 
 namespace bcos::ledger{
 
@@ -47,7 +45,7 @@ protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr&
 
 size_t blockTransactionListSetter(const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs){
 
-    if(_block == nullptr || _txs == nullptr || _txs->empty()){
+    if(_block == nullptr || _txs == nullptr){
         LEDGER_LOG(DEBUG)<<LOG_DESC("blockTransactionListSetter set error");
         return -1;
     }
@@ -80,8 +78,8 @@ protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block)
 
 size_t blockReceiptListSetter(const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts)
 {
-    if(_block == nullptr || _receipts == nullptr || _receipts->empty()){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block receipts size is 0");
+    if(_block == nullptr || _receipts == nullptr){
+        LEDGER_LOG(DEBUG)<<LOG_DESC("Block receipts set error");
         return -1;
     }
     for (const auto& rcpt : *_receipts)

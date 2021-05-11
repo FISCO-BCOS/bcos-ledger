@@ -19,38 +19,113 @@
  */
 
 #pragma once
-#include "../../mock/MockBlockHeaderFactory.h"
-#include <bcos-framework/libprotocol/Exceptions.h>
-#include <bcos-framework/libprotocol/protobuf/PBBlockHeaderFactory.h>
-#include <bcos-framework/libutilities/Common.h>
+#include "libprotocol/Common.h"
+#include "libprotocol/Exceptions.h"
+#include "libprotocol/protobuf/PBBlockHeaderFactory.h"
+#include "libutilities/Common.h"
+#include <bcos-test/libutils/HashImpl.h>
+#include <bcos-test/libutils/SignatureImpl.h>
 #include <boost/test/unit_test.hpp>
-
-inline bcos::protocol::BlockHeader::Ptr fakeBlockHeader(
-    bcos::crypto::HashType const& _txsRoot, bcos::crypto::HashType const& _receiptRoot,bcos::crypto::HashType const& _stateRoot,
-    int64_t _number, u256 const& _gasUsed, bytes const& _extraData)
+using namespace bcos;
+using namespace bcos::protocol;
+using namespace bcos::crypto;
+namespace bcos
 {
-    bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory =
-        std::make_shared<bcos::test::MockBlockHeaderFactory>();
-    bcos::protocol::BlockHeader::Ptr blockHeader = blockHeaderFactory->createBlockHeader();
+namespace test
+{
+
+inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, int32_t _version,
+    const ParentInfoList& _parentInfo, h256 const& _txsRoot, h256 const& _receiptRoot,
+    h256 const& _stateRoot, int64_t _number, u256 const& _gasUsed, int64_t _timestamp,
+    int64_t _sealer, const std::vector<bytes>& _sealerList, bytes const& _extraData,
+    SignatureList _signatureList)
+{
+    BlockHeaderFactory::Ptr blockHeaderFactory =
+        std::make_shared<PBBlockHeaderFactory>(_cryptoSuite);
+    BlockHeader::Ptr blockHeader = blockHeaderFactory->createBlockHeader();
+    blockHeader->setVersion(_version);
+    blockHeader->setParentInfo(_parentInfo);
     blockHeader->setTxsRoot(_txsRoot);
     blockHeader->setReceiptRoot(_receiptRoot);
     blockHeader->setStateRoot(_stateRoot);
     blockHeader->setNumber(_number);
     blockHeader->setGasUsed(_gasUsed);
+    blockHeader->setTimestamp(_timestamp);
+    blockHeader->setSealer(_sealer);
+    blockHeader->setSealerList(gsl::span<const bytes>(_sealerList));
     blockHeader->setExtraData(_extraData);
+    blockHeader->setSignatureList(_signatureList);
+    WeightList weights;
+    weights.push_back(0);
+    blockHeader->setConsensusWeights(weights);
     return blockHeader;
 }
 
-inline bcos::protocol::BlockHeader::Ptr getBlockHeader()
+inline ParentInfoList fakeParentInfo(Hash::Ptr _hashImpl, size_t _size)
 {
-    auto txsRoot = bcos::crypto::HashType(1);
-    auto receiptRoot = bcos::crypto::HashType(2);
-    auto stateRoot = bcos::crypto::HashType(3);
-    bcos::protocol::BlockNumber number = rand();
+    ParentInfoList parentInfos;
+    for (size_t i = 0; i < _size; i++)
+    {
+        ParentInfo parentInfo;
+        parentInfo.blockNumber = i;
+        parentInfo.blockHash = _hashImpl->hash(std::to_string(i));
+        parentInfos.emplace_back(parentInfo);
+    }
+    return parentInfos;
+}
+
+inline std::vector<bytes> fakeSealerList(
+    std::vector<KeyPairInterface::Ptr>& _keyPairVec, SignatureCrypto::Ptr _signImpl, size_t size)
+{
+    std::vector<bytes> sealerList;
+    for (size_t i = 0; i < size; i++)
+    {
+        auto keyPair = _signImpl->generateKeyPair();
+        _keyPairVec.emplace_back(keyPair);
+        sealerList.emplace_back(*(keyPair->publicKey()->encode()));
+    }
+    return sealerList;
+}
+
+inline SignatureList fakeSignatureList(SignatureCrypto::Ptr _signImpl,
+                                       std::vector<KeyPairInterface::Ptr>& _keyPairVec, h256 const& _hash)
+{
+    auto sealerIndex = 0;
+    SignatureList signatureList;
+    for (auto keyPair : _keyPairVec)
+    {
+        auto signature = _signImpl->sign(keyPair, _hash);
+        Signature sig;
+        sig.index = sealerIndex++;
+        sig.signature = *signature;
+        signatureList.push_back(sig);
+    }
+    return signatureList;
+}
+
+inline BlockHeader::Ptr testPBBlockHeader(CryptoSuite::Ptr _cryptoSuite)
+{
+    auto hashImpl = _cryptoSuite->hashImpl();
+    auto signImpl = _cryptoSuite->signatureImpl();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
+    int version = 10;
+    auto parentInfo = fakeParentInfo(hashImpl, 3);
+    auto txsRoot = hashImpl->hash((std::string) "txsRoot");
+    auto receiptRoot = hashImpl->hash((std::string) "receiptRoot");
+    auto stateRoot = hashImpl->hash((std::string) "stateRoot");
+    int64_t number = random();
     u256 gasUsed = 3453456346534;
+    int64_t timestamp = 9234234234;
+    int64_t sealer = 100;
+    std::vector<KeyPairInterface::Ptr> keyPairVec;
+    auto sealerList = fakeSealerList(keyPairVec, signImpl, 4);
     bytes extraData = stateRoot.asBytes();
+    auto signatureList = fakeSignatureList(signImpl, keyPairVec, receiptRoot);
 
     auto blockHeader =
-        fakeBlockHeader(txsRoot, receiptRoot, stateRoot, number, gasUsed, extraData);
+        fakeAndTestBlockHeader(cryptoSuite, version, parentInfo, txsRoot, receiptRoot, stateRoot,
+                               number, gasUsed, timestamp, sealer, sealerList, extraData, signatureList);
     return blockHeader;
 }
+}  // namespace test
+}  // namespace bcos

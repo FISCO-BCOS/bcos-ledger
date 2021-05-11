@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
+#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "bcos-framework/interfaces/protocol/BlockFactory.h"
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/interfaces/storage/Common.h"
@@ -27,10 +28,10 @@
 #include "bcos-framework/libutilities/Common.h"
 #include "bcos-framework/libutilities/Exceptions.h"
 #include "bcos-framework/libutilities/ThreadPool.h"
-#include "bcos-ledger/ledger/utilities/Common.h"
-#include "bcos-ledger/ledger/utilities/FIFOCache.h"
-#include "bcos-ledger/ledger/storage/StorageGetter.h"
-#include "bcos-ledger/ledger/storage/StorageSetter.h"
+#include "utilities/Common.h"
+#include "utilities/FIFOCache.h"
+#include "storage/StorageGetter.h"
+#include "storage/StorageSetter.h"
 
 #include <utility>
 
@@ -39,23 +40,21 @@
 namespace bcos::ledger
 {
 
-class Ledger: public LedgerInterface {
+class Ledger: public LedgerInterface, public std::enable_shared_from_this<Ledger>
+{
 public:
-    Ledger(bcos::storage::TableFactoryInterface::Ptr _tableFactory,
-        bcos::protocol::BlockFactory::Ptr _blockFactory,
+    Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::protocol::BlockHeaderFactory::Ptr _headerFactory,
-        bcos::storage::StorageInterface::Ptr _state)
+        bcos::storage::StorageInterface::Ptr _storage)
       : m_blockFactory(_blockFactory),
         m_headerFactory(_headerFactory),
-        m_tableFactory(_tableFactory),
-        m_state(_state),
+        m_storage(_storage),
         m_storageGetter(StorageGetter::storageGetterFactory()),
         m_storageSetter(StorageSetter::storageSetterFactory())
     {
         assert(m_blockFactory);
         assert(m_headerFactory);
-        assert(m_tableFactory);
-        assert(m_state);
+        assert(m_storage);
 
         auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
         auto headerDestructorThread = std::make_shared<ThreadPool>("headerCache", 1);
@@ -115,10 +114,26 @@ public:
     void asyncGetNonceList(bcos::protocol::BlockNumber _blockNumber,
         std::function<void(Error::Ptr, bcos::protocol::NonceListPtr)> _onGetList) override;
 
-private:
+    void asyncGetNodeListByType(const std::string& _type,
+        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override;
+
+    void setBlockFactory(const protocol::BlockFactory::Ptr& mBlockFactory)
+    {
+        m_blockFactory = mBlockFactory;
+    }
+    void setHeaderFactory(const protocol::BlockHeaderFactory::Ptr& mHeaderFactory)
+    {
+        m_headerFactory = mHeaderFactory;
+    }
+    void setStorage(const storage::StorageInterface::Ptr& mStorage)
+    {
+        m_storage = mStorage;
+    }
+
     /****** init ledger ******/
     bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig);
 
+private:
     /****** base block data getter ******/
     bcos::protocol::Block::Ptr getBlock(bcos::protocol::BlockNumber const& _blockNumber,  int32_t _blockFlag);
 
@@ -146,10 +161,14 @@ private:
     std::shared_ptr<Parent2ChildListMap> getParent2ChildListByTxsProofCache(
         protocol::BlockNumber _blockNumber, protocol::TransactionsPtr _txs);
 
-    inline storage::TableFactoryInterface::Ptr getMemoryTableFactory()
+    inline storage::TableFactoryInterface::Ptr getMemoryTableFactory(const protocol::BlockNumber& _number)
     {
-        return m_tableFactory;
+        // if you use this tableFactory to write data, _number should be latest block number;
+        // if you use it read data, _number can be -1
+        return std::make_shared<storage::TableFactory>(
+            m_storage, m_blockFactory->cryptoSuite()->hashImpl(), _number);
     }
+
 
     inline StorageGetter::Ptr getStorageGetter(){
         return m_storageGetter;
@@ -193,15 +212,15 @@ private:
         const storage::TableFactoryInterface::Ptr& _tableFactory);
 
     inline bcos::storage::StorageInterface::Ptr getState(){
-        return m_state;
+        return m_storage;
     }
 
     /****** runtime cache ******/
-    FIFOCache<bcos::protocol::Block::Ptr, bcos::protocol::Block> m_blockCache;
-    FIFOCache<bcos::protocol::BlockHeader::Ptr, bcos::protocol::BlockHeader> m_blockHeaderCache;
-    FIFOCache<bcos::protocol::TransactionsPtr, bcos::protocol::Transactions>
+    FIFOCache<protocol::Block::Ptr, protocol::Block> m_blockCache;
+    FIFOCache<protocol::BlockHeader::Ptr, protocol::BlockHeader> m_blockHeaderCache;
+    FIFOCache<protocol::TransactionsPtr, protocol::Transactions>
         m_transactionsCache;
-    FIFOCache<bcos::protocol::ReceiptsPtr, bcos::protocol::Receipts> m_receiptCache;
+    FIFOCache<protocol::ReceiptsPtr, protocol::Receipts> m_receiptCache;
 
     mutable SharedMutex m_blockNumberMutex;
     bcos::protocol::BlockNumber m_blockNumber = -1;
@@ -230,8 +249,7 @@ private:
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::BlockHeaderFactory::Ptr m_headerFactory;
-    bcos::storage::TableFactoryInterface::Ptr m_tableFactory;
-    bcos::storage::StorageInterface::Ptr m_state;
+    bcos::storage::StorageInterface::Ptr m_storage;
     StorageGetter::Ptr m_storageGetter;
     StorageSetter::Ptr m_storageSetter;
 };
