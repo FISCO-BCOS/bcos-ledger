@@ -18,7 +18,7 @@
  * @date 2021-05-06
  */
 
-#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
+#include "../ledger/utilities/BlockUtilities.h"
 #include "unittests/ledger/common/FakeTransaction.h"
 #include "unittests/ledger/common/FakeReceipt.h"
 #include "unittests/ledger/common/FakeBlock.h"
@@ -36,8 +36,9 @@ BOOST_FIXTURE_TEST_SUITE(BlockUtilitiesTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testBlockTxListSetterGetter)
 {
     auto txs = fakeTransactions(10);
-    auto blockFactory = createBlockFactory();
-    auto block1 = fakeBlock(blockFactory, 10, 10);
+    auto crypto = createCryptoSuite();
+    auto blockFactory = createBlockFactory(crypto);
+    auto block1 = fakeBlock(crypto, blockFactory, 0, 0);
     auto number = bcos::ledger::blockTransactionListSetter(block1, txs);
     BOOST_CHECK_EQUAL(number, 10);
     BOOST_CHECK_EQUAL(block1->transactionsSize(), 10);
@@ -50,22 +51,24 @@ BOOST_AUTO_TEST_CASE(testNullTxSetter){
     auto error1 = bcos::ledger::blockTransactionListSetter(nullptr, txs);
     auto error2 = bcos::ledger::blockTransactionListSetter(nullptr, nullptr);
 
-    auto blockFactory = createBlockFactory();
-    auto block1 = fakeBlock(blockFactory, 10, 10);
+    auto crypto = createCryptoSuite();
+    auto blockFactory = createBlockFactory(crypto);
+    auto block1 = fakeBlock(crypto, blockFactory, 10, 10);
     auto error3 = bcos::ledger::blockTransactionListSetter(block1, nullptr);
 
     auto txs_empty = fakeTransactions(0);
-    auto error4 = bcos::ledger::blockTransactionListSetter(block1, txs_empty);
+    auto txs_number = bcos::ledger::blockTransactionListSetter(block1, txs_empty);
 
     BOOST_CHECK_EQUAL(error1, -1);
     BOOST_CHECK_EQUAL(error2, -1);
     BOOST_CHECK_EQUAL(error3, -1);
-    BOOST_CHECK_EQUAL(error4, -1);
+    BOOST_CHECK_EQUAL(txs_number, block1->transactionsSize());
 }
 
 BOOST_AUTO_TEST_CASE(testEmptyBlockTxGetter){
-    auto blockFactory = createBlockFactory();
-    auto block1 = fakeBlock(blockFactory, 10, 10);
+    auto crypto = createCryptoSuite();
+    auto blockFactory = createBlockFactory(crypto);
+    auto block1 = fakeBlock(crypto, blockFactory, 0, 0);
     auto errorTx1 = bcos::ledger::blockTransactionListGetter(block1);
     BOOST_CHECK_EQUAL(errorTx1->size(),0);
 
@@ -76,8 +79,10 @@ BOOST_AUTO_TEST_CASE(testEmptyBlockTxGetter){
 BOOST_AUTO_TEST_CASE(testBlockReceiptListSetterGetter)
 {
     auto receipts = fakeReceipts(10);
-    auto blockFactory = createBlockFactory();
-    auto block1 = fakeBlock(blockFactory, 10, 10);
+    auto crypto = createCryptoSuite();
+
+    auto blockFactory = createBlockFactory(crypto);
+    auto block1 = fakeBlock(crypto, blockFactory, 0, 0);
     auto number = bcos::ledger::blockReceiptListSetter(block1, receipts);
     BOOST_CHECK_EQUAL(number, 10);
     BOOST_CHECK_EQUAL(block1->receiptsSize(), 10);
@@ -91,21 +96,23 @@ BOOST_AUTO_TEST_CASE(testNullReceiptSetter){
     auto error1 = bcos::ledger::blockReceiptListSetter(nullptr, receipts);
     auto error2 = bcos::ledger::blockReceiptListSetter(nullptr, nullptr);
 
-    auto blockFactory = createBlockFactory();
-    auto block1 = fakeBlock(blockFactory, 10, 10);
+    auto crypto = createCryptoSuite();
+    auto blockFactory = createBlockFactory(crypto);
+    auto block1 = fakeBlock(crypto, blockFactory, 10, 10);
     auto error3 = bcos::ledger::blockReceiptListSetter(block1, nullptr);
 
     auto receipts_empty = fakeReceipts(0);
-    auto error4 = bcos::ledger::blockReceiptListSetter(block1, receipts_empty);
+    auto rcpt_number = bcos::ledger::blockReceiptListSetter(block1, receipts_empty);
 
     BOOST_CHECK_EQUAL(error1, -1);
     BOOST_CHECK_EQUAL(error2, -1);
     BOOST_CHECK_EQUAL(error3, -1);
-    BOOST_CHECK_EQUAL(error4, -1);
+    BOOST_CHECK_EQUAL(rcpt_number, block1->receiptsSize());
 }
 BOOST_AUTO_TEST_CASE(testEmptyBlockReceiptGetter){
-    auto blockFactory = createBlockFactory();
-    auto block1 = fakeBlock(blockFactory, 10, 10);
+    auto crypto = createCryptoSuite();
+    auto blockFactory = createBlockFactory(crypto);
+    auto block1 = fakeBlock(crypto, blockFactory, 0, 0);
     auto errorReceipt1 = bcos::ledger::blockReceiptListGetter(block1);
     BOOST_CHECK_EQUAL(errorReceipt1->size(),0);
 

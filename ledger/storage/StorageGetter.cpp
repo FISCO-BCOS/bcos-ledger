@@ -19,11 +19,12 @@
  */
 
 #include "StorageGetter.h"
-#include "bcos-ledger/ledger/utilities/Common.h"
+#include "../utilities/Common.h"
 
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::storage;
+using namespace bcos::consensus;
 
 namespace bcos::ledger
 {
@@ -105,9 +106,14 @@ std::string StorageGetter::getBlockNumberByHash(
 }
 
 std::string StorageGetter::getBlockHashByNumber(
-    const std::string& _num, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
+    const BlockNumber& _num, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
-    return getKeyByValue(_tableFactory,SYS_HASH_2_NUMBER,_num);
+    auto hashStr = getterByBlockNumber(_num, _tableFactory, SYS_NUMBER_2_HASH);
+    if (hashStr.empty())
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("[#getBlockHashByNumber] Cannot get hashStr, return empty.");
+    }
+    return hashStr;
 }
 
 std::string StorageGetter::getCurrentState(
@@ -126,6 +132,53 @@ std::shared_ptr<stringsPair> StorageGetter::getSysConfig(
     const std::string& _key, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
     return stringsPairGetterByRowAndFields(_tableFactory, SYS_CONFIG, _key, SYS_VALUE, SYS_CONFIG_ENABLE_BLOCK_NUMBER);
+}
+
+ConsensusNodeListPtr StorageGetter::getConsensusConfig(const std::string& _nodeType,
+    const BlockNumber& _blockNumber, const TableFactoryInterface::Ptr& _tableFactory,
+    const crypto::KeyFactory::Ptr& _keyFactory)
+{
+    ConsensusNodeListPtr nodeList = std::make_shared<ConsensusNodeList>();
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+
+    auto table = _tableFactory->openTable(SYS_CONSENSUS);
+    auto openTable_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    if (table)
+    {
+        auto nodeIdList = table->getPrimaryKeys(nullptr);
+        auto select_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
+        auto nodeMap = table->getRows(nodeIdList);
+        for (const auto& nodePair : nodeMap)
+        {
+            if (nodePair.second->getField(NODE_TYPE) == _nodeType &&
+                boost::lexical_cast<BlockNumber>(nodePair.second->getField(NODE_ENABLE_NUMBER)) <=
+                    _blockNumber)
+            {
+                crypto::NodeIDPtr nodeID = _keyFactory->createKey(nodePair.first);
+                auto weight = boost::lexical_cast<uint64_t>(nodePair.second->getField(NODE_WEIGHT));
+                auto node = std::make_shared<ConsensusNode>(std::move(nodeID), weight);
+                std::shared_ptr<ConsensusNodeInterface> a = nodeList->at(1);
+                nodeList->emplace_back(node);
+            }
+            auto get_field_time_cost = utcTime() - record_time;
+            LEDGER_LOG(DEBUG) << LOG_DESC("Get ConsensusConfig from db")
+                              << LOG_KV("openTableTimeCost", openTable_time_cost)
+                              << LOG_KV("selectTimeCost", select_time_cost)
+                              << LOG_KV("getFieldTimeCost", get_field_time_cost)
+                              << LOG_KV("totalTimeCost", utcTime() - start_time);
+        }
+    }
+    else
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_CONSENSUS table error from db");
+        return nullptr;
+    }
+    return nodeList;
 }
 
 std::string StorageGetter::tableGetterByRowAndField(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName, const std::string& _row, const std::string& _field)
@@ -155,6 +208,10 @@ std::string StorageGetter::tableGetterByRowAndField(const bcos::storage::TableFa
                               << LOG_KV("getFieldTimeCost", get_field_time_cost)
                               << LOG_KV("totalTimeCost", utcTime() - start_time);
         }
+    }
+    else{
+        LEDGER_LOG(DEBUG) << LOG_DESC("Open table error from db")
+                          << LOG_KV("openTable", _tableName);
     }
     return ret;
 }
@@ -192,36 +249,4 @@ std::shared_ptr<stringsPair> StorageGetter::stringsPairGetterByRowAndFields(
     }
     return ret;
 }
-
-std::string StorageGetter::getKeyByValue(const TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _tableName, const std::string& _keyValue)
-{
-    std::string ret;
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-
-    auto table = _tableFactory->openTable(_tableName);
-
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
-    if(table){
-        auto condition = std::make_shared<Condition>();
-        condition->GE(_keyValue);
-        condition->LE(_keyValue);
-        auto keyVector = table->getPrimaryKeys(condition);
-        auto select_time_cost = utcTime() - record_time;
-
-        if(!keyVector.empty()){
-            ret = keyVector.at(0);
-            LEDGER_LOG(DEBUG) << LOG_DESC("Get string from db") << LOG_KV("openTable", _tableName)
-                              << LOG_KV("openTableTimeCost", openTable_time_cost)
-                              << LOG_KV("selectTimeCost", select_time_cost)
-                              << LOG_KV("totalTimeCost", utcTime() - start_time);
-        }
-    }
-    return ret;
-}
-
-
 } // namespace bcos::ledger

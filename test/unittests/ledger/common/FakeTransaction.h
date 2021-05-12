@@ -54,20 +54,7 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     auto factory = std::make_shared<PBTransactionFactory>(_cryptoSuite);
     auto pbTransaction = fakeTransaction(
         _cryptoSuite, _keyPair, _to, _input, _nonce, _blockLimit, _chainId, _groupId);
-
-    BOOST_CHECK(
-        pbTransaction->sender().toBytes() == _keyPair->address(_cryptoSuite->hashImpl()).asBytes());
-    // encode
-    std::shared_ptr<bytes> encodedData = std::make_shared<bytes>();
-    pbTransaction->encode(*encodedData);
-    std::cout << "#### encodedData is:" << *toHexString(*encodedData) << std::endl;
-    std::cout << "### hash:" << pbTransaction->hash().hex() << std::endl;
-    std::cout << "### sender:" << *toHexString(pbTransaction->sender()) << std::endl;
-    std::cout << "### type:" << pbTransaction->type() << std::endl;
-    std::cout << "### to:" << *toHexString(pbTransaction->to()) << std::endl;
-    // decode
-    auto decodedTransaction = factory->createTransaction(*encodedData, true);
-    return decodedTransaction;
+    return pbTransaction;
 }
 
 inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite)

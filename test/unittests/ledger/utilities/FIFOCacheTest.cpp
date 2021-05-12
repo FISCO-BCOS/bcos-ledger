@@ -18,7 +18,7 @@
  * @date 2021-04-14
  */
 
-#include "bcos-ledger/ledger/utilities/FIFOCache.h"
+#include "../ledger/utilities/FIFOCache.h"
 #include "unittests/ledger/common/FakeBlock.h"
 #include <bcos-test/libutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
@@ -37,12 +37,13 @@ BOOST_AUTO_TEST_CASE(testBlockCacheAdd)
     auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
     _blockFIFOCache.setDestructorThread(blockDestructorThread);
 
-    auto blockFactory = createBlockFactory();
-    auto block1 = fakeBlock(blockFactory, 10, 10);
+    auto crypto = createCryptoSuite();
+    auto blockFactory = createBlockFactory(crypto);
+    auto block1 = fakeBlock(crypto, blockFactory, 10, 10);
     _blockFIFOCache.add(block1->blockHeader()->number(), block1);
     auto block1_get = _blockFIFOCache.get(block1->blockHeader()->number());
     BOOST_CHECK_EQUAL(block1_get.first, block1->blockHeader()->number());
-    BOOST_CHECK_EQUAL(block1_get.second->transactionsHashSize(), 10);
+    BOOST_CHECK_EQUAL(block1_get.second->transactionsSize(), 10);
 }
 
 BOOST_AUTO_TEST_CASE(testBlockCacheAddMax)
@@ -51,17 +52,19 @@ BOOST_AUTO_TEST_CASE(testBlockCacheAddMax)
     auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
     _blockFIFOCache.setDestructorThread(blockDestructorThread);
 
-    auto blockFactory = createBlockFactory();
-    auto blocks = fakeBlocks(blockFactory, 1, 1, 11);
-    for (auto & block :blocks)
+    auto crypto = createCryptoSuite();
+    auto blockFactory = createBlockFactory(crypto);
+    auto blocks = fakeBlocks(crypto, blockFactory, 1, 1, 11);
+    for (auto & block : *blocks)
     {
         _blockFIFOCache.add(block->blockHeader()->number(), block);
     }
-    auto block1_get = _blockFIFOCache.get(blocks.at(0)->blockHeader()->number());
+    auto block1_get = _blockFIFOCache.get(blocks->at(0)->blockHeader()->number());
+
     BOOST_CHECK_EQUAL(block1_get.first, -1);
     BOOST_CHECK(block1_get.second == nullptr);
-    auto block2_get = _blockFIFOCache.get(blocks.at(1)->blockHeader()->number());
-    BOOST_CHECK_EQUAL(block2_get.second->transactionsHashSize(),2);
+    auto block2_get = _blockFIFOCache.get(blocks->at(1)->blockHeader()->number());
+    BOOST_CHECK_EQUAL(block2_get.second->transactionsSize(), 2);
 }
 
 BOOST_AUTO_TEST_CASE(testGetEmpty)

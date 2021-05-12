@@ -20,9 +20,8 @@
 
 #include "unittests/ledger/common/FakeTable.h"
 #include "unittests/ledger/common/FakeBlock.h"
-#include "unittests/ledger/common/FakeTransaction.h"
-#include "bcos-ledger/ledger/storage/StorageGetter.h"
-#include "bcos-ledger/ledger/storage/StorageSetter.h"
+#include "../ledger/storage/StorageGetter.h"
+#include "../ledger/storage/StorageSetter.h"
 #include <bcos-test/libutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <boost/lexical_cast.hpp>
@@ -33,19 +32,31 @@ using namespace bcos::protocol;
 
 namespace bcos::test
 {
-BOOST_FIXTURE_TEST_SUITE(StorageUtilitiesTest, TestPromptFixture)
+class TableFactoryFixture : public TestPromptFixture{
+public:
+    TableFactoryFixture() :TestPromptFixture(){
+        tableFactory = fakeTableFactory(0);
+        BOOST_TEST(tableFactory!=nullptr);
+        storageGetter =  StorageGetter::storageGetterFactory();
+        storageSetter = StorageSetter::storageSetterFactory();
+        storageSetter->createTables(tableFactory);
+    }
+    ~TableFactoryFixture(){}
+
+    TableFactoryInterface::Ptr tableFactory = nullptr;
+    StorageSetter::Ptr storageSetter = nullptr;
+    StorageGetter::Ptr storageGetter = nullptr;
+};
+
+BOOST_FIXTURE_TEST_SUITE(StorageUtilitiesTest, TableFactoryFixture)
 BOOST_AUTO_TEST_CASE(testTableSetterGetterByRowAndField)
 {
-    auto tableFactory = fakeTableFactory(0);
-    auto storageGetter =  StorageGetter::storageGetterFactory();
-    auto storageSetter = StorageSetter::storageSetterFactory();
-
     bool setterRet = storageSetter->tableSetterByRowAndField(
-        tableFactory, "_sys_config_", "test", "hello", "world");
+        tableFactory, "_sys_config_", "test", SYS_VALUE, "world");
     BOOST_CHECK(setterRet);
 
     auto ret =
-        storageGetter->tableGetterByRowAndField(tableFactory, "_sys_config_", "test", "hello");
+        storageGetter->tableGetterByRowAndField(tableFactory, "_sys_config_", "test", SYS_VALUE);
     BOOST_CHECK_EQUAL(ret, "world");
 }
 BOOST_AUTO_TEST_CASE(testErrorOpenTable)
@@ -60,33 +71,22 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
         OpenSysTableFailed);
 }
 BOOST_AUTO_TEST_CASE(testWritTx2Block){
-    auto blockFactory = createBlockFactory();
-    auto block = fakeBlock(blockFactory, 10, 10);
-    auto txs = fakeTransactions(10);
-    for (auto & tx : *txs)
-    {
-        block->appendTransaction(tx);
-    }
-    auto tableFactory = fakeTableFactory(block->blockHeader()->number());
-    auto storageSetter = StorageSetter::storageSetterFactory();
+    auto crypto = createCryptoSuite();
+    auto blockFactory = createBlockFactory(crypto);
+    auto block = fakeBlock(crypto, blockFactory, 10, 10);
+    auto second_tx = block->transaction(2);
+
     storageSetter->writeTxToBlock(block, tableFactory);
-
-    auto storageGetter =  StorageGetter::storageGetterFactory();
-
-    auto test_tx = txs->at(2);
     auto numberIndex =
-        storageGetter->getBlockNumberAndIndexByHash(test_tx->hash().hex(), tableFactory);
+        storageGetter->getBlockNumberAndIndexByHash(second_tx->hash().hex(), tableFactory);
     BOOST_CHECK_EQUAL(numberIndex->first, std::to_string(block->blockHeader()->number()));
     BOOST_CHECK_EQUAL(numberIndex->second, std::to_string(2));
 }
 BOOST_AUTO_TEST_CASE(testGetterSetter)
 {
-    auto blockFactory = createBlockFactory();
-    auto block = fakeBlock(blockFactory, 10, 10);
-
-    auto tableFactory = fakeTableFactory(block->blockHeader()->number());
-    auto storageGetter =  StorageGetter::storageGetterFactory();
-    auto storageSetter = StorageSetter::storageSetterFactory();
+    auto crypto = createCryptoSuite();
+    auto blockFactory = createBlockFactory(crypto);
+    auto block = fakeBlock(crypto, blockFactory, 10, 10);
 
     auto number = block->blockHeader()->number();
     auto numberStr = boost::lexical_cast<std::string>(number);
@@ -134,11 +134,11 @@ BOOST_AUTO_TEST_CASE(testGetterSetter)
     BOOST_CHECK(setHash2NumberRet);
     BOOST_CHECK_EQUAL(getBlockNumberByHashRet, "");
 
-    auto setHash2NumberRet2 = storageSetter->setHash2Number(tableFactory, "test", numberStr);
-    auto getBlockHashByNumberRet = storageGetter->getBlockHashByNumber(numberStr, tableFactory);
-    BOOST_CHECK(setHash2NumberRet2);
-    // MockStorage return {1,2,3}
-    BOOST_CHECK_EQUAL(getBlockHashByNumberRet, "1");
+    // SYS_NUMBER_2_HASH
+    auto setNumber2HashRet = storageSetter->setNumber2Hash(tableFactory, numberStr, "");
+    auto getBlockHashByNumberRet = storageGetter->getBlockHashByNumber(number, tableFactory);
+    BOOST_CHECK(setNumber2HashRet);
+    BOOST_CHECK_EQUAL(getBlockHashByNumberRet, "");
 
     // SYS_NUMBER_NONCES
     auto setNumber2NoncesRet = storageSetter->setNumber2Nonces(tableFactory, numberStr, "");

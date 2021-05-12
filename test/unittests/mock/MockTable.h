@@ -19,12 +19,10 @@
  */
 #pragma once
 
-#include "bcos-ledger/ledger/utilities/Common.h"
+#include "../ledger/utilities/Common.h"
 #include "bcos-framework/libtable/Table.h"
 #include "bcos-framework/libtable/TableFactory.h"
 #include "bcos-framework/interfaces/storage/Common.h"
-#include "MockBlock.h"
-#include "MockBlockHeader.h"
 #include <tbb/concurrent_unordered_map.h>
 
 using namespace bcos::storage;
@@ -36,19 +34,33 @@ class MockTable : public Table
 public:
     using Ptr = std::shared_ptr<MockTable>;
 
-    MockTable(): Table(nullptr, nullptr, nullptr, 0)
+    explicit MockTable(std::string const& _tableName):Table(nullptr, nullptr, nullptr, 0),
+        m_tableName(_tableName) {}
+
+    std::shared_ptr<Entry> getRow(const std::string &_key) override
     {
-        m_fakeStorage[SYS_CONFIG] = std::unordered_map<std::string, Entry::Ptr>();
-        m_fakeStorage[SYS_CURRENT_STATE] = std::unordered_map<std::string, Entry::Ptr>();
-        m_fakeStorage[SYS_HASH_2_NUMBER] = std::unordered_map<std::string, Entry::Ptr>();
-        m_fakeStorage[SYS_NUMBER_2_BLOCK_HEADER] = std::unordered_map<std::string, Entry::Ptr>();
-        m_fakeStorage[SYS_NUMBER_2_TXS] = std::unordered_map<std::string, Entry::Ptr>();
-        m_fakeStorage[SYS_NUMBER_2_RECEIPTS] = std::unordered_map<std::string, Entry::Ptr>();
-        m_fakeStorage[SYS_TX_HASH_2_BLOCK_NUMBER] = std::unordered_map<std::string, Entry::Ptr>();
+        auto entry = m_fakeStorage[_key];
+        if(entry){
+            return entry;
+        }
+        return nullptr;
+    }
+
+    bool setRow(const std::string &_key, std::shared_ptr<Entry> _entry) override{
+        m_fakeStorage[_key] = _entry;
+        return true;
+    }
+
+    std::vector<std::string> getPrimaryKeys(std::shared_ptr<Condition>) const override{
+        std::vector<std::string> keys;
+        keys.reserve(m_fakeStorage.size());
+        std::transform(m_fakeStorage.begin(), m_fakeStorage.end(), keys.begin(), [](auto pair){return pair.first;});
+        return keys;
     }
 
 private:
-    std::unordered_map<std::string, std::unordered_map<std::string, Entry::Ptr>> m_fakeStorage;
+    std::string m_tableName;
+    std::unordered_map<std::string, Entry::Ptr> m_fakeStorage;
 };
 class MockTableFactory : public TableFactory
 {
@@ -62,7 +74,7 @@ public:
         {
             return it->second;
         }
-        auto table = std::make_shared<MockTable>();
+        auto table = std::make_shared<MockTable>(_tableName);
         m_name2Table.insert({_tableName, table});
         return table;
     }
@@ -79,7 +91,7 @@ private:
 class MockErrorTableFactory : public TableFactory
 {
 public:
-    MockErrorTableFactory(): TableFactory(nullptr, nullptr, 0){}
+    MockErrorTableFactory(): TableFactory(nullptr, nullptr, -1){}
     std::shared_ptr<TableInterface> openTable(const std::string &) override
     {
         return nullptr;

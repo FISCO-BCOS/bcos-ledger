@@ -26,6 +26,7 @@
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/interfaces/storage/TableInterface.h"
+#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
 
 namespace bcos::ledger
 {
@@ -37,6 +38,8 @@ public:
     inline static StorageSetter::Ptr storageSetterFactory(){
         return std::make_shared<StorageSetter>();
     }
+
+    void createTables(const storage::TableFactoryInterface::Ptr& _tableFactory);
 
     /**
      * @brief update tableName set fieldName=fieldValue where row=_row
@@ -111,6 +114,9 @@ public:
     bool setHash2Number(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _row, const std::string& _numberValue);
 
+    bool setNumber2Hash(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const std::string& _row, const std::string& _hashValue);
+
     /**
     * @brief update SYS_BLOCK_NUMBER_2_NONCES set SYS_VALUE=_noncesValue where row=_row
     * @param _tableFactory
@@ -122,7 +128,7 @@ public:
         const std::string& _row, const std::string& _noncesValue);
 
     /**
-     * @brief update SYS_CONFIG set SYS_KEY=_key,SYS_VALUE=_value,SYSTEM_CONFIG_ENABLE_NUM=_enableBlock where row=_row
+     * @brief update SYS_CONFIG set SYS_VALUE=_value,SYSTEM_CONFIG_ENABLE_NUM=_enableBlock where row=_key
      * @param _tableFactory
      * @param _key
      * @param _value
@@ -131,6 +137,18 @@ public:
      */
     bool setSysConfig(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _key, const std::string& _value, const std::string& _enableBlock);
+
+    /**
+     * @brief update SYS_CONSENSUS set NODE_TYPE=type,NODE_WEIGHT=weight,NODE_ENABLE_NUMBER=_enableBlock where row=nodeID
+     * @param _tableFactory
+     * @param _type node type, only support CONSENSUS_SEALER CONSENSUS_OBSERVER
+     * @param _nodeList
+     * @param _enableBlock
+     * @return
+     */
+    bool setConsensusConfig(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const std::string& _type, const consensus::ConsensusNodeList& _nodeList,
+        const std::string& _enableBlock);
 
     /**
      * @brief tbb:parallel_for update SYS_TX_HASH_2_BLOCK_NUMBER set SYS_VALUE=blockNumber, index=txIndex where row=_row

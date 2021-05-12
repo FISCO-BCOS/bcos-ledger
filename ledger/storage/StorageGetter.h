@@ -27,6 +27,7 @@
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/interfaces/storage/TableInterface.h"
+#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
 
 namespace bcos::ledger
 {
@@ -124,7 +125,7 @@ public:
      * @return return string hash
      */
     std::string getBlockHashByNumber(
-        const std::string& _num, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+        const protocol::BlockNumber& _num, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
 
     /**
      * @brief get current state in row
@@ -145,6 +146,19 @@ public:
         const std::string& _key, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
 
     /**
+     * @brief get consensus node list in table SYS_CONSENSUS
+     * @param _nodeType
+     * @param _blockNumber latest block number
+     * @param _tableFactory
+     * @param _keyFactory key factory to generate nodeID
+     * @return return a node list ptr
+     */
+    consensus::ConsensusNodeListPtr getConsensusConfig(const std::string& _nodeType,
+        const protocol::BlockNumber& _blockNumber,
+        const storage::TableFactoryInterface::Ptr& _tableFactory,
+        const crypto::KeyFactory::Ptr& _keyFactory);
+
+    /**
      * @brief get block number and index by tx hash in table SYS_TX_HASH_2_BLOCK_NUMBER
      * @param _tableFactory
      * @param _hash transaction hash
@@ -163,16 +177,6 @@ public:
      */
     std::string tableGetterByRowAndField(const bcos::storage::TableFactoryInterface::Ptr & _tableFactory,
         const std::string& _tableName, const std::string& _row, const std::string& _field);
-
-    /**
-     * @brief select key from tableName where value=_keyValue
-     * @param _tableFactory
-     * @param _tableName
-     * @param _keyValue
-     * @return string of key
-     */
-    std::string getKeyByValue(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        const std::string& _tableName, const std::string& _keyValue);
 
     /**
      * @brief select field1, field2 from tableName where row=_row

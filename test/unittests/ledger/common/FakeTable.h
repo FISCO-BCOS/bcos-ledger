@@ -29,7 +29,7 @@ namespace bcos::test{
 inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockNumber){
     auto hashImpl = std::make_shared<Keccak256Hash>();
     auto storage = std::make_shared<MockStorage>();
-    auto tableFactory = std::make_shared<TableFactory>(storage,hashImpl, _blockNumber);
+    auto tableFactory = std::make_shared<TableFactory>(storage, hashImpl, _blockNumber);
     return tableFactory;
 }
 
