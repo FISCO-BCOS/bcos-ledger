@@ -78,9 +78,10 @@ public:
         m_name2Table.insert({_tableName, table});
         return table;
     }
-    void commit() override
+    size_t commit() override
     {
         m_name2Table.clear();
+        return 1;
     }
 
 private:

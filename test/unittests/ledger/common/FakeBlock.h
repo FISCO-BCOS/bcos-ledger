@@ -69,6 +69,23 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
         auto receipt = testPBTransactionReceipt(_cryptoSuite);
         block->appendReceipt(receipt);
     }
+    // fake txsHash
+    for (size_t i = 0; i < _txsNum; i++)
+    {
+        block->appendTransactionHash(block->transaction(i)->hash());
+    }
+    // fake receiptsHash
+    for (size_t i = 0; i < _receiptsNum; i++)
+    {
+        block->appendReceiptHash(block->receipt(i)->hash());
+    }
+
+    NonceList nonceList;
+    for (size_t i = 0; i < _txsNum; i++)
+    {
+        nonceList.emplace_back(u256(123));
+    }
+    block->setNonceList(nonceList);
     return block;
 }
 

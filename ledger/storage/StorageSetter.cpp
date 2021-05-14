@@ -44,6 +44,7 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     _tableFactory->createTable(SYS_CONSENSUS, "node_id", consensusFields);
     _tableFactory->createTable(SYS_CURRENT_STATE, SYS_KEY, SYS_VALUE);
     _tableFactory->createTable(SYS_TX_HASH_2_BLOCK_NUMBER, "tx_hash", txFields);
+    _tableFactory->createTable(SYS_HASH_2_TX, "tx_hash", SYS_VALUE);
     _tableFactory->createTable(SYS_HASH_2_NUMBER, "block_hash", SYS_VALUE);
     _tableFactory->createTable(SYS_NUMBER_2_HASH, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_NUMBER_2_BLOCK, "block_num", SYS_VALUE);
@@ -51,7 +52,11 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     _tableFactory->createTable(SYS_NUMBER_2_TXS, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_NUMBER_2_RECEIPTS, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_BLOCK_NUMBER_2_NONCES, "block_num", SYS_VALUE);
-    _tableFactory->commit();
+    if(_tableFactory->commit() == 0)
+    {
+        // TODO: use new exception
+        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(""));
+    }
 }
 
 bool StorageSetter::tableSetterByRowAndField(
@@ -160,7 +165,7 @@ bool StorageSetter::setConsensusConfig(
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _type,
     const consensus::ConsensusNodeList& _nodeList, const std::string& _enableBlock)
 {
-    if(_type != CONSENSUS_SEALER || _type != CONSENSUS_OBSERVER){
+    if(_type != CONSENSUS_SEALER && _type != CONSENSUS_OBSERVER){
         return false;
     }
     auto start_time = utcTime();
@@ -202,19 +207,19 @@ void StorageSetter::writeTxToBlock(
     record_time = utcTime();
     if (tb)
     {
-        auto txs = blockTransactionListGetter(_block);
+        auto txHashList = blockTxHashListGetter(_block);
         auto constructVector_time_cost = utcTime() - record_time;
         record_time = utcTime();
         auto blockNumberStr = boost::lexical_cast<std::string>(_block->blockHeader()->number());
         tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, txs->size()), [&](const tbb::blocked_range<size_t>& _r) {
+            tbb::blocked_range<size_t>(0, txHashList->size()), [&](const tbb::blocked_range<size_t>& _r) {
               for (size_t i = _r.begin(); i != _r.end(); ++i)
               {
                   auto entry = tb->newEntry();
                   // entry: <blockNumber, txIndex>
                   entry->setField(SYS_VALUE, blockNumberStr);
                   entry->setField("index", boost::lexical_cast<std::string>(i));
-                  tb->setRow((*txs)[i]->hash().hex(), entry);
+                  tb->setRow(txHashList->at(i).hex(), entry);
               }
             });
         auto insertTable_time_cost = utcTime() - record_time;
@@ -230,4 +235,11 @@ void StorageSetter::writeTxToBlock(
         BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_TX_HASH_2_BLOCK_NUMBER));
     }
 }
+
+bool StorageSetter::setHashToTx(const bcos::storage::TableFactoryInterface::Ptr _tableFactory,
+    const std::string& _txHash, const std::string& _encodeTx)
+{
+    return tableSetterByRowAndField(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE, _encodeTx);
+}
+
 } // namespace bcos::ledger

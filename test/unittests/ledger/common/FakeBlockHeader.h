@@ -20,7 +20,6 @@
 
 #pragma once
 #include "libprotocol/Common.h"
-#include "libprotocol/Exceptions.h"
 #include "libprotocol/protobuf/PBBlockHeaderFactory.h"
 #include "libutilities/Common.h"
 #include <bcos-test/libutils/HashImpl.h>

@@ -61,10 +61,8 @@ std::shared_ptr<Parent2ChildListMap> getReceiptProof(crypto::CryptoSuite::Ptr _c
     return merklePath;
 }
 
-void getMerkleProof(const crypto::HashType& _txHash,
-                            const Parent2ChildListMap & parent2ChildList,
-                            const Child2ParentMap& child2Parent,
-                            MerkleProof& merkleProof)
+void getMerkleProof(const crypto::HashType& _txHash, const Parent2ChildListMap& parent2ChildList,
+    const Child2ParentMap& child2Parent, MerkleProof& merkleProof)
 {
     std::string merkleNode = _txHash.hex();
     // get child=>parent info

@@ -74,11 +74,11 @@ BOOST_AUTO_TEST_CASE(testWritTx2Block){
     auto crypto = createCryptoSuite();
     auto blockFactory = createBlockFactory(crypto);
     auto block = fakeBlock(crypto, blockFactory, 10, 10);
-    auto second_tx = block->transaction(2);
+    auto second_tx = block->transactionHash(2);
 
     storageSetter->writeTxToBlock(block, tableFactory);
     auto numberIndex =
-        storageGetter->getBlockNumberAndIndexByHash(second_tx->hash().hex(), tableFactory);
+        storageGetter->getBlockNumberAndIndexByHash(second_tx.hex(), tableFactory);
     BOOST_CHECK_EQUAL(numberIndex->first, std::to_string(block->blockHeader()->number()));
     BOOST_CHECK_EQUAL(numberIndex->second, std::to_string(2));
 }

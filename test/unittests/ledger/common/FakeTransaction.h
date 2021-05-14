@@ -19,7 +19,6 @@
  */
 
 #pragma once
-#include "bcos-framework/libprotocol/Exceptions.h"
 #include "bcos-framework/libprotocol/protobuf/PBTransactionFactory.h"
 #include "bcos-framework/libutilities/Common.h"
 #include <bcos-test/libutils/HashImpl.h>

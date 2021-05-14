@@ -25,6 +25,8 @@ namespace bcos::ledger
 {
 protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr& _block);
 
+protocol::HashListPtr blockTxHashListGetter(const protocol::Block::Ptr& _block);
+
 size_t blockTransactionListSetter(
     const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs);
 

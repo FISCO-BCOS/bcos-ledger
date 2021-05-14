@@ -96,7 +96,17 @@ public:
         std::lock_guard<std::mutex> lock(m_mutex);
         for (size_t i = 0; i < _tableInfos.size(); ++i)
         {
-            data[_tableInfos[i]->name] = *_tableDatas[i];
+            for (auto& tableData : *(_tableDatas.at(i)))
+            {
+                if (data[_tableInfos[i]->name].count(tableData.first))
+                {
+                    data[_tableInfos[i]->name].at(tableData.first) = tableData.second;
+                }
+                else
+                {
+                    data[_tableInfos[i]->name].insert(tableData);
+                }
+            }
         }
         return _tableInfos.size();
     }
@@ -125,12 +135,30 @@ public:
     void asyncGetStateCache(
         protocol::BlockNumber, std::function<void(Error, std::shared_ptr<TableFactory>)>) override
     {}
-    protocol::Block::Ptr getBlock(protocol::BlockNumber) override { return nullptr; }
-    std::shared_ptr<TableFactory> getStateCache(protocol::BlockNumber) override { return nullptr; }
+    protocol::Block::Ptr getBlock(protocol::BlockNumber _blockNumber) override
+    {
+        if (m_number2TableFactory.count(_blockNumber))
+        {
+            return m_number2TableFactory[_blockNumber].block;
+        }
+        return nullptr;
+    }
+
+    std::shared_ptr<TableFactory> getStateCache(protocol::BlockNumber _blockNumber) override
+    {
+        if (m_number2TableFactory.count(_blockNumber))
+        {
+            return m_number2TableFactory[_blockNumber].tableFactory;
+        }
+        return nullptr;
+    }
+
     void dropStateCache(protocol::BlockNumber) override {}
     void addStateCache(
-        protocol::BlockNumber, protocol::Block::Ptr, std::shared_ptr<TableFactory>) override
-    {}
+        protocol::BlockNumber _blockNumber, protocol::Block::Ptr _block, std::shared_ptr<TableFactory> _tableFactory) override
+    {
+        m_number2TableFactory[_blockNumber] = BlockCache{_block, _tableFactory};
+    }
     // KV store in split database, used to store data off-chain
     bool put(const std::string&, const std::string_view&, const std::string_view&) override
     {
@@ -140,9 +168,14 @@ public:
     void asyncGetBatch(const std::string&, std::shared_ptr<std::vector<std::string_view>>,
                        std::function<void(Error, std::shared_ptr<std::vector<std::string>>)>) override
     {}
-
+    struct BlockCache
+    {
+        protocol::Block::Ptr block;
+        std::shared_ptr<TableFactory> tableFactory;
+    };
 private:
     std::map<std::string, std::map<std::string, Entry::Ptr>> data;
     mutable std::mutex m_mutex;
+    std::map<protocol::BlockNumber, BlockCache> m_number2TableFactory;
 };
 }
