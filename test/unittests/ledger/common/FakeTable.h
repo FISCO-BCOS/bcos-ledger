@@ -19,11 +19,11 @@
  */
 #pragma once
 
-#include "unittests/mock/MockStorage.h"
-#include "unittests/mock/MockTable.h"
+#include "mock/MockStorage.h"
+#include "mock/MockTable.h"
 #include "bcos-framework/libtable/TableFactory.h"
 #include "bcos-framework/libtable/Table.h"
-#include "bcos-test/libutils/HashImpl.h"
+#include <bcos-framework/testutils/HashImpl.h>
 
 namespace bcos::test{
 inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockNumber){

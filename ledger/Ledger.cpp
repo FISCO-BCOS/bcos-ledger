@@ -499,52 +499,45 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
 
     // cannot find the system config key or need to update the value with different block height
     // get value from db
-    try
-    {
-        auto ret = getStorageGetter()->getSysConfig(_key, getMemoryTableFactory(0));
-        if (!ret)
-        {
-            LEDGER_LOG(ERROR) << LOG_DESC(
-                                     "[#asyncGetSystemConfigByKey] Null pointer of getSysConfig")
-                              << LOG_KV("key", _key);
-            // TODO: add error code and error msg
-            auto error = std::make_shared<Error>(-1, "");
-            _onGetConfig(error, "", -1);
-            return;
-        }
-        else
-        {
-            auto number = boost::lexical_cast<BlockNumber>(ret->second);
-            // update cache
-            {
-                UpgradeGuard ul(l);
-                SystemConfigRecordCache systemConfigRecordCache(
-                    ret->first, number, currentNumber);
-                if (it != m_systemConfigRecordMap.end())
-                {
-                    it->second = systemConfigRecordCache;
-                }
-                else
-                {
-                    m_systemConfigRecordMap.insert(
-                        std::pair<std::string, SystemConfigRecordCache>(_key, systemConfigRecordCache));
-                }
-            }
 
-            LEDGER_LOG(TRACE) << LOG_DESC("[#asyncGetSystemConfigByKey]Data in db") << LOG_KV("key", _key)
-                              << LOG_KV("value", ret->first);
-            _onGetConfig(nullptr, ret->first, boost::lexical_cast<BlockNumber>(ret->second));
-            return;
-        }
-    }
-    catch (std::exception& e)
+    auto ret = getStorageGetter()->getSysConfig(_key, getMemoryTableFactory(0));
+    if (ret->first.empty() && ret->second.empty())
     {
-        LEDGER_LOG(ERROR) << LOG_DESC("[#asyncGetSystemConfigByKey]Failed")
-                          << LOG_KV("EINFO", boost::diagnostic_information(e));
+
+        LEDGER_LOG(ERROR) << LOG_DESC("[#asyncGetSystemConfigByKey] Null pointer of getSysConfig")
+                          << LOG_KV("key", _key);
         // TODO: add error code and error msg
         auto error = std::make_shared<Error>(-1, "");
         _onGetConfig(error, "", -1);
+        return;
     }
+    else
+    {
+        auto number = boost::lexical_cast<BlockNumber>(ret->second);
+        // update cache
+        {
+            UpgradeGuard ul(l);
+            SystemConfigRecordCache systemConfigRecordCache(ret->first, number, currentNumber);
+            if (it != m_systemConfigRecordMap.end())
+            {
+                it->second = systemConfigRecordCache;
+            }
+            else
+            {
+                m_systemConfigRecordMap.insert(
+                    std::pair<std::string, SystemConfigRecordCache>(_key, systemConfigRecordCache));
+            }
+        }
+
+        LEDGER_LOG(TRACE) << LOG_DESC("[#asyncGetSystemConfigByKey]Data in db")
+                          << LOG_KV("key", _key) << LOG_KV("value", ret->first);
+        _onGetConfig(nullptr, ret->first, boost::lexical_cast<BlockNumber>(ret->second));
+        return;
+    }
+    LEDGER_LOG(ERROR) << LOG_DESC("[#asyncGetSystemConfigByKey]Failed");
+    // TODO: add error code and error msg
+    auto error = std::make_shared<Error>(-1, "");
+    _onGetConfig(error, "", -1);
 }
 
 void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t _offset,
@@ -552,7 +545,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
         _onGetList)
 {
     auto latestNumber = getLatestBlockNumber();
-    if (_startNumber < 0 || _startNumber > latestNumber)
+    if (_startNumber < 0 || _offset < 0 || _startNumber > latestNumber)
     {
         // TODO: to add errorCode and message
         auto error = std::make_shared<Error>(-1, "");

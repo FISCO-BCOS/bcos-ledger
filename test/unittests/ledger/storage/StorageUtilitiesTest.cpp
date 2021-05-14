@@ -22,7 +22,7 @@
 #include "unittests/ledger/common/FakeBlock.h"
 #include "../ledger/storage/StorageGetter.h"
 #include "../ledger/storage/StorageSetter.h"
-#include <bcos-test/libutils/TestPromptFixture.h>
+#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <boost/lexical_cast.hpp>
 

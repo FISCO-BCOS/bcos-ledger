@@ -26,9 +26,10 @@ config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 
-include(InstallBcosCryptoDependencies)
+hunter_add_package(wedpr-crypto)
+find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG REQUIRED unit_test_framework)
 find_package(bcos-framework)
-target_link_libraries(${TEST_BINARY_NAME} ${BCOS_LEDGER_TARGET} ${BCOS_EVENT_FILTER_TARGET} bcos-crypto::bcos-crypto
+target_link_libraries(${TEST_BINARY_NAME} ${BCOS_LEDGER_TARGET} ${BCOS_EVENT_FILTER_TARGET} wedpr-crypto::crypto
         bcos-framework::utilities bcos-framework::protocol bcos-framework::protocol-pb bcos-framework::codec
         Boost::unit_test_framework wedpr-crypto::crypto)

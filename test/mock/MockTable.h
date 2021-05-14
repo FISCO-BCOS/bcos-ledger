@@ -19,10 +19,10 @@
  */
 #pragma once
 
-#include "../ledger/utilities/Common.h"
+#include "../../ledger/utilities/Common.h"
+#include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/libtable/Table.h"
 #include "bcos-framework/libtable/TableFactory.h"
-#include "bcos-framework/interfaces/storage/Common.h"
 #include <tbb/concurrent_unordered_map.h>
 
 using namespace bcos::storage;

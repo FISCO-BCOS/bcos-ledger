@@ -74,11 +74,6 @@ add_subdirectory(eventfilter)
 if (TESTS)
     hunter_add_package(Boost COMPONENTS test)
     set(BCOS_TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test)
-    FetchContent_Declare(bcos-test
-            GIT_REPOSITORY https://${FETCH_URL_BASE}/FISCO-BCOS/bcos-test.git
-            GIT_TAG dev
-            SOURCE_DIR ${BCOS_TEST_DIR})
-    FetchContent_MakeAvailable(bcos-test)
 
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
@@ -102,5 +97,5 @@ include(BuildDocs)
 # for code coverage
 if (COVERAGE)
     include(Coverage)
-    config_coverage("'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/bcos-test*'")
+    config_coverage("'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
 endif ()

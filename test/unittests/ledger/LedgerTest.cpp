@@ -20,9 +20,9 @@
 #include "common/FakeTable.h"
 #include "common/FakeBlock.h"
 #include "../ledger/Ledger.h"
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-test/libutils/TestPromptFixture.h>
+#include "mock/MockKeyFactor.h"
+#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-framework/testutils/HashImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -44,7 +44,7 @@ public:
         m_storageGetter =  StorageGetter::storageGetterFactory();
         m_storageSetter = StorageSetter::storageSetterFactory();
         m_blockFactory = createBlockFactory(createCryptoSuite());
-        auto keyFactor = std::make_shared<crypto::KeyFactoryImpl>();
+        auto keyFactor = std::make_shared<MockKeyFactory>();
         m_blockFactory->cryptoSuite()->setKeyFactory(keyFactor);
 
         m_headerFactory = std::make_shared<PBBlockHeaderFactory>(createCryptoSuite());
@@ -62,7 +62,7 @@ public:
         m_param->setBlockTxCountLimit(1000);
         m_param->setConsensusTimeout(1000);
 
-        auto signImpl = std::make_shared<crypto::Secp256k1Crypto>();
+        auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
         consensus::ConsensusNodeList consensusNodeList;
         consensus::ConsensusNodeList observerNodeList;
         for (int i = 0; i < 4; ++i)
@@ -457,6 +457,27 @@ BOOST_AUTO_TEST_CASE(getNonceList) {
             BOOST_CHECK(_nonceMap != nullptr);
             BOOST_CHECK_EQUAL(_nonceMap->size(), 3);
         });
+
+    // error param
+    m_ledger->asyncGetNonceList(-1, -5,
+        [&](Error::Ptr _error,
+            std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> _nonceMap) {
+            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK(_nonceMap == nullptr);
+        });
+
+    // size == 0
+    auto table = getTableFactory(6);
+    auto block = fakeBlock(m_blockFactory->cryptoSuite(), m_blockFactory, 0, 0);
+    m_storage->addStateCache(6, block, table);
+    m_ledger->asyncCommitBlock(6, block->blockHeader()->signatureList(),
+                               [&](Error::Ptr _error, LedgerConfig::Ptr) { BOOST_CHECK_EQUAL(_error->errorCode(), 0); });
+    m_ledger->asyncGetNonceList(6, 0,
+        [&](Error::Ptr _error,
+            std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> _nonceMap) {
+            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK(_nonceMap == nullptr);
+        });
 }
 
 BOOST_AUTO_TEST_CASE(preStoreTransaction)
@@ -476,6 +497,35 @@ BOOST_AUTO_TEST_CASE(preStoreTransaction)
     // null hash
     m_ledger->asyncPreStoreTransaction(
         tx, HashType(""), [&](Error::Ptr _error) { BOOST_CHECK_EQUAL(_error->errorCode(), -1); });
+}
+
+BOOST_AUTO_TEST_CASE(getSystemConfig)
+{
+    initFixture();
+    initChain(5);
+
+    m_ledger->asyncGetSystemConfigByKey(
+        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+          BOOST_CHECK(_error == nullptr);
+          BOOST_CHECK_EQUAL(_value, "1000");
+          BOOST_CHECK_EQUAL(_number, 0);
+        });
+
+    // hit cache
+    m_ledger->asyncGetSystemConfigByKey(
+        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+          BOOST_CHECK(_error == nullptr);
+          BOOST_CHECK_EQUAL(_value, "1000");
+          BOOST_CHECK_EQUAL(_number, 0);
+        });
+
+    // get error key
+    m_ledger->asyncGetSystemConfigByKey(
+        "test", [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+          BOOST_CHECK(_error != nullptr);
+          BOOST_CHECK_EQUAL(_value, "");
+          BOOST_CHECK_EQUAL(_number, -1);
+        });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

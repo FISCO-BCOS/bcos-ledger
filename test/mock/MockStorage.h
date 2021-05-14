@@ -20,9 +20,9 @@
 
 #pragma once
 
-#include "../ledger/utilities/Common.h"
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "../../ledger/utilities/Common.h"
 #include "bcos-framework/interfaces/storage/Common.h"
+#include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/libtable/Table.h"
 
 using namespace bcos::storage;
