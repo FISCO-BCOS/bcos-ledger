@@ -42,16 +42,8 @@ public:
 
                 m_CacheMap.erase(firstNumber);
                 // Destruct the block in m_destructorThread
-                 HolderForDestructor<T2> holder(std::move(removedItem));
-                 m_destructorThread->enqueue(std::move(holder));
-
-                // in case something unexpect error
-                if (m_CacheMap.size() > c_CacheMaxSize)
-                {
-                    // meet error, cache and cacheFIFO not sync, clear the cache
-                    m_CacheMap.clear();
-                    m_CacheQueue.clear();
-                }
+                HolderForDestructor<T2> holder(std::move(removedItem));
+                m_destructorThread->enqueue(std::move(holder));
             }
             auto blockNumber = _number;
             auto item = _item;

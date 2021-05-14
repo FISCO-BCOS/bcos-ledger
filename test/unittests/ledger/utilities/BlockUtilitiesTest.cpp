@@ -22,7 +22,7 @@
 #include "unittests/ledger/common/FakeTransaction.h"
 #include "unittests/ledger/common/FakeReceipt.h"
 #include "unittests/ledger/common/FakeBlock.h"
-#include <bcos-test/libutils/TestPromptFixture.h>
+#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

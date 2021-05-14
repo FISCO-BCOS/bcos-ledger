@@ -52,7 +52,8 @@ static const std::string SYS_NUMBER_2_BLOCK = "_sys_number_2_block_";
 static const std::string SYS_BLOCK_NUMBER_2_NONCES = "_sys_block_number_2_nonces_";
 static const std::string SYS_NUMBER_2_BLOCK_HEADER = "_sys_number_2_header_";
 static const std::string SYS_NUMBER_2_TXS = "_sys_number_2_txs_";
-static const std::string SYS_NUMBER_2_RECEIPTS = "_sys_number_2_receipts";
+static const std::string SYS_NUMBER_2_RECEIPTS = "_sys_number_2_receipts_";
+static const std::string SYS_HASH_2_TX = "_sys_hash_2_tx_";
 
 static const std::string NODE_TYPE = "_type_";
 static const std::string NODE_WEIGHT = "_weight_";

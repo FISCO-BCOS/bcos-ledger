@@ -43,6 +43,26 @@ protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr&
     return txs;
 }
 
+protocol::HashListPtr blockTxHashListGetter(const protocol::Block::Ptr& _block){
+    auto hashList = std::make_shared<crypto::HashList>();
+    if(_block == nullptr){
+        LEDGER_LOG(DEBUG)<<LOG_DESC("Block is null, return nullptr");
+        return nullptr;
+    }
+    auto hashSize = _block->transactionsHashSize();
+    if(hashSize == 0){
+        LEDGER_LOG(DEBUG)<<LOG_DESC("Block transactions size is 0, return empty");
+        return hashList;
+    }
+    for (size_t i = 0; i < hashSize; ++i)
+    {
+        auto hash = _block->transactionHash(i);
+        hashList->emplace_back(hash);
+    }
+    return hashList;
+}
+
+
 size_t blockTransactionListSetter(const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs){
 
     if(_block == nullptr || _txs == nullptr){

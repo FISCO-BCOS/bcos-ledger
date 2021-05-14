@@ -13,25 +13,19 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file BlockUtilities.h
+ * @file main.cpp
  * @author: kyonRay
- * @date 2021-05-06
+ * @date 2021-05-14
  */
 
-#pragma once
-#include "Common.h"
+#define BOOST_TEST_NO_MAIN
 
-namespace bcos::ledger
+#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
+
+int main(int argc, const char* argv[])
 {
-protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr& _block);
-
-protocol::HashListPtr blockTxHashListGetter(const protocol::Block::Ptr& _block);
-
-size_t blockTransactionListSetter(
-    const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs);
-
-protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block);
-
-size_t blockReceiptListSetter(
-    const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts);
+    auto fakeInit = [](int, char**) -> boost::unit_test::test_suite* { return nullptr; };
+    int result = boost::unit_test::unit_test_main(fakeInit, argc, const_cast<char**>(argv));
+    return result;
 }

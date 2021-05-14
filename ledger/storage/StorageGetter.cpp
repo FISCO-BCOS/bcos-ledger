@@ -155,23 +155,22 @@ ConsensusNodeListPtr StorageGetter::getConsensusConfig(const std::string& _nodeT
         auto nodeMap = table->getRows(nodeIdList);
         for (const auto& nodePair : nodeMap)
         {
-            if (nodePair.second->getField(NODE_TYPE) == _nodeType &&
-                boost::lexical_cast<BlockNumber>(nodePair.second->getField(NODE_ENABLE_NUMBER)) <=
-                    _blockNumber)
+            auto nodeType = nodePair.second->getField(NODE_TYPE);
+            auto blockNum = boost::lexical_cast<BlockNumber>(nodePair.second->getField(NODE_ENABLE_NUMBER));
+            if (nodeType == _nodeType && blockNum <= _blockNumber)
             {
-                crypto::NodeIDPtr nodeID = _keyFactory->createKey(nodePair.first);
+                crypto::NodeIDPtr nodeID = _keyFactory->createKey(*fromHexString(nodePair.first));
                 auto weight = boost::lexical_cast<uint64_t>(nodePair.second->getField(NODE_WEIGHT));
-                auto node = std::make_shared<ConsensusNode>(std::move(nodeID), weight);
-                std::shared_ptr<ConsensusNodeInterface> a = nodeList->at(1);
+                auto node = std::make_shared<ConsensusNode>(nodeID, weight);
                 nodeList->emplace_back(node);
             }
-            auto get_field_time_cost = utcTime() - record_time;
-            LEDGER_LOG(DEBUG) << LOG_DESC("Get ConsensusConfig from db")
-                              << LOG_KV("openTableTimeCost", openTable_time_cost)
-                              << LOG_KV("selectTimeCost", select_time_cost)
-                              << LOG_KV("getFieldTimeCost", get_field_time_cost)
-                              << LOG_KV("totalTimeCost", utcTime() - start_time);
         }
+        auto get_field_time_cost = utcTime() - record_time;
+        LEDGER_LOG(DEBUG) << LOG_DESC("Get ConsensusConfig from db")
+                          << LOG_KV("openTableTimeCost", openTable_time_cost)
+                          << LOG_KV("selectTimeCost", select_time_cost)
+                          << LOG_KV("getFieldTimeCost", get_field_time_cost)
+                          << LOG_KV("totalTimeCost", utcTime() - start_time);
     }
     else
     {
@@ -192,7 +191,6 @@ std::string StorageGetter::tableGetterByRowAndField(const bcos::storage::TableFa
     auto openTable_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    // TODO: return error
     if(table){
         auto entry = table->getRow(_row);
         auto select_time_cost = utcTime() - record_time;
@@ -248,5 +246,10 @@ std::shared_ptr<stringsPair> StorageGetter::stringsPairGetterByRowAndFields(
         }
     }
     return ret;
+}
+std::string StorageGetter::getTxByTxHash(
+    const std::string& _txHash, const TableFactoryInterface::Ptr& _tableFactory)
+{
+    return tableGetterByRowAndField(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE);
 }
 } // namespace bcos::ledger

@@ -20,11 +20,11 @@
 
 #pragma once
 #include "libprotocol/Common.h"
-#include "libprotocol/Exceptions.h"
 #include "libprotocol/protobuf/PBBlockHeaderFactory.h"
 #include "libutilities/Common.h"
-#include <bcos-test/libutils/HashImpl.h>
-#include <bcos-test/libutils/SignatureImpl.h>
+#include <bcos-framework/testutils/HashImpl.h>
+#include <bcos-framework/testutils/HashImpl.h>
+#include <bcos-framework/testutils/SignatureImpl.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::protocol;

@@ -19,10 +19,10 @@
  */
 #pragma once
 
-#include "../ledger/utilities/Common.h"
+#include "../../ledger/utilities/Common.h"
+#include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/libtable/Table.h"
 #include "bcos-framework/libtable/TableFactory.h"
-#include "bcos-framework/interfaces/storage/Common.h"
 #include <tbb/concurrent_unordered_map.h>
 
 using namespace bcos::storage;
@@ -78,13 +78,13 @@ public:
         m_name2Table.insert({_tableName, table});
         return table;
     }
-    void commit() override
+    size_t commit() override
     {
         m_name2Table.clear();
+        return 1;
     }
 
 private:
-
     tbb::concurrent_unordered_map<std::string, Table::Ptr> m_name2Table;
 };
 

@@ -86,6 +86,10 @@ public:
     std::string getNoncesFromStorage(const bcos::protocol::BlockNumber& _blockNumber,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
 
+    std::map<protocol::BlockNumber, std::string> getNoncesBatchFromStorage(const bcos::protocol::BlockNumber& _startNumber,
+        const protocol::BlockNumber& _endNumber,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+
     /**
      * @brief get a encode data by block hash in _tableName table
      * @param _blockHash the hash of block
@@ -166,6 +170,15 @@ public:
      */
     std::shared_ptr<stringsPair> getBlockNumberAndIndexByHash(
         const std::string& _hash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+
+    /**
+     * @brief get encode tx by tx hash in table SYS_HASH_2_TX
+     * @param _txHash
+     * @param _tableFactory
+     * @return return a encode tx string
+     */
+    std::string getTxByTxHash(
+        const std::string& _txHash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
 
     /**
      * @brief select field from tableName where row=_row

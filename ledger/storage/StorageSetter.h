@@ -158,5 +158,8 @@ public:
     void writeTxToBlock(const protocol::Block::Ptr& _block,
         const storage::TableFactoryInterface::Ptr& _tableFactory);
 
+    bool setHashToTx(const bcos::storage::TableFactoryInterface::Ptr _tableFactory,
+        const std::string& _txHash, const std::string& _encodeTx);
+
 };
 }
