@@ -18,6 +18,8 @@
  * @date 2021-05-14
  */
 
+#pragma once
+
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
 
 namespace bcos

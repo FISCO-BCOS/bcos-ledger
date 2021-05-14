@@ -85,7 +85,6 @@ public:
     }
 
 private:
-
     tbb::concurrent_unordered_map<std::string, Table::Ptr> m_name2Table;
 };
 

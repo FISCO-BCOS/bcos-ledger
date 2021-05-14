@@ -503,7 +503,6 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
     auto ret = getStorageGetter()->getSysConfig(_key, getMemoryTableFactory(0));
     if (ret->first.empty() && ret->second.empty())
     {
-
         LEDGER_LOG(ERROR) << LOG_DESC("[#asyncGetSystemConfigByKey] Null pointer of getSysConfig")
                           << LOG_KV("key", _key);
         // TODO: add error code and error msg
