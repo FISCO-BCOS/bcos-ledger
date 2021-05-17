@@ -19,6 +19,7 @@
  */
 #pragma once
 #include <bcos-framework/interfaces/protocol/Block.h>
+#include <bcos-framework/interfaces/consensus/ConsensusNodeInterface.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <map>
 
@@ -59,14 +60,24 @@ static const std::string NODE_TYPE = "_type_";
 static const std::string NODE_WEIGHT = "_weight_";
 static const std::string NODE_ENABLE_NUMBER = "_enable_block_number";
 
-struct SystemConfigRecordCache
+struct LedgerConfigCache
 {
     std::string value;
     bcos::protocol::BlockNumber enableNumber;
     bcos::protocol::BlockNumber curBlockNum = -1;  // at which block gets the configuration value
-    SystemConfigRecordCache(std::string& _value, bcos::protocol::BlockNumber const& _enableNumber,
+    LedgerConfigCache(const std::string& _value, bcos::protocol::BlockNumber const& _enableNumber,
         bcos::protocol::BlockNumber const& _num)
       : value(_value), enableNumber(_enableNumber), curBlockNum(_num){};
+};
+
+struct NodeConfigCache
+{
+    std::string type;
+    bcos::consensus::ConsensusNodeListPtr nodeList;
+    bcos::protocol::BlockNumber curBlockNum = -1;  // at which block gets the configuration value
+    NodeConfigCache(const std::string& _type, bcos::protocol::BlockNumber const& _num,
+        bcos::consensus::ConsensusNodeListPtr _nodeList)
+      : type(_type), nodeList(_nodeList), curBlockNum(_num){};
 };
 
 } // namespace bcos
