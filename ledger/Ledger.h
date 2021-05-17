@@ -224,6 +224,9 @@ private:
     std::map<std::string, LedgerConfigCache> m_ledgerConfigMap;
     mutable SharedMutex m_ledgerConfigMutex;
 
+    std::map<std::string, NodeConfigCache> m_nodeConfigMap;
+    mutable SharedMutex m_nodeConfigMutex;
+
     std::pair<bcos::protocol::BlockNumber,
         std::shared_ptr<Parent2ChildListMap>>
         m_transactionWithProof = std::make_pair(0, nullptr);

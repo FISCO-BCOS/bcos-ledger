@@ -116,6 +116,15 @@ public:
         for (int i = 0; i < _number; ++i)
         {
             auto table = getTableFactory(i + 1);
+            for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
+            {
+                auto txData = m_fakeBlocks->at(i)->transaction(j)->encode(false);
+                m_ledger->asyncPreStoreTransaction(
+                    txData, m_fakeBlocks->at(i)->transaction(j)->hash(), [&](Error::Ptr _error)
+                    {
+                        BOOST_CHECK_EQUAL(_error->errorCode(), 0);
+                    });
+            }
             m_storage->addStateCache(i + 1, m_fakeBlocks->at(i), table);
             m_ledger->asyncCommitBlock(i + 1, m_fakeBlocks->at(i)->blockHeader()->signatureList(),
                 [&](Error::Ptr _error, LedgerConfig::Ptr _config) {
@@ -381,6 +390,9 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             std::map<std::string, MerkleProofPtr> _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txData != nullptr);
+            auto txFactory = std::make_shared<PBTransactionFactory>(m_blockFactory->cryptoSuite());
+            auto tx = txFactory->createTransaction(*(_txData->at(1)));
+            auto getHash = tx->hash().hex();
             BOOST_CHECK(_proof.at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
         });
 

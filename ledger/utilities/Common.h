@@ -63,12 +63,21 @@ static const std::string NODE_ENABLE_NUMBER = "_enable_block_number";
 struct LedgerConfigCache
 {
     std::string value;
-    bcos::consensus::ConsensusNodeListPtr nodeList;
     bcos::protocol::BlockNumber enableNumber;
     bcos::protocol::BlockNumber curBlockNum = -1;  // at which block gets the configuration value
-    LedgerConfigCache(const std::string& _value, bcos::consensus::ConsensusNodeListPtr _nodeList,
-        bcos::protocol::BlockNumber const& _enableNumber, bcos::protocol::BlockNumber const& _num)
-      : value(_value), nodeList(_nodeList), enableNumber(_enableNumber), curBlockNum(_num){};
+    LedgerConfigCache(const std::string& _value, bcos::protocol::BlockNumber const& _enableNumber,
+        bcos::protocol::BlockNumber const& _num)
+      : value(_value), enableNumber(_enableNumber), curBlockNum(_num){};
+};
+
+struct NodeConfigCache
+{
+    std::string type;
+    bcos::consensus::ConsensusNodeListPtr nodeList;
+    bcos::protocol::BlockNumber curBlockNum = -1;  // at which block gets the configuration value
+    NodeConfigCache(const std::string& _type, bcos::protocol::BlockNumber const& _num,
+        bcos::consensus::ConsensusNodeListPtr _nodeList)
+      : type(_type), nodeList(_nodeList), curBlockNum(_num){};
 };
 
 } // namespace bcos

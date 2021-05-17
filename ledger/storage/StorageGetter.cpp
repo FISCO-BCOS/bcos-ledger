@@ -82,6 +82,63 @@ std::string StorageGetter::getNoncesFromStorage(
     }
     return noncesStr;
 }
+
+std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>
+StorageGetter::getNoncesBatchFromStorage(const bcos::protocol::BlockNumber& _startNumber,
+    const protocol::BlockNumber& _endNumber,
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    const bcos::protocol::BlockFactory::Ptr& _blockFactory)
+{
+    auto retMap = std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
+
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+
+    auto table = _tableFactory->openTable(SYS_BLOCK_NUMBER_2_NONCES);
+    auto openTable_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    if (table)
+    {
+        std::vector<std::string> numberList;
+        for (BlockNumber i = _startNumber; i <= _endNumber; ++i)
+        {
+            numberList.emplace_back(boost::lexical_cast<std::string>(i));
+        }
+
+        auto numberEntryMap = table->getRows(numberList);
+        auto select_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
+        if (numberEntryMap.size() != (size_t)_endNumber - _startNumber + 1)
+        {
+            LEDGER_LOG(DEBUG) << LOG_DESC("getRows SYS_BLOCK_NUMBER_2_NONCES table error from db");
+            return retMap;
+        }
+
+        for (const auto& number : numberList)
+        {
+            auto nonceStr = numberEntryMap.at(number)->getField(SYS_VALUE);
+            auto block = _blockFactory->createBlock();
+            block->decode(nonceStr, false, false);
+            auto nonceList = std::make_shared<protocol::NonceList>(block->nonceList());
+            retMap->emplace(std::make_pair(boost::lexical_cast<BlockNumber>(number), nonceList));
+        }
+        auto get_field_time_cost = utcTime() - record_time;
+        LEDGER_LOG(DEBUG) << LOG_DESC("Get Nonce list from db")
+                          << LOG_KV("openTableTimeCost", openTable_time_cost)
+                          << LOG_KV("selectTimeCost", select_time_cost)
+                          << LOG_KV("getFieldTimeCost", get_field_time_cost)
+                          << LOG_KV("totalTimeCost", utcTime() - start_time);
+    }
+    else
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_BLOCK_NUMBER_2_NONCES table error from db");
+        return retMap;
+    }
+    return retMap;
+}
+
 std::string StorageGetter::getterByBlockNumber(const BlockNumber& _blockNumber, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName)
 {
     auto numberStr = boost::lexical_cast<std::string>(_blockNumber);
@@ -252,4 +309,49 @@ std::string StorageGetter::getTxByTxHash(
 {
     return tableGetterByRowAndField(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE);
 }
+std::shared_ptr<std::vector<bytesPointer>> StorageGetter::getBatchTxByHashList(
+    const std::vector<std::string>& _hashList,
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
+{
+    auto retList = std::make_shared<std::vector<bytesPointer>>();
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+
+    auto table = _tableFactory->openTable(SYS_HASH_2_TX);
+    auto openTable_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    if (table)
+    {
+        auto hashEntryMap = table->getRows(_hashList);
+        auto select_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
+        if (hashEntryMap.size() != _hashList.size())
+        {
+            LEDGER_LOG(DEBUG) << LOG_DESC("getRows SYS_HASH_2_TX table error from db");
+            return retList;
+        }
+
+        for (const auto& hash : _hashList)
+        {
+            auto txStr = hashEntryMap.at(hash)->getField(SYS_VALUE);
+            auto txPointer = std::make_shared<bytes>(asBytes(txStr));
+            retList->emplace_back(txPointer);
+        }
+        auto get_field_time_cost = utcTime() - record_time;
+        LEDGER_LOG(DEBUG) << LOG_DESC("Get txs list from db")
+                          << LOG_KV("openTableTimeCost", openTable_time_cost)
+                          << LOG_KV("selectTimeCost", select_time_cost)
+                          << LOG_KV("getFieldTimeCost", get_field_time_cost)
+                          << LOG_KV("totalTimeCost", utcTime() - start_time);
+    }
+    else
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_TX table error from db");
+        return retList;
+    }
+    return retList;
+}
+
 } // namespace bcos::ledger

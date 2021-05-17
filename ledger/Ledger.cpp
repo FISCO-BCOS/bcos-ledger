@@ -304,27 +304,28 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
         std::map<std::string, MerkleProofPtr>)>
         _onGetTx)
 {
-    // use concurrent vector
-    auto con_txByteList = std::make_shared<tbb::concurrent_vector<bytesPointer>>();
+    auto txHashStrList = std::vector<std::string>();
+    for (auto& txHash : *_txHashList)
+    {
+        txHashStrList.emplace_back(txHash.hex());
+    }
+    auto txByteList =
+        getStorageGetter()->getBatchTxByHashList(txHashStrList, getMemoryTableFactory(0));
+
     // use concurrent map
     tbb::concurrent_unordered_map<std::string, MerkleProofPtr> con_proofMap;
-
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end() ; ++i)
-            {
-                auto txHash = _txHashList->at(i);
-                auto txData = getStorageGetter()->getTxByTxHash(txHash.hex(), getMemoryTableFactory(0));
-                auto txPointer = std::make_shared<bytes>(asBytes(txData));
-                con_txByteList->emplace_back(txPointer);
-                if(_withProof){
+    if(_withProof)
+    {
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i < range.end(); ++i)
+                {
+                    auto txHash = _txHashList->at(i);
                     auto proof = getTxProof(txHash);
                     con_proofMap.emplace(std::make_pair(txHash.hex(), proof));
                 }
-            }
-        });
-    auto txByteList =
-        std::make_shared<std::vector<bytesPointer>>(con_txByteList->begin(), con_txByteList->end());
+            });
+    }
     std::map<std::string, MerkleProofPtr> proofMap(con_proofMap.begin(), con_proofMap.end()), emptyMap;
     if(_txHashList->size() != txByteList->size()){
         // TODO: add error code and msg
@@ -502,15 +503,12 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
     std::function<void(Error::Ptr, std::string, bcos::protocol::BlockNumber)> _onGetConfig)
 {
     auto currentNumber = getLatestBlockNumber();
-    // FIXME: async deadlock
-
     UpgradableGuard l(m_ledgerConfigMutex);
     auto it = m_ledgerConfigMap.find(_key);
     if (it != m_ledgerConfigMap.end() && it->second.curBlockNum == currentNumber)
     {
         // get value from cache
         // TODO: add success code and msg
-        l.unlock();
         auto success = std::make_shared<Error>(0, "");
         _onGetConfig(success, it->second.value, it->second.enableNumber);
         return;
@@ -534,7 +532,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
         // update cache
         {
             UpgradeGuard ul(l);
-            LedgerConfigCache ledgerConfigCache(ret->first, nullptr, number, currentNumber);
+            LedgerConfigCache ledgerConfigCache(ret->first, number, currentNumber);
             if (it != m_ledgerConfigMap.end())
             {
                 it->second = ledgerConfigCache;
@@ -549,7 +547,6 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
 
     LEDGER_LOG(TRACE) << LOG_DESC("[#asyncGetSystemConfigByKey]Data in db") << LOG_KV("key", _key)
                       << LOG_KV("value", ret->first);
-    l.unlock();
     // TODO: add success code and msg
     auto success = std::make_shared<Error>(0, "");
     _onGetConfig(success, ret->first, boost::lexical_cast<BlockNumber>(ret->second));
@@ -570,29 +567,16 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
     auto endNumber =
         (_startNumber + _offset > latestNumber) ? latestNumber : (_startNumber + _offset);
     auto tableFactory = getMemoryTableFactory(0);
-    auto retMap = std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
-    auto block = m_blockFactory->createBlock();
-
-    for (BlockNumber i = _startNumber; i <= endNumber; ++i)
-    {
-        auto noncesStr = getStorageGetter()->getNoncesFromStorage(i, tableFactory);
-        if (!noncesStr.empty())
-        {
-            block->decode(noncesStr, false, false);
-            auto nonceList = std::make_shared<protocol::NonceList>(block->nonceList());
-            retMap->emplace(std::make_pair(i, nonceList));
-        }
-        else{
-            LEDGER_LOG(ERROR)
-                    << LOG_DESC("[#asyncGetBlockHashByNumber] error happened in open table or get entry")
-                    << LOG_KV("blockNumber", i);
-            // TODO: add error code and msg
-            auto error = std::make_shared<Error>(-1, "");
-            _onGetList(error, nullptr);
-            return;
-        }
+    auto retMap = getStorageGetter()->getNoncesBatchFromStorage(
+        _startNumber, endNumber, tableFactory, m_blockFactory);
+    if(!retMap || retMap->empty()){
+        LEDGER_LOG(ERROR)
+                << LOG_DESC("[#asyncGetNonceList] error happened in open table or get entry");
+        // TODO: add error code and msg
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetList(error, nullptr);
+        return;
     }
-
     if (retMap->size() == size_t(endNumber - _startNumber + 1))
     {
         LEDGER_LOG(TRACE) << LOG_DESC("[#asyncGetBlockHashByNumber] get nonceList enough")
@@ -619,13 +603,12 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
         return;
     }
     auto number = getLatestBlockNumber();
-    UpgradableGuard l(m_ledgerConfigMutex);
-    auto it = m_ledgerConfigMap.find(_type);
-    if (it != m_ledgerConfigMap.end() && it->second.curBlockNum == number)
+    UpgradableGuard l(m_nodeConfigMutex);
+    auto it = m_nodeConfigMap.find(_type);
+    if (it != m_nodeConfigMap.end() && it->second.curBlockNum == number)
     {
         // get value from cache
         // TODO: add success code and msg
-        l.unlock();
         auto success = std::make_shared<Error>(0, "");
         _onGetConfig(success, it->second.nodeList);
         return;
@@ -640,25 +623,22 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
             << LOG_KV("blockNumber", number);
 
         // TODO: add error code and msg
-        l.unlock();
         auto error = std::make_shared<Error>(-1, "");
         _onGetConfig(error, nullptr);
         return;
     }
     {
         UpgradeGuard ul(l);
-        LedgerConfigCache ledgerConfigCache(_type, nodeList, number, number);
-        if (it != m_ledgerConfigMap.end())
+        NodeConfigCache nodeConfigCache(_type, number, nodeList);
+        if (it != m_nodeConfigMap.end())
         {
-            it->second = ledgerConfigCache;
+            it->second = nodeConfigCache;
         }
         else
         {
-            m_ledgerConfigMap.insert(
-                std::pair<std::string, LedgerConfigCache>(_type, ledgerConfigCache));
+            m_nodeConfigMap.insert(std::make_pair(_type, nodeConfigCache));
         }
     }
-    l.unlock();
     // TODO: add success code and msg
     auto success = std::make_shared<Error>(0, "");
     _onGetConfig(success, nodeList);
