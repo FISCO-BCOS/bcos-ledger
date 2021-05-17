@@ -69,7 +69,7 @@ public:
         const gsl::span<const protocol::Signature>& _signList,
         std::function<void(Error::Ptr,  LedgerConfig::Ptr)> _onCommitBlock) override;
 
-    void asyncPreStoreTransaction(bytesPointer _txToStore, const crypto::HashType& _txHash,
+    void asyncPreStoreTransaction(bytesConstRef _txToStore, const crypto::HashType& _txHash,
         std::function<void(Error::Ptr)> _onTxStored) override;
 
     void asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
@@ -84,9 +84,10 @@ public:
     void asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
         std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock) override;
 
-    void asyncGetTransactionByHash(crypto::HashType const& _txHash, bool _withProof,
-        std::function<void(Error::Ptr, protocol::Transaction::ConstPtr, MerkleProofPtr)> _onGetTx)
-        override;
+    void asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _withProof,
+        std::function<void(Error::Ptr, std::shared_ptr<std::vector<bytesPointer>>,
+            std::map<std::string, MerkleProofPtr>)>
+            _onGetTx) override;
 
     void asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txHash, bool _withProof,
         std::function<void(Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr, MerkleProofPtr)> _onGetTx)
@@ -143,6 +144,8 @@ private:
         const bcos::protocol::BlockNumber& _blockNumber);
     bcos::protocol::TransactionsPtr getTxs(bcos::protocol::BlockNumber const& _blockNumber);
     bcos::protocol::ReceiptsPtr getReceipts(bcos::protocol::BlockNumber const& _blockNumber);
+    MerkleProofPtr getTxProof(const crypto::HashType& _txHash);
+    LedgerConfig::Ptr getLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash);
 
     /****** merkle methods, TODO: should be removed ******/
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByReceipt(
@@ -197,9 +200,6 @@ private:
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
     void writeHash2Number(const bcos::protocol::Block::Ptr& block,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
-    // TODO: is it necessary?
-    void writeNumber2Block(const bcos::protocol::Block::Ptr& block,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
     void writeNumber2BlockHeader(const bcos::protocol::Block::Ptr& _block,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
     // transaction encoded in block
@@ -221,8 +221,8 @@ private:
     mutable SharedMutex m_blockNumberMutex;
     bcos::protocol::BlockNumber m_blockNumber = -1;
 
-    std::map<std::string, SystemConfigRecordCache> m_systemConfigRecordMap;
-    mutable SharedMutex m_systemConfigMutex;
+    std::map<std::string, LedgerConfigCache> m_ledgerConfigMap;
+    mutable SharedMutex m_ledgerConfigMutex;
 
     std::pair<bcos::protocol::BlockNumber,
         std::shared_ptr<Parent2ChildListMap>>

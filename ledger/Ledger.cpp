@@ -49,7 +49,6 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
     auto parentHash = HashType(getLatestBlockHash());
 
     // get block from storage cache
-    // TODO: check this getBlock
     auto block = getState()->getBlock(_blockNumber);
 
     if (block == nullptr)
@@ -72,6 +71,8 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
         LEDGER_LOG(WARNING) << LOG_DESC("Commit block without signature list")
                             << LOG_KV("number", _blockNumber);
     }
+
+    auto ledgerConfig = getLedgerConfig(_blockNumber, block->blockHeader()->hash());
     try
     {
         auto before_write_time_cost = utcTime() - record_time;
@@ -131,6 +132,7 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
         auto addBlockCache_time_cost = utcTime() - record_time;
         record_time = utcTime();
         // TODO: push msg to tx pool
+        // TODO: broadcast msg to module
         auto noteReady_time_cost = utcTime() - record_time;
 
         LEDGER_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Commit block time record")
@@ -152,15 +154,14 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockNumber _blockNumber,
 
     // TODO: add success code and msg
     auto success = std::make_shared<Error>(0, "");
-    // TODO: get ledger config
-    _onCommitBlock(success, nullptr);
+    _onCommitBlock(success, ledgerConfig);
 }
 
 void Ledger::asyncPreStoreTransaction(
-    bytesPointer _txToStore, const crypto::HashType& _txHash,
+    bytesConstRef _txToStore, const crypto::HashType& _txHash,
     std::function<void(Error::Ptr)> _onTxStored)
 {
-    if (_txToStore == nullptr || _txHash == HashType(""))
+    if (_txHash == HashType(""))
     {
         // TODO: add error code and msg
         auto error = std::make_shared<Error>(-1, "");
@@ -173,7 +174,7 @@ void Ledger::asyncPreStoreTransaction(
     {
         auto write_record_time = utcTime();
         TableFactoryInterface::Ptr tableFactory = getState()->getStateCache(number);
-        getStorageSetter()->setHashToTx(tableFactory, _txHash.hex(), asString(*_txToStore));
+        getStorageSetter()->setHashToTx(tableFactory, _txHash.hex(), asString(_txToStore));
 
         auto ret = tableFactory->commit();
         if(ret == 0)
@@ -297,49 +298,61 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
     _onGetBlock(error, -1);
 }
 
-void Ledger::asyncGetTransactionByHash(crypto::HashType const& _txHash, bool _withProof,
-    std::function<void(Error::Ptr, protocol::Transaction::ConstPtr, MerkleProofPtr)> _onGetTx)
+// FIXME: use pointer to map to return in callback
+void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _withProof,
+    std::function<void(Error::Ptr, std::shared_ptr<std::vector<bytesPointer>>,
+        std::map<std::string, MerkleProofPtr>)>
+        _onGetTx)
 {
-    auto numIndexPair =
-        getStorageGetter()->getBlockNumberAndIndexByHash(_txHash.hex(), getMemoryTableFactory(0));
-    if (numIndexPair
-        && !numIndexPair->first.empty()
-        && !numIndexPair->second.empty())
+    // use concurrent vector
+    auto con_txByteList = std::make_shared<tbb::concurrent_vector<bytesPointer>>();
+    // use concurrent map
+    tbb::concurrent_unordered_map<std::string, MerkleProofPtr> con_proofMap;
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end() ; ++i)
+            {
+                auto txHash = _txHashList->at(i);
+                auto txData = getStorageGetter()->getTxByTxHash(txHash.hex(), getMemoryTableFactory(0));
+                auto txPointer = std::make_shared<bytes>(asBytes(txData));
+                con_txByteList->emplace_back(txPointer);
+                if(_withProof){
+                    auto proof = getTxProof(txHash);
+                    con_proofMap.emplace(std::make_pair(txHash.hex(), proof));
+                }
+            }
+        });
+    auto txByteList =
+        std::make_shared<std::vector<bytesPointer>>(con_txByteList->begin(), con_txByteList->end());
+    std::map<std::string, MerkleProofPtr> proofMap(con_proofMap.begin(), con_proofMap.end()), emptyMap;
+    if(_txHashList->size() != txByteList->size()){
+        // TODO: add error code and msg
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetTx(error, nullptr, emptyMap);
+        return;
+    }
+    if (_withProof)
     {
-        auto blockNumber = boost::lexical_cast<BlockNumber>(numIndexPair->first);
-        auto index = boost::lexical_cast<uint>(numIndexPair->second);
-        auto txs = getTxs(blockNumber);
-        if (!txs)
+        if (proofMap.size() != _txHashList->size())
         {
-            LEDGER_LOG(TRACE) << LOG_DESC("[#getTxs] get txs error")
-                              << LOG_KV("blockNumber", blockNumber) << LOG_KV("txHash", _txHash);
             // TODO: add error code and msg
             auto error = std::make_shared<Error>(-1, "");
-            _onGetTx(error, nullptr, nullptr);
-            return;
+            _onGetTx(error, nullptr, emptyMap);
         }
-        if (txs->size() > index)
+        else
         {
-            if(_withProof){
-                auto merkleProof = std::make_shared<MerkleProof>();
-                auto tx = txs->at(index);
-                auto parent2ChildList = getParent2ChildListByTxsProofCache(blockNumber, txs);
-                auto child2Parent = getChild2ParentCacheByTransaction(parent2ChildList, blockNumber);
-                getMerkleProof(tx->hash(), *parent2ChildList, *child2Parent, *merkleProof);
-                _onGetTx(nullptr, txs->at(index), merkleProof);
-                return;
-            }
-            else
-            {
-                _onGetTx(nullptr, txs->at(index), nullptr);
-                return;
-            }
+            LEDGER_LOG(INFO) << LOG_DESC("") << LOG_KV("txHashListSize", _txHashList->size())
+                             << LOG_KV("withProof", _withProof);
+            _onGetTx(nullptr, txByteList, proofMap);
         }
     }
-    LEDGER_LOG(ERROR) << LOG_DESC("") << LOG_KV("txHash", _txHash);
-    // TODO: add error code and message
-    auto error = std::make_shared<Error>(-1, "");
-    _onGetTx(error, nullptr, nullptr);
+    else
+    {
+        LEDGER_LOG(INFO) << LOG_DESC("") << LOG_KV("txHashListSize", _txHashList->size())
+                          << LOG_KV("withProof", _withProof);
+        _onGetTx(nullptr, txByteList, emptyMap);
+    }
 }
 
 void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txHash,
@@ -489,19 +502,25 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
     std::function<void(Error::Ptr, std::string, bcos::protocol::BlockNumber)> _onGetConfig)
 {
     auto currentNumber = getLatestBlockNumber();
-    UpgradableGuard l(m_systemConfigMutex);
-    auto it = m_systemConfigRecordMap.find(_key);
-    if (it != m_systemConfigRecordMap.end() && it->second.curBlockNum == currentNumber)
+    // FIXME: async deadlock
+
+    UpgradableGuard l(m_ledgerConfigMutex);
+    auto it = m_ledgerConfigMap.find(_key);
+    if (it != m_ledgerConfigMap.end() && it->second.curBlockNum == currentNumber)
     {
         // get value from cache
-        _onGetConfig(nullptr, it->second.value, it->second.enableNumber);
+        // TODO: add success code and msg
+        l.unlock();
+        auto success = std::make_shared<Error>(0, "");
+        _onGetConfig(success, it->second.value, it->second.enableNumber);
+        return;
     }
 
     // cannot find the system config key or need to update the value with different block height
     // get value from db
 
     auto ret = getStorageGetter()->getSysConfig(_key, getMemoryTableFactory(0));
-    if (ret->first.empty() && ret->second.empty())
+    if (ret->second.empty())
     {
         LEDGER_LOG(ERROR) << LOG_DESC("[#asyncGetSystemConfigByKey] Null pointer of getSysConfig")
                           << LOG_KV("key", _key);
@@ -510,33 +529,30 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
         _onGetConfig(error, "", -1);
         return;
     }
-    else
-    {
+
         auto number = boost::lexical_cast<BlockNumber>(ret->second);
         // update cache
         {
             UpgradeGuard ul(l);
-            SystemConfigRecordCache systemConfigRecordCache(ret->first, number, currentNumber);
-            if (it != m_systemConfigRecordMap.end())
+            LedgerConfigCache ledgerConfigCache(ret->first, nullptr, number, currentNumber);
+            if (it != m_ledgerConfigMap.end())
             {
-                it->second = systemConfigRecordCache;
+                it->second = ledgerConfigCache;
             }
             else
             {
-                m_systemConfigRecordMap.insert(
-                    std::pair<std::string, SystemConfigRecordCache>(_key, systemConfigRecordCache));
+                m_ledgerConfigMap.insert(
+                    std::pair<std::string, LedgerConfigCache>(_key, ledgerConfigCache));
             }
         }
 
-        LEDGER_LOG(TRACE) << LOG_DESC("[#asyncGetSystemConfigByKey]Data in db")
-                          << LOG_KV("key", _key) << LOG_KV("value", ret->first);
-        _onGetConfig(nullptr, ret->first, boost::lexical_cast<BlockNumber>(ret->second));
-        return;
-    }
-    LEDGER_LOG(ERROR) << LOG_DESC("[#asyncGetSystemConfigByKey]Failed");
-    // TODO: add error code and error msg
-    auto error = std::make_shared<Error>(-1, "");
-    _onGetConfig(error, "", -1);
+
+    LEDGER_LOG(TRACE) << LOG_DESC("[#asyncGetSystemConfigByKey]Data in db") << LOG_KV("key", _key)
+                      << LOG_KV("value", ret->first);
+    l.unlock();
+    // TODO: add success code and msg
+    auto success = std::make_shared<Error>(0, "");
+    _onGetConfig(success, ret->first, boost::lexical_cast<BlockNumber>(ret->second));
 }
 
 void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t _offset,
@@ -603,20 +619,49 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
         return;
     }
     auto number = getLatestBlockNumber();
-    auto nodeList = getStorageGetter()->getConsensusConfig(
-        _type, number, getMemoryTableFactory(0), m_blockFactory->cryptoSuite()->keyFactory());
-    if (nodeList != nullptr && nodeList->size() != 0)
+    UpgradableGuard l(m_ledgerConfigMutex);
+    auto it = m_ledgerConfigMap.find(_type);
+    if (it != m_ledgerConfigMap.end() && it->second.curBlockNum == number)
     {
-        _onGetConfig(nullptr, nodeList);
+        // get value from cache
+        // TODO: add success code and msg
+        l.unlock();
+        auto success = std::make_shared<Error>(0, "");
+        _onGetConfig(success, it->second.nodeList);
         return;
     }
-    LEDGER_LOG(ERROR)
+
+    consensus::ConsensusNodeListPtr nodeList = getStorageGetter()->getConsensusConfig(
+        _type, number, getMemoryTableFactory(0), m_blockFactory->cryptoSuite()->keyFactory());
+    if (nodeList == nullptr || nodeList->empty())
+    {
+        LEDGER_LOG(ERROR)
             << LOG_DESC("[#asyncGetNodeListByType] error happened in open table or get entry")
             << LOG_KV("blockNumber", number);
 
-    // TODO: add error code and msg
-    auto error = std::make_shared<Error>(-1, "");
-    _onGetConfig(error, nullptr);
+        // TODO: add error code and msg
+        l.unlock();
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetConfig(error, nullptr);
+        return;
+    }
+    {
+        UpgradeGuard ul(l);
+        LedgerConfigCache ledgerConfigCache(_type, nodeList, number, number);
+        if (it != m_ledgerConfigMap.end())
+        {
+            it->second = ledgerConfigCache;
+        }
+        else
+        {
+            m_ledgerConfigMap.insert(
+                std::pair<std::string, LedgerConfigCache>(_type, ledgerConfigCache));
+        }
+    }
+    l.unlock();
+    // TODO: add success code and msg
+    auto success = std::make_shared<Error>(0, "");
+    _onGetConfig(success, nodeList);
 }
 
 Block::Ptr Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag)
@@ -895,6 +940,88 @@ bcos::protocol::ReceiptsPtr Ledger::getReceipts(
     }
 }
 
+MerkleProofPtr Ledger::getTxProof(const HashType& _txHash)
+{
+    auto numIndexPair =
+        getStorageGetter()->getBlockNumberAndIndexByHash(_txHash.hex(), getMemoryTableFactory(0));
+    if (numIndexPair && !numIndexPair->first.empty() && !numIndexPair->second.empty())
+    {
+        auto blockNumber = boost::lexical_cast<BlockNumber>(numIndexPair->first);
+        auto index = boost::lexical_cast<uint>(numIndexPair->second);
+        auto txs = getTxs(blockNumber);
+        if (!txs)
+        {
+            LEDGER_LOG(TRACE) << LOG_DESC("[#getTxProof] get txs error")
+                              << LOG_KV("blockNumber", blockNumber) << LOG_KV("txHash", _txHash);
+            return nullptr;
+        }
+        if (txs->size() > index)
+        {
+            auto merkleProof = std::make_shared<MerkleProof>();
+            auto tx = txs->at(index);
+            auto parent2ChildList = getParent2ChildListByTxsProofCache(blockNumber, txs);
+            auto child2Parent = getChild2ParentCacheByTransaction(parent2ChildList, blockNumber);
+            getMerkleProof(tx->hash(), *parent2ChildList, *child2Parent, *merkleProof);
+            return merkleProof;
+        }
+    }
+    return nullptr;
+}
+
+LedgerConfig::Ptr Ledger::getLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash){
+    auto ledgerConfig = std::make_shared<LedgerConfig>();
+    ledgerConfig->setBlockNumber(_number);
+    ledgerConfig->setHash(_hash);
+    asyncGetSystemConfigByKey(SYSTEM_KEY_CONSENSUS_TIMEOUT, [&](Error::Ptr _error,
+                                                                std::string _value, BlockNumber) {
+        if (_error->errorCode() == 0)
+        {
+            ledgerConfig->setConsensusTimeout(boost::lexical_cast<uint64_t>(_value));
+            asyncGetNodeListByType(CONSENSUS_SEALER,
+                [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+                    if (_error->errorCode() == 0)
+                    {
+                        ledgerConfig->setConsensusNodeList(*_nodeList);
+                    }
+                    else
+                    {
+                        LEDGER_LOG(ERROR) << LOG_DESC("") << LOG_KV("getKey", CONSENSUS_SEALER);
+                    }
+                });
+        }
+        else
+        {
+            LEDGER_LOG(ERROR) << LOG_DESC("") << LOG_KV("getKey", SYSTEM_KEY_CONSENSUS_TIMEOUT);
+        }
+    });
+    asyncGetSystemConfigByKey(
+        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber)
+        {
+          if (_error->errorCode() == 0)
+          {
+              ledgerConfig->setBlockTxCountLimit(boost::lexical_cast<uint64_t>(_value));
+              asyncGetNodeListByType(
+                  CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+                    if (_error->errorCode() == 0)
+                    {
+                        ledgerConfig->setObserverNodeList(*_nodeList);
+                    }
+                    else
+                    {
+                        LEDGER_LOG(ERROR)
+                                << LOG_DESC("") << LOG_KV("getKey", CONSENSUS_OBSERVER);
+                    }
+                  });
+          }
+          else
+          {
+              LEDGER_LOG(ERROR) << LOG_DESC("")
+                                << LOG_KV("getKey", SYSTEM_KEY_TX_COUNT_LIMIT);
+          }
+        });
+    return ledgerConfig;
+}
+
 std::shared_ptr<Child2ParentMap> Ledger::getChild2ParentCacheByReceipt(
     std::shared_ptr<Parent2ChildListMap> _parent2ChildList, BlockNumber _blockNumber)
 {
@@ -1055,19 +1182,7 @@ void Ledger:: writeHash2Number(
                           << LOG_KV("blockHash", block->blockHeader()->hash().hex());
     }
 }
-void Ledger::writeNumber2Block(
-    const Block::Ptr& _block, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
-{
-    auto encodedBlock = std::make_shared<bytes>();
-    _block->encode(*encodedBlock);
-    bool ret = getStorageSetter()->setNumber2Block(_tableFactory,
-        boost::lexical_cast<std::string>(_block->blockHeader()->number()), asString(*encodedBlock));
-    if(!ret){
-        LEDGER_LOG(DEBUG) << LOG_BADGE("WriteNumber2Block")
-                          << LOG_DESC("Write row in SYS_NUMBER_2_BLOCK error")
-                          << LOG_KV("blockNumber", _block->blockHeader()->number());
-    }
-}
+
 void Ledger::writeNumber2BlockHeader(
     const Block::Ptr& _block, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
@@ -1194,6 +1309,8 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig)
         block->setBlockHeader(header);
         try
         {
+            // TODO: concurrent write these
+            // TODO: set cache
             // write in HASH_2_NUMBER
             writeHash2Number(block, tableFactory);
             // write in SYS_CONFIG
@@ -1209,7 +1326,6 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig)
             getStorageSetter()->setConsensusConfig(
                 tableFactory, CONSENSUS_OBSERVER, _ledgerConfig->observerNodeList(), "0");
             // write in NUMBER_2_HEADER
-            writeNumber2Block(block, tableFactory);
             writeNumber2BlockHeader(block, tableFactory);
             // write in SYS_CURRENT_STATE
             getStorageSetter()->setCurrentState(
