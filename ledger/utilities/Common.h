@@ -33,7 +33,6 @@ using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 
 static const std::string SYS_KEY_CURRENT_NUMBER = "current_number";
-static const std::string SYS_KEY_CURRENT_HASH = "current_hash";
 static const std::string SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
 static const std::string SYS_KEY_TOTAL_FAILED_TRANSACTION = "total_failed_transaction_count";
 static const std::string SYS_VALUE = "value";
@@ -41,20 +40,16 @@ static const std::string SYS_KEY = "key";
 static const std::string TX_INDEX = "index";
 static const std::string SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_block_num";
 
-static const std::string SYS_CONSENSUS = "_sys_consensus_";
-static const std::string SYS_ACCESS_TABLE = "_sys_table_access_";
-static const std::string SYS_CNS = "_sys_cns_";
-static const std::string SYS_CONFIG = "_sys_config_";
-static const std::string SYS_CURRENT_STATE = "_sys_current_state_";
-static const std::string SYS_TX_HASH_2_BLOCK_NUMBER = "_sys_tx_hash_2_block_number_";
-static const std::string SYS_HASH_2_NUMBER = "_sys_hash_2_number_";
-static const std::string SYS_NUMBER_2_HASH = "_sys_number_2_hash_";
-static const std::string SYS_NUMBER_2_BLOCK = "_sys_number_2_block_";
-static const std::string SYS_BLOCK_NUMBER_2_NONCES = "_sys_block_number_2_nonces_";
-static const std::string SYS_NUMBER_2_BLOCK_HEADER = "_sys_number_2_header_";
-static const std::string SYS_NUMBER_2_TXS = "_sys_number_2_txs_";
-static const std::string SYS_NUMBER_2_RECEIPTS = "_sys_number_2_receipts_";
-static const std::string SYS_HASH_2_TX = "_sys_hash_2_tx_";
+static const std::string SYS_CONSENSUS = "s_consensus";
+static const std::string SYS_CONFIG = "s_config";
+static const std::string SYS_CURRENT_STATE = "s_current_state";
+static const std::string SYS_HASH_2_NUMBER = "s_hash_2_number";
+static const std::string SYS_NUMBER_2_HASH = "s_number_2_hash";
+static const std::string SYS_BLOCK_NUMBER_2_NONCES = "s_block_number_2_nonces";
+static const std::string SYS_NUMBER_2_BLOCK_HEADER = "s_number_2_header";
+static const std::string SYS_NUMBER_2_TXS = "s_number_2_txs";
+static const std::string SYS_HASH_2_TX = "s_hash_2_tx";
+static const std::string SYS_HASH_2_RECEIPT = "s_hash_2_receipt";
 
 static const std::string NODE_TYPE = "_type_";
 static const std::string NODE_WEIGHT = "_weight_";
@@ -69,15 +64,4 @@ struct LedgerConfigCache
         bcos::protocol::BlockNumber const& _num)
       : value(_value), enableNumber(_enableNumber), curBlockNum(_num){};
 };
-
-struct NodeConfigCache
-{
-    std::string type;
-    bcos::consensus::ConsensusNodeListPtr nodeList;
-    bcos::protocol::BlockNumber curBlockNum = -1;  // at which block gets the configuration value
-    NodeConfigCache(const std::string& _type, bcos::protocol::BlockNumber const& _num,
-        bcos::consensus::ConsensusNodeListPtr _nodeList)
-      : type(_type), nodeList(_nodeList), curBlockNum(_num){};
-};
-
 } // namespace bcos

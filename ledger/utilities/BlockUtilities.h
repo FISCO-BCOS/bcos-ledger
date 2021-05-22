@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include "Common.h"
 
 namespace bcos::ledger
@@ -34,4 +35,16 @@ protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block)
 
 size_t blockReceiptListSetter(
     const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts);
+
+bcos::protocol::Block::Ptr decodeBlock(
+    const protocol::BlockFactory::Ptr _blockFactory, const std::string& _blockStr);
+
+bcos::protocol::BlockHeader::Ptr decodeBlockHeader(
+    const protocol::BlockHeaderFactory::Ptr _headerFactory, const std::string& _headerStr);
+
+bcos::protocol::Transaction::Ptr decodeTransaction(
+    const protocol::TransactionFactory::Ptr _txFactory, const std::string& _txStr);
+
+bcos::protocol::TransactionReceipt::Ptr decodeReceipt(
+    const protocol::TransactionReceiptFactory::Ptr _receiptFactory, const std::string& _receiptStr);
 }

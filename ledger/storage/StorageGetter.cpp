@@ -18,8 +18,10 @@
  * @date 2021-04-23
  */
 
+#include <bcos-framework/interfaces/protocol/CommonError.h>
 #include "StorageGetter.h"
 #include "../utilities/Common.h"
+#include "../utilities/BlockUtilities.h"
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -28,66 +30,38 @@ using namespace bcos::consensus;
 
 namespace bcos::ledger
 {
-std::string StorageGetter::getTxsFromStorage(
-    const BlockNumber& _blockNumber, const TableFactoryInterface::Ptr& _tableFactory)
+void StorageGetter::getTxsFromStorage(
+    const BlockNumber& _blockNumber, const TableFactoryInterface::Ptr& _tableFactory,
+    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
 {
-    auto txsStr = getterByBlockNumber(_blockNumber, _tableFactory, SYS_NUMBER_2_TXS);
-    if (txsStr.empty())
-    {
-        LEDGER_LOG(DEBUG) << LOG_DESC("[#getTxsFromStorage] Cannot get txs, return empty.");
-    }
-    return txsStr;
-}
-std::string StorageGetter::getReceiptsFromStorage(const bcos::protocol::BlockNumber& _blockNumber,
-    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
-{
-    auto rcptStr = getterByBlockNumber(_blockNumber, _tableFactory, SYS_NUMBER_2_RECEIPTS);
-    if (rcptStr.empty())
-    {
-        LEDGER_LOG(DEBUG) << LOG_DESC(
-            "[#getReceiptFromStorage] Cannot get receipts, return empty.");
-    }
-    return rcptStr;
-}
-std::string StorageGetter::getBlockHeaderFromStorage(
-    const bcos::protocol::BlockNumber& _blockNumber,
-    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
-{
-    auto headerStr = getterByBlockNumber(_blockNumber, _tableFactory, SYS_NUMBER_2_BLOCK_HEADER);
-    if (headerStr.empty())
-    {
-        LEDGER_LOG(DEBUG) << LOG_DESC(
-            "[#getBlockHeaderFromStorage] Cannot get header, return empty.");
-    }
-    return headerStr;
-}
-std::string StorageGetter::getFullBlockFromStorage(
-    const BlockNumber& _blockNumber, const TableFactoryInterface::Ptr& _tableFactory)
-{
-    auto blockStr = getterByBlockNumber(_blockNumber,_tableFactory,SYS_NUMBER_2_BLOCK);
-    if (blockStr.empty())
-    {
-        LEDGER_LOG(DEBUG) << LOG_DESC(
-                    "[#getFullBlockFromStorage] Cannot get block, return empty.");
-    }
-    return blockStr;
-}
-std::string StorageGetter::getNoncesFromStorage(
-    const BlockNumber& _blockNumber, const TableFactoryInterface::Ptr& _tableFactory)
-{
-    auto noncesStr = getterByBlockNumber(_blockNumber, _tableFactory, SYS_BLOCK_NUMBER_2_NONCES);
-    if (noncesStr.empty())
-    {
-        LEDGER_LOG(DEBUG) << LOG_DESC("[#getNoncesFromStorage] Cannot get nonces, return empty.");
-    }
-    return noncesStr;
+    asyncTableGetter(_tableFactory, SYS_NUMBER_2_TXS,
+        boost::lexical_cast<std::string>(_blockNumber), SYS_VALUE, _onGetString);
 }
 
-std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>
-StorageGetter::getNoncesBatchFromStorage(const bcos::protocol::BlockNumber& _startNumber,
+void StorageGetter::getBlockHeaderFromStorage(
+    const bcos::protocol::BlockNumber& _blockNumber,
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+{
+    asyncTableGetter(_tableFactory, SYS_NUMBER_2_BLOCK_HEADER,
+        boost::lexical_cast<std::string>(_blockNumber), SYS_VALUE, _onGetString);
+}
+
+void StorageGetter::getNoncesFromStorage(const BlockNumber& _blockNumber,
+    const TableFactoryInterface::Ptr& _tableFactory,
+    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+{
+    asyncTableGetter(_tableFactory, SYS_BLOCK_NUMBER_2_NONCES,
+        boost::lexical_cast<std::string>(_blockNumber), SYS_VALUE, _onGetString);
+}
+
+void StorageGetter::getNoncesBatchFromStorage(const bcos::protocol::BlockNumber& _startNumber,
     const protocol::BlockNumber& _endNumber,
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-    const bcos::protocol::BlockFactory::Ptr& _blockFactory)
+    const bcos::protocol::BlockFactory::Ptr& _blockFactory,
+    std::function<void(
+        Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
+        _onGetData)
 {
     auto retMap = std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
 
@@ -100,100 +74,149 @@ StorageGetter::getNoncesBatchFromStorage(const bcos::protocol::BlockNumber& _sta
 
     if (table)
     {
-        std::vector<std::string> numberList;
+        auto numberList = std::make_shared<std::vector<std::string>>();
         for (BlockNumber i = _startNumber; i <= _endNumber; ++i)
         {
-            numberList.emplace_back(boost::lexical_cast<std::string>(i));
+            numberList->emplace_back(boost::lexical_cast<std::string>(i));
         }
 
-        auto numberEntryMap = table->getRows(numberList);
-        auto select_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-
-        if (numberEntryMap.size() != (size_t)_endNumber - _startNumber + 1)
-        {
-            LEDGER_LOG(DEBUG) << LOG_DESC("getRows SYS_BLOCK_NUMBER_2_NONCES table error from db");
-            return retMap;
-        }
-
-        for (const auto& number : numberList)
-        {
-            auto nonceStr = numberEntryMap.at(number)->getField(SYS_VALUE);
-            auto block = _blockFactory->createBlock();
-            block->decode(nonceStr, false, false);
-            auto nonceList = std::make_shared<protocol::NonceList>(block->nonceList());
-            retMap->emplace(std::make_pair(boost::lexical_cast<BlockNumber>(number), nonceList));
-        }
-        auto get_field_time_cost = utcTime() - record_time;
-        LEDGER_LOG(DEBUG) << LOG_DESC("Get Nonce list from db")
-                          << LOG_KV("openTableTimeCost", openTable_time_cost)
-                          << LOG_KV("selectTimeCost", select_time_cost)
-                          << LOG_KV("getFieldTimeCost", get_field_time_cost)
-                          << LOG_KV("totalTimeCost", utcTime() - start_time);
+        table->asyncGetRows(numberList,
+            [&](const Error::Ptr& _error, const std::map<std::string, Entry::Ptr>& numberEntryMap) {
+                if (!_error || _error->errorCode() == CommonError::SUCCESS)
+                {
+                    auto select_time_cost = utcTime() - record_time;
+                    record_time = utcTime();
+                    if (numberEntryMap.size() != size_t(_endNumber - _startNumber + 1))
+                    {
+                        LEDGER_LOG(DEBUG) << LOG_DESC(
+                            "getRows SYS_BLOCK_NUMBER_2_NONCES table error from db, wrong size of "
+                            "map returned");
+                        // TODO: add error code and msg
+                        auto error = std::make_shared<Error>(-1, "");
+                        _onGetData(error, retMap);
+                    }
+                    for (const auto& number : *numberList)
+                    {
+                        auto nonceStr = numberEntryMap.at(number)->getField(SYS_VALUE);
+                        auto block = _blockFactory->createBlock();
+                        block->decode(nonceStr, false, false);
+                        auto nonceList = std::make_shared<protocol::NonceList>(block->nonceList());
+                        retMap->emplace(std::make_pair(boost::lexical_cast<BlockNumber>(number), nonceList));
+                    }
+                    auto get_field_time_cost = utcTime() - record_time;
+                    LEDGER_LOG(DEBUG) << LOG_DESC("Get Nonce list from db")
+                                      << LOG_KV("openTableTimeCost", openTable_time_cost)
+                                      << LOG_KV("selectTimeCost", select_time_cost)
+                                      << LOG_KV("getFieldTimeCost", get_field_time_cost)
+                                      << LOG_KV("totalTimeCost", utcTime() - start_time);
+                    auto success = std::make_shared<Error>(CommonError::SUCCESS, "");
+                    _onGetData(success, retMap);
+                }
+                else{
+                    // TODO: add error code and msg
+                    auto error =
+                        std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
+                    _onGetData(error, retMap);
+                }
+            });
     }
     else
     {
         LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_BLOCK_NUMBER_2_NONCES table error from db");
-        return retMap;
+        // TODO: add error code and msg
+        auto error =
+            std::make_shared<Error>(-1, "");
+        _onGetData(error, retMap);
     }
-    return retMap;
 }
 
-std::string StorageGetter::getterByBlockNumber(const BlockNumber& _blockNumber, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName)
+void StorageGetter::getBlockNumberByHash(const std::string& _hash,
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
 {
-    auto numberStr = boost::lexical_cast<std::string>(_blockNumber);
-    return tableGetterByRowAndField(_tableFactory, _tableName, numberStr, SYS_VALUE);
+    asyncTableGetter(_tableFactory, SYS_HASH_2_NUMBER, _hash, SYS_VALUE, _onGetString);
 }
 
-std::string StorageGetter::getterByBlockHash(const std::string& _blockHash,
-    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName)
+void StorageGetter::getBlockHashByNumber(const BlockNumber& _num,
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
 {
-    return tableGetterByRowAndField(_tableFactory, _tableName, _blockHash, SYS_VALUE);
+    asyncTableGetter(_tableFactory, SYS_NUMBER_2_HASH, boost::lexical_cast<std::string>(_num),
+        SYS_VALUE, _onGetString);
 }
 
-std::string StorageGetter::getBlockNumberByHash(
-    const std::string& _hash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
+void StorageGetter::getCurrentState(const std::string& _row,
+    const storage::TableFactoryInterface::Ptr& _tableFactory,
+    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
 {
-    auto numberStr = getterByBlockHash(_hash, _tableFactory, SYS_HASH_2_NUMBER);
-    if (numberStr.empty())
+    return asyncTableGetter(_tableFactory, SYS_CURRENT_STATE, _row, SYS_VALUE, _onGetString);
+}
+
+void StorageGetter::getSysConfig(const std::string& _key, const TableFactoryInterface::Ptr& _tableFactory,
+    std::function<void(Error::Ptr, std::shared_ptr<stringsPair>)> _onGetConfig)
+{
+    auto ret = std::make_shared<stringsPair>(std::make_pair("", ""));
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+
+    auto table = _tableFactory->openTable(SYS_CONFIG);
+    auto openTable_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+    if (table)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("[#getBlockNumberByHash] Cannot get numberStr, return empty.");
-    }
-    return numberStr;
-}
+        table->asyncGetRow(_key, [&](const Error::Ptr& _error, std::shared_ptr<Entry> _entry) {
+            if(!_error || _error->errorCode() == CommonError::SUCCESS)
+            {
+                auto select_time_cost = utcTime() - record_time;
+                if (_entry)
+                {
+                    auto value = _entry->getField(SYS_VALUE);
+                    auto number = _entry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER);
+                    auto get_field_time_cost = utcTime() - record_time;
 
-std::string StorageGetter::getBlockHashByNumber(
-    const BlockNumber& _num, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
-{
-    auto hashStr = getterByBlockNumber(_num, _tableFactory, SYS_NUMBER_2_HASH);
-    if (hashStr.empty())
+                    ret->first.swap(value);
+                    ret->second.swap(number);
+
+                    LEDGER_LOG(DEBUG)
+                        << LOG_DESC("Get config from db") << LOG_KV("openTable", SYS_CONFIG)
+                        << LOG_KV("openTableTimeCost", openTable_time_cost)
+                        << LOG_KV("selectTimeCost", select_time_cost)
+                        << LOG_KV("getFieldTimeCost", get_field_time_cost)
+                        << LOG_KV("totalTimeCost", utcTime() - start_time);
+                    // TODO: success msg
+                    auto success = std::make_shared<Error>(CommonError::SUCCESS, "");
+                    _onGetConfig(success, ret);
+                }
+                else
+                {
+                    // TODO: add error msg
+                    auto error =
+                        std::make_shared<Error>(-1, "");
+                    _onGetConfig(error, ret);
+                }
+            }
+            else
+            {
+                // TODO: add error msg
+                auto error =
+                    std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
+                _onGetConfig(error, ret);
+            }
+        });
+    }
+    else
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("[#getBlockHashByNumber] Cannot get hashStr, return empty.");
+        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_CONFIG table error from db");
+        // TODO: add error msg
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetConfig(error, ret);
     }
-    return hashStr;
 }
 
-std::string StorageGetter::getCurrentState(
-    const std::string& _row, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
-{
-    return tableGetterByRowAndField(_tableFactory, SYS_CURRENT_STATE, _row, SYS_VALUE);
-}
-
-std::shared_ptr<stringsPair> StorageGetter::getBlockNumberAndIndexByHash(
-    const std::string& _hash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
-{
-    return stringsPairGetterByRowAndFields(
-        _tableFactory, SYS_TX_HASH_2_BLOCK_NUMBER, _hash, SYS_VALUE, "index");
-}
-std::shared_ptr<stringsPair> StorageGetter::getSysConfig(
-    const std::string& _key, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
-{
-    return stringsPairGetterByRowAndFields(_tableFactory, SYS_CONFIG, _key, SYS_VALUE, SYS_CONFIG_ENABLE_BLOCK_NUMBER);
-}
-
-ConsensusNodeListPtr StorageGetter::getConsensusConfig(const std::string& _nodeType,
+void StorageGetter::getConsensusConfig(const std::string& _nodeType,
     const BlockNumber& _blockNumber, const TableFactoryInterface::Ptr& _tableFactory,
-    const crypto::KeyFactory::Ptr& _keyFactory)
+    const crypto::KeyFactory::Ptr& _keyFactory,
+    std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
 {
     ConsensusNodeListPtr nodeList = std::make_shared<ConsensusNodeList>();
     auto start_time = utcTime();
@@ -205,41 +228,68 @@ ConsensusNodeListPtr StorageGetter::getConsensusConfig(const std::string& _nodeT
 
     if (table)
     {
-        auto nodeIdList = table->getPrimaryKeys(nullptr);
-        auto select_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-
-        auto nodeMap = table->getRows(nodeIdList);
-        for (const auto& nodePair : nodeMap)
-        {
-            auto nodeType = nodePair.second->getField(NODE_TYPE);
-            auto blockNum = boost::lexical_cast<BlockNumber>(nodePair.second->getField(NODE_ENABLE_NUMBER));
-            if (nodeType == _nodeType && blockNum <= _blockNumber)
+        table->asyncGetPrimaryKeys(nullptr, [&](const Error::Ptr& _error, std::vector<std::string> _keys) {
+            if ((!_error || _error->errorCode() == CommonError::SUCCESS) && !_keys.empty())
             {
-                crypto::NodeIDPtr nodeID = _keyFactory->createKey(*fromHexString(nodePair.first));
-                auto weight = boost::lexical_cast<uint64_t>(nodePair.second->getField(NODE_WEIGHT));
-                auto node = std::make_shared<ConsensusNode>(nodeID, weight);
-                nodeList->emplace_back(node);
+                auto keys = std::make_shared<std::vector<std::string>>(_keys);
+                table->asyncGetRows(keys,
+                    [_nodeType, _blockNumber, _keyFactory, _onGetConfig, nodeList,
+                        openTable_time_cost, record_time, start_time](const Error::Ptr& _error,
+                        const std::map<std::string, Entry::Ptr>& _entryMap) {
+                        if (!_error || _error->errorCode() == CommonError::SUCCESS)
+                        {
+                            for (const auto& nodePair : _entryMap)
+                            {
+                                auto nodeType = nodePair.second->getField(NODE_TYPE);
+                                auto blockNum = boost::lexical_cast<BlockNumber>(
+                                    nodePair.second->getField(NODE_ENABLE_NUMBER));
+                                if (nodeType == _nodeType && blockNum <= _blockNumber)
+                                {
+                                    crypto::NodeIDPtr nodeID =
+                                        _keyFactory->createKey(*fromHexString(nodePair.first));
+                                    auto weight = boost::lexical_cast<uint64_t>(
+                                        nodePair.second->getField(NODE_WEIGHT));
+                                    auto node = std::make_shared<ConsensusNode>(nodeID, weight);
+                                    nodeList->emplace_back(node);
+                                }
+                            }
+                            auto get_field_time_cost = utcTime() - record_time;
+                            LEDGER_LOG(DEBUG) << LOG_DESC("Get ConsensusConfig from db")
+                                              << LOG_KV("openTableTimeCost", openTable_time_cost)
+                                              << LOG_KV("getFieldTimeCost", get_field_time_cost)
+                                              << LOG_KV("totalTimeCost", utcTime() - start_time);
+                        }
+                        else
+                        {
+                            // TODO
+                            auto error = std::make_shared<Error>(
+                                _error->errorCode(), "" + _error->errorMessage());
+                            _onGetConfig(error, nodeList);
+                        }
+                    });
             }
-        }
-        auto get_field_time_cost = utcTime() - record_time;
-        LEDGER_LOG(DEBUG) << LOG_DESC("Get ConsensusConfig from db")
-                          << LOG_KV("openTableTimeCost", openTable_time_cost)
-                          << LOG_KV("selectTimeCost", select_time_cost)
-                          << LOG_KV("getFieldTimeCost", get_field_time_cost)
-                          << LOG_KV("totalTimeCost", utcTime() - start_time);
+            else
+            {
+                // TODO:
+                auto error =
+                    std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
+                _onGetConfig(error, nodeList);
+            }
+        });
     }
     else
     {
         LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_CONSENSUS table error from db");
-        return nullptr;
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetConfig(error, nodeList);
     }
-    return nodeList;
 }
 
-std::string StorageGetter::tableGetterByRowAndField(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName, const std::string& _row, const std::string& _field)
+void StorageGetter::asyncTableGetter(
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName,
+    const std::string& _row, const std::string& _field,
+    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
 {
-    std::string ret;
     auto start_time = utcTime();
     auto record_time = utcTime();
 
@@ -248,72 +298,60 @@ std::string StorageGetter::tableGetterByRowAndField(const bcos::storage::TableFa
     auto openTable_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    if(table){
-        auto entry = table->getRow(_row);
-        auto select_time_cost = utcTime() - record_time;
-        record_time = utcTime();
+    if (table)
+    {
+        table->asyncGetRow(_row, [&](const Error::Ptr& _error, Entry::Ptr _entry) {
+            if (!_error || _error->errorCode() == CommonError::SUCCESS)
+            {
+                if (_entry)
+                {
+                    auto ret = std::make_shared<std::string>(_entry->getField(_field));
 
-        if(entry){
-            ret = entry->getField(_field);
-            auto get_field_time_cost = utcTime() - record_time;
+                    LEDGER_LOG(TRACE)
+                        << LOG_DESC("Get string from db") << LOG_KV("openTable", _tableName)
+                        << LOG_KV("openTableTimeCost", openTable_time_cost)
+                        << LOG_KV("totalTimeCost", utcTime() - start_time);
 
-            LEDGER_LOG(DEBUG) << LOG_DESC("Get string from db") << LOG_KV("openTable", _tableName)
-                              << LOG_KV("openTableTimeCost", openTable_time_cost)
-                              << LOG_KV("selectTimeCost", select_time_cost)
-                              << LOG_KV("getFieldTimeCost", get_field_time_cost)
-                              << LOG_KV("totalTimeCost", utcTime() - start_time);
-        }
+                    _onGetString(nullptr, ret);
+                }
+                else
+                {
+                    // TODO: add error code and msg
+                    auto error = std::make_shared<Error>(-1, "");
+                    _onGetString(error, nullptr);
+                }
+            }
+            else
+            {
+                auto error =
+                    std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
+                _onGetString(error, nullptr);
+            }
+        });
     }
-    else{
+    else
+    {
         LEDGER_LOG(DEBUG) << LOG_DESC("Open table error from db")
                           << LOG_KV("openTable", _tableName);
+        // TODO: add error code and msg
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetString(error, nullptr);
     }
-    return ret;
 }
 
-std::shared_ptr<stringsPair> StorageGetter::stringsPairGetterByRowAndFields(
-    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName,
-    const std::string& _row, const std::string& _field1, const std::string& _filed2)
+void StorageGetter::getTxByTxHash(const std::string& _txHash,
+    const TableFactoryInterface::Ptr& _tableFactory,
+    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
 {
-    auto ret = std::make_shared<stringsPair>(std::make_pair("",""));
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-
-    auto table = _tableFactory->openTable(_tableName);
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-    if(table)
-    {
-        auto entry = table->getRow(_row);
-        auto select_time_cost = utcTime() - record_time;
-        if(entry)
-        {
-            auto field1 = entry->getField(_field1);
-            auto field2 = entry->getField(_filed2);
-            auto get_field_time_cost = utcTime() - record_time;
-
-            ret->first.swap(field1);
-            ret->second.swap(field2);
-
-            LEDGER_LOG(DEBUG) << LOG_DESC("Get string from db") << LOG_KV("openTable", _tableName)
-                              << LOG_KV("openTableTimeCost", openTable_time_cost)
-                              << LOG_KV("selectTimeCost", select_time_cost)
-                              << LOG_KV("getFieldTimeCost", get_field_time_cost)
-                              << LOG_KV("totalTimeCost", utcTime() - start_time);
-        }
-    }
-    return ret;
+    asyncTableGetter(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE, _onGetString);
 }
-std::string StorageGetter::getTxByTxHash(
-    const std::string& _txHash, const TableFactoryInterface::Ptr& _tableFactory)
+void StorageGetter::getBatchTxByHashList(
+    const std::shared_ptr<std::vector<std::string>>& _hashList,
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    const bcos::protocol::TransactionFactory::Ptr& _txFactory,
+    std::function<void(Error::Ptr, protocol::TransactionsPtr)> _onGetTx)
 {
-    return tableGetterByRowAndField(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE);
-}
-std::shared_ptr<std::vector<bytesPointer>> StorageGetter::getBatchTxByHashList(
-    const std::vector<std::string>& _hashList,
-    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
-{
-    auto retList = std::make_shared<std::vector<bytesPointer>>();
+    auto txList = std::make_shared<Transactions>();
     auto start_time = utcTime();
     auto record_time = utcTime();
 
@@ -323,35 +361,116 @@ std::shared_ptr<std::vector<bytesPointer>> StorageGetter::getBatchTxByHashList(
 
     if (table)
     {
-        auto hashEntryMap = table->getRows(_hashList);
-        auto select_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-
-        if (hashEntryMap.size() != _hashList.size())
-        {
-            LEDGER_LOG(DEBUG) << LOG_DESC("getRows SYS_HASH_2_TX table error from db");
-            return retList;
-        }
-
-        for (const auto& hash : _hashList)
-        {
-            auto txStr = hashEntryMap.at(hash)->getField(SYS_VALUE);
-            auto txPointer = std::make_shared<bytes>(asBytes(txStr));
-            retList->emplace_back(txPointer);
-        }
-        auto get_field_time_cost = utcTime() - record_time;
-        LEDGER_LOG(DEBUG) << LOG_DESC("Get txs list from db")
-                          << LOG_KV("openTableTimeCost", openTable_time_cost)
-                          << LOG_KV("selectTimeCost", select_time_cost)
-                          << LOG_KV("getFieldTimeCost", get_field_time_cost)
-                          << LOG_KV("totalTimeCost", utcTime() - start_time);
+        table->asyncGetRows(_hashList,
+            [&](const Error::Ptr& _error, const std::map<std::string, Entry::Ptr>& _hashEntryMap) {
+                if (!_error || _error->errorCode() == CommonError::SUCCESS)
+                {
+                    auto select_time_cost = utcTime() - record_time;
+                    record_time = utcTime();
+                    if (_hashEntryMap.size() != _hashList->size())
+                    {
+                        LEDGER_LOG(DEBUG) << LOG_DESC("getRows SYS_HASH_2_TX table error from db");
+                        auto error = std::make_shared<Error>(-1, "");
+                        _onGetTx(error, nullptr);
+                    }
+                    for (const auto& hash : *_hashList)
+                    {
+                        auto txStr = _hashEntryMap.at(hash)->getField(SYS_VALUE);
+                        auto tx = decodeTransaction(_txFactory, txStr);
+                        txList->emplace_back(tx);
+                    }
+                    auto get_field_time_cost = utcTime() - record_time;
+                    LEDGER_LOG(DEBUG) << LOG_DESC("Get txs list from db")
+                                      << LOG_KV("openTableTimeCost", openTable_time_cost)
+                                      << LOG_KV("selectTimeCost", select_time_cost)
+                                      << LOG_KV("getFieldTimeCost", get_field_time_cost)
+                                      << LOG_KV("totalTimeCost", utcTime() - start_time);
+                    auto success = std::make_shared<Error>(CommonError::SUCCESS, "");
+                    _onGetTx(success, txList);
+                }
+                else
+                {
+                    auto error =
+                        std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
+                    _onGetTx(error, nullptr);
+                }
+            });
     }
     else
     {
         LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_TX table error from db");
-        return retList;
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetTx(error, nullptr);
     }
-    return retList;
+}
+
+void StorageGetter::getReceiptByTxHash(const std::string& _txHash,
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+{
+    asyncTableGetter(_tableFactory, SYS_HASH_2_RECEIPT, _txHash, SYS_VALUE, _onGetString);
+}
+
+void StorageGetter::getBatchReceiptsByHashList(
+    std::shared_ptr<std::vector<std::string>> _hashList,
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& _receiptFactory,
+    std::function<void(Error::Ptr, protocol::ReceiptsPtr)> _onGetReceipt)
+{
+    auto receiptList = std::make_shared<Receipts>();
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+
+    auto table = _tableFactory->openTable(SYS_HASH_2_RECEIPT);
+    auto openTable_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    if (table)
+    {
+        table->asyncGetRows(_hashList,
+            [&](const Error::Ptr& _error, const std::map<std::string, Entry::Ptr>& _hashEntryMap) {
+                if(!_error || _error->errorCode() == CommonError::SUCCESS)
+                {
+                    auto select_time_cost = utcTime() - record_time;
+                    record_time = utcTime();
+
+                    if (_hashEntryMap.size() != _hashList->size())
+                    {
+                        LEDGER_LOG(DEBUG) << LOG_DESC("getRows SYS_HASH_2_RECEIPT table error from db");
+                        // TODO: add error code and msg
+                        auto error = std::make_shared<Error>(-1, "");
+                        _onGetReceipt(error, nullptr);
+                    }
+                    for (const auto& hash : *_hashList)
+                    {
+                        auto receiptStr = _hashEntryMap.at(hash)->getField(SYS_VALUE);
+                        auto receipt = decodeReceipt(_receiptFactory, receiptStr);
+                        receiptList->emplace_back(receipt);
+                    }
+                    auto get_field_time_cost = utcTime() - record_time;
+                    LEDGER_LOG(DEBUG) << LOG_DESC("Get receipt list from db")
+                                      << LOG_KV("openTableTimeCost", openTable_time_cost)
+                                      << LOG_KV("selectTimeCost", select_time_cost)
+                                      << LOG_KV("getFieldTimeCost", get_field_time_cost)
+                                      << LOG_KV("totalTimeCost", utcTime() - start_time);
+                    auto success = std::make_shared<Error>(CommonError::SUCCESS, "");
+                    _onGetReceipt(success, receiptList);
+                }
+                else
+                {
+                    auto error =
+                        std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
+                    _onGetReceipt(error, nullptr);
+                }
+            });
+    }
+    else
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_RECEIPT table error from db");
+        // TODO: add error code and msg
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetReceipt(error, nullptr);
+    }
 }
 
 } // namespace bcos::ledger

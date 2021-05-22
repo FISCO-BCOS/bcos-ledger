@@ -65,7 +65,7 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _crypto
     }
     auto factory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
     auto receipt = factory->createReceipt(version, stateRoot, gasUsed, contractAddress.asBytes(),
-                                          logEntries, (int32_t)status, output);
+        logEntries, (int32_t)status, output, 0);
     return receipt;
 }
 

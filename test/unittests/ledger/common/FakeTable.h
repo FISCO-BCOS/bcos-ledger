@@ -30,6 +30,7 @@ inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockN
     auto hashImpl = std::make_shared<Keccak256Hash>();
     auto storage = std::make_shared<MockStorage>();
     auto tableFactory = std::make_shared<TableFactory>(storage, hashImpl, _blockNumber);
+    storage->addStateCache(0, tableFactory);
     return tableFactory;
 }
 

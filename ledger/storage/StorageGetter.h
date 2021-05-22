@@ -45,73 +45,36 @@ public:
      * @brief get transactions in SYS_NUMBER_2_TXS table
      * @param _blockNumber the number of block
      * @param _tableFactory
-     * @return encoded block data, where txs contains
      */
-    std::string getTxsFromStorage(const bcos::protocol::BlockNumber& _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
-
-    /**
-     * @brief get receipts in SYS_NUMBER_2_RECEIPTS table
-     * @param _blockNumber the number of block
-     * @param _tableFactory
-     * @return encoded block data, where receipts contains
-     */
-    std::string getReceiptsFromStorage(const bcos::protocol::BlockNumber& _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    void getTxsFromStorage(const bcos::protocol::BlockNumber& _blockNumber,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
 
     /**
      * @brief get block header in SYS_NUMBER_2_BLOCK_HEADER table
      * @param _blockNumber the number of block
      * @param _tableFactory
-     * @return encoded block header data, which can be decoded by BlockHeader.decode()
      */
-    std::string getBlockHeaderFromStorage(const bcos::protocol::BlockNumber& _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
-
-    /**
-     * @brief get encoded block in SYS_NUMBER_2_BLOCK table
-     * @param _blockNumber the number of block
-     * @param _tableFactory
-     * @return encoded block data, which can be decoded by Block.decode()
-     */
-    std::string getFullBlockFromStorage(const bcos::protocol::BlockNumber& _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    void getBlockHeaderFromStorage(const bcos::protocol::BlockNumber& _blockNumber,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
 
     /**
      * @brief get nonce list in SYS_BLOCK_NUMBER_2_NONCES table
      * @param _blockNumber the number of block
      * @param _tableFactory
-     * @return encoded nonce list
      */
-    std::string getNoncesFromStorage(const bcos::protocol::BlockNumber& _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    void getNoncesFromStorage(const bcos::protocol::BlockNumber& _blockNumber,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
 
-    std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> getNoncesBatchFromStorage(const bcos::protocol::BlockNumber& _startNumber,
+    void getNoncesBatchFromStorage(const bcos::protocol::BlockNumber& _startNumber,
         const protocol::BlockNumber& _endNumber,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        const bcos::protocol::BlockFactory::Ptr& _blockFactory);
-
-    /**
-     * @brief get a encode data by block hash in _tableName table
-     * @param _blockHash the hash of block
-     * @param _tableFactory
-     * @param _tableName the table name of the table to get data
-     * @return return encoded data
-     */
-    std::string getterByBlockHash(const std::string& _blockHash,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        const std::string& _tableName);
-
-    /**
-     * @brief get a encode data by block number in _tableName table
-     * @param _blockNumber the number of block
-     * @param _tableFactory
-     * @param _tableName the table name of the table to get data
-     * @return return encoded data
-     */
-    std::string getterByBlockNumber(const protocol::BlockNumber& _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        const std::string& _tableName);
+        const bcos::protocol::BlockFactory::Ptr& _blockFactory,
+        std::function<void(
+            Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
+            _onGetData);
 
     /**
      * @brief get block number by blockHash
@@ -120,26 +83,26 @@ public:
      * @param _hash hash string, it can be blockHash
      * @return return string data of block number
      */
-    std::string getBlockNumberByHash(
-        const std::string& _hash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    void getBlockNumberByHash(const std::string& _hash,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
 
     /**
      * @brief get block hash by number
      * @param _num
      * @param _tableFactory
-     * @return return string hash
      */
-    std::string getBlockHashByNumber(
-        const protocol::BlockNumber& _num, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    void getBlockHashByNumber(const protocol::BlockNumber& _num,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
 
     /**
      * @brief get current state in row
      * @param _tableFactory
      * @param _row
-     * @return
      */
-    std::string getCurrentState(
-        const std::string& _row, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    void getCurrentState(const std::string& _row, const storage::TableFactoryInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
 
     /**
      * @brief get sys config in table SYS_CONFIG
@@ -147,8 +110,8 @@ public:
      * @param _key row key in table
      * @return return a string pair <value, enableBlockNumber>
      */
-    std::shared_ptr<stringsPair> getSysConfig(
-        const std::string& _key, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    void getSysConfig(const std::string& _key, const storage::TableFactoryInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr, std::shared_ptr<stringsPair>)> _onGetConfig);
 
     /**
      * @brief get consensus node list in table SYS_CONSENSUS
@@ -156,34 +119,36 @@ public:
      * @param _blockNumber latest block number
      * @param _tableFactory
      * @param _keyFactory key factory to generate nodeID
-     * @return return a node list ptr
      */
-    consensus::ConsensusNodeListPtr getConsensusConfig(const std::string& _nodeType,
+    void getConsensusConfig(const std::string& _nodeType,
         const protocol::BlockNumber& _blockNumber,
         const storage::TableFactoryInterface::Ptr& _tableFactory,
-        const crypto::KeyFactory::Ptr& _keyFactory);
-
-    /**
-     * @brief get block number and index by tx hash in table SYS_TX_HASH_2_BLOCK_NUMBER
-     * @param _tableFactory
-     * @param _hash transaction hash
-     * @return return a string pair <number, transaction index>
-     */
-    std::shared_ptr<stringsPair> getBlockNumberAndIndexByHash(
-        const std::string& _hash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+        const crypto::KeyFactory::Ptr& _keyFactory,
+        std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig);
 
     /**
      * @brief get encode tx by tx hash in table SYS_HASH_2_TX
      * @param _txHash
      * @param _tableFactory
-     * @return return a encode tx string
      */
-    std::string getTxByTxHash(
-        const std::string& _txHash, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    void getTxByTxHash(const std::string& _txHash,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
 
-    std::shared_ptr<std::vector<bytesPointer>> getBatchTxByHashList(
-        const std::vector<std::string>& _hashList,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    void getBatchTxByHashList(
+        const std::shared_ptr<std::vector<std::string>>& _hashList,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const bcos::protocol::TransactionFactory::Ptr& _txFactory,
+        std::function<void(Error::Ptr, protocol::TransactionsPtr)> _onGetTx);
+
+    void getReceiptByTxHash(const std::string& _txHash,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
+
+    void getBatchReceiptsByHashList(std::shared_ptr<std::vector<std::string>> _hashList,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const bcos::protocol::TransactionReceiptFactory::Ptr& _receiptFactory,
+        std::function<void(Error::Ptr, protocol::ReceiptsPtr)> _onGetReceipt);
 
     /**
      * @brief select field from tableName where row=_row
@@ -191,24 +156,11 @@ public:
      * @param _tableName
      * @param _row
      * @param _field
-     * @return string of field
+     * @param _onGetString callback when get string data in db
      */
-    std::string tableGetterByRowAndField(const bcos::storage::TableFactoryInterface::Ptr & _tableFactory,
-        const std::string& _tableName, const std::string& _row, const std::string& _field);
-
-    /**
-     * @brief select field1, field2 from tableName where row=_row
-     * @param _tableFactory
-     * @param _tableName
-     * @param _row
-     * @param _field1
-     * @param _filed2
-     * @return
-     */
-    std::shared_ptr<stringsPair> stringsPairGetterByRowAndFields(
+    void asyncTableGetter(
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        const std::string& _tableName, const std::string& _row, const std::string& _field1,
-        const std::string& _filed2);
-
+        const std::string& _tableName, const std::string& _row, const std::string& _field,
+        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
 };
 }

@@ -31,6 +31,7 @@
 namespace bcos::ledger
 {
 DERIVE_BCOS_EXCEPTION(OpenSysTableFailed);
+DERIVE_BCOS_EXCEPTION(CreateSysTableFailed);
 using stringsPair = std::pair<std::string, std::string>;
 class StorageSetter final {
 public:
@@ -50,19 +51,9 @@ public:
      * @param _fieldValue
      * @return return update result
      */
-    bool tableSetterByRowAndField(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool syncTableSetter(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _tableName, const std::string& _row, const std::string& _fieldName,
         const std::string& _fieldValue);
-
-    /**
-     * @brief update SYS_NUMBER_2_BLOCK set SYS_VALUE=_blockValue where row=_row
-     * @param _tableFactory
-     * @param _row
-     * @param _blockValue encoded block string value
-     * @return return update result
-     */
-    bool setNumber2Block(const bcos::storage::TableFactoryInterface::Ptr & _tableFactory,
-        const std::string& _row, const std::string& _blockValue);
 
     /**
      * @brief update SYS_CURRENT_STATE set SYS_VALUE=_stateValue where row=_row
@@ -93,16 +84,6 @@ public:
     */
     bool setNumber2Txs(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _row, const std::string& _txsValue);
-
-    /**
-    * @brief update SYS_NUMBER_2_RECEIPTS set SYS_VALUE=_receiptsValue where row=_row
-    * @param _tableFactory
-    * @param _row
-    * @param _receiptsValue encoded block string value, which receipts contain in
-    * @return return update result
-    */
-    bool setNumber2Receipts(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        const std::string& _row, const std::string& _receiptsValue);
 
     /**
     * @brief update SYS_HASH_2_NUMBER set SYS_VALUE=_numberValue where row=_row
@@ -150,16 +131,10 @@ public:
         const std::string& _type, const consensus::ConsensusNodeList& _nodeList,
         const std::string& _enableBlock);
 
-    /**
-     * @brief tbb:parallel_for update SYS_TX_HASH_2_BLOCK_NUMBER set SYS_VALUE=blockNumber, index=txIndex where row=_row
-     * @param _block
-     * @param _tableFactory
-     */
-    void writeTxToBlock(const protocol::Block::Ptr& _block,
-        const storage::TableFactoryInterface::Ptr& _tableFactory);
-
-    bool setHashToTx(const bcos::storage::TableFactoryInterface::Ptr _tableFactory,
+    bool setHashToTx(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _txHash, const std::string& _encodeTx);
 
+    bool setHashToReceipt(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const std::string& _txHash, const std::string& _encodeReceipt);
 };
 }

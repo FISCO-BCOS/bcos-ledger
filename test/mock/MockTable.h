@@ -46,12 +46,12 @@ public:
         return nullptr;
     }
 
-    bool setRow(const std::string &_key, std::shared_ptr<Entry> _entry) override{
+    bool setRow(const std::string &_key, const std::shared_ptr<Entry>& _entry) override{
         m_fakeStorage[_key] = _entry;
         return true;
     }
 
-    std::vector<std::string> getPrimaryKeys(std::shared_ptr<Condition>) const override{
+    std::vector<std::string> getPrimaryKeys(const Condition::Ptr&) const override{
         std::vector<std::string> keys;
         keys.reserve(m_fakeStorage.size());
         std::transform(m_fakeStorage.begin(), m_fakeStorage.end(), keys.begin(), [](auto pair){return pair.first;});
@@ -78,10 +78,11 @@ public:
         m_name2Table.insert({_tableName, table});
         return table;
     }
-    size_t commit() override
+    std::pair<size_t, Error::Ptr> commit() override
     {
         m_name2Table.clear();
-        return 1;
+        auto success = std::make_shared<Error>(0, "");
+        return {1, success};
     }
 
 private:

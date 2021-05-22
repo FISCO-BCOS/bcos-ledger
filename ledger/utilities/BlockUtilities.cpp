@@ -43,23 +43,23 @@ protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr&
     return txs;
 }
 
-protocol::HashListPtr blockTxHashListGetter(const protocol::Block::Ptr& _block){
-    auto hashList = std::make_shared<crypto::HashList>();
+protocol::HashListPtr blockTxHashListGetter(const protocol::Block::Ptr& _block)
+{
+    auto txHashList = std::make_shared<crypto::HashList>();
     if(_block == nullptr){
         LEDGER_LOG(DEBUG)<<LOG_DESC("Block is null, return nullptr");
         return nullptr;
     }
-    auto hashSize = _block->transactionsHashSize();
-    if(hashSize == 0){
+    auto txHashSize = _block->transactionsHashSize();
+    if(txHashSize == 0){
         LEDGER_LOG(DEBUG)<<LOG_DESC("Block transactions size is 0, return empty");
-        return hashList;
+        return txHashList;
     }
-    for (size_t i = 0; i < hashSize; ++i)
+    for (size_t i = 0; i < txHashSize; ++i)
     {
-        auto hash = _block->transactionHash(i);
-        hashList->emplace_back(hash);
+        txHashList->emplace_back(_block->transactionHash(i));
     }
-    return hashList;
+    return txHashList;
 }
 
 
@@ -109,4 +109,35 @@ size_t blockReceiptListSetter(const protocol::Block::Ptr& _block, const protocol
     return _block->receiptsSize();
 }
 
+bcos::protocol::Block::Ptr decodeBlock(
+    const protocol::BlockFactory::Ptr _blockFactory, const std::string& _blockStr)
+{
+    protocol::Block::Ptr block = nullptr;
+    block = _blockFactory->createBlock(asBytes(_blockStr), false, false);
+    return block;
+}
+
+bcos::protocol::BlockHeader::Ptr decodeBlockHeader(
+    const protocol::BlockHeaderFactory::Ptr _headerFactory, const std::string& _headerStr)
+{
+    protocol::BlockHeader::Ptr header = nullptr;
+    header = _headerFactory->createBlockHeader(asBytes(_headerStr));
+    return header;
+}
+
+bcos::protocol::Transaction::Ptr decodeTransaction(
+    const protocol::TransactionFactory::Ptr _txFactory, const std::string& _txStr)
+{
+    protocol::Transaction::Ptr tx = nullptr;
+    tx = _txFactory->createTransaction(asBytes(_txStr), false);
+    return tx;
+}
+
+bcos::protocol::TransactionReceipt::Ptr decodeReceipt(
+    const protocol::TransactionReceiptFactory::Ptr _receiptFactory, const std::string& _receiptStr)
+{
+    protocol::TransactionReceipt::Ptr receipt = nullptr;
+    receipt = _receiptFactory->createReceipt(asBytes(_receiptStr));
+    return receipt;
+}
 }

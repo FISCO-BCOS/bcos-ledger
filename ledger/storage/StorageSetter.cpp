@@ -26,6 +26,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include <bcos-framework/interfaces/protocol/CommonError.h>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -43,23 +44,29 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     _tableFactory->createTable(SYS_CONFIG, SYS_KEY, configFields);
     _tableFactory->createTable(SYS_CONSENSUS, "node_id", consensusFields);
     _tableFactory->createTable(SYS_CURRENT_STATE, SYS_KEY, SYS_VALUE);
-    _tableFactory->createTable(SYS_TX_HASH_2_BLOCK_NUMBER, "tx_hash", txFields);
     _tableFactory->createTable(SYS_HASH_2_TX, "tx_hash", SYS_VALUE);
     _tableFactory->createTable(SYS_HASH_2_NUMBER, "block_hash", SYS_VALUE);
     _tableFactory->createTable(SYS_NUMBER_2_HASH, "block_num", SYS_VALUE);
-    _tableFactory->createTable(SYS_NUMBER_2_BLOCK, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_NUMBER_2_BLOCK_HEADER, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_NUMBER_2_TXS, "block_num", SYS_VALUE);
-    _tableFactory->createTable(SYS_NUMBER_2_RECEIPTS, "block_num", SYS_VALUE);
+    _tableFactory->createTable(SYS_HASH_2_RECEIPT, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_BLOCK_NUMBER_2_NONCES, "block_num", SYS_VALUE);
-    if(_tableFactory->commit() == 0)
+
+    // db sync commit
+    auto retPair = _tableFactory->commit();
+    if (retPair.second->errorCode() == CommonError::SUCCESS && retPair.first > 0)
     {
-        // TODO: use new exception
-        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(""));
+        LEDGER_LOG(TRACE) << LOG_DESC("[#buildGenesisBlock]Storage commit success")
+                          << LOG_KV("commitSize", retPair.first);
+    }
+    else
+    {
+        LEDGER_LOG(ERROR) << LOG_DESC("[#buildGenesisBlock]Storage commit error");
+        BOOST_THROW_EXCEPTION(CreateSysTableFailed() << errinfo_comment(""));
     }
 }
 
-bool StorageSetter::tableSetterByRowAndField(
+bool StorageSetter::syncTableSetter(
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName,
     const std::string& _row, const std::string& _fieldName, const std::string& _fieldValue)
 {
@@ -87,51 +94,38 @@ bool StorageSetter::tableSetterByRowAndField(
     }
 }
 
-bool StorageSetter::setNumber2Block(const TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _row, const std::string& _blockValue)
-{
-    return tableSetterByRowAndField(
-        _tableFactory, SYS_NUMBER_2_BLOCK, _row, SYS_VALUE, _blockValue);
-}
-
 bool StorageSetter::setCurrentState(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _stateValue)
 {
-    return tableSetterByRowAndField(_tableFactory, SYS_CURRENT_STATE, _row, SYS_VALUE, _stateValue);
+    return syncTableSetter(_tableFactory, SYS_CURRENT_STATE, _row, SYS_VALUE, _stateValue);
 }
 bool StorageSetter::setNumber2Header(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _headerValue)
 {
-    return tableSetterByRowAndField(
-        _tableFactory, SYS_NUMBER_2_BLOCK_HEADER, _row, SYS_VALUE, _headerValue);
+    return syncTableSetter(_tableFactory, SYS_NUMBER_2_BLOCK_HEADER, _row, SYS_VALUE, _headerValue);
 }
 bool StorageSetter::setNumber2Txs(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _txsValue)
 {
-    return tableSetterByRowAndField(_tableFactory, SYS_NUMBER_2_TXS, _row, SYS_VALUE, _txsValue);
+    return syncTableSetter(_tableFactory, SYS_NUMBER_2_TXS, _row, SYS_VALUE, _txsValue);
 }
-bool StorageSetter::setNumber2Receipts(const TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _row, const std::string& _receiptsValue)
-{
-    return tableSetterByRowAndField(_tableFactory, SYS_NUMBER_2_RECEIPTS,_row,SYS_VALUE,_receiptsValue);
-}
+
 bool StorageSetter::setHash2Number(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _numberValue)
 {
-    return tableSetterByRowAndField(_tableFactory, SYS_HASH_2_NUMBER, _row, SYS_VALUE, _numberValue);
+    return syncTableSetter(_tableFactory, SYS_HASH_2_NUMBER, _row, SYS_VALUE, _numberValue);
 }
 
 bool StorageSetter::setNumber2Hash(const TableFactoryInterface::Ptr& _tableFactory,
                                    const std::string& _row, const std::string& _hashValue)
 {
-    return tableSetterByRowAndField(_tableFactory, SYS_NUMBER_2_HASH, _row, SYS_VALUE, _hashValue);
+    return syncTableSetter(_tableFactory, SYS_NUMBER_2_HASH, _row, SYS_VALUE, _hashValue);
 }
 
 bool StorageSetter::setNumber2Nonces(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _row, const std::string& _noncesValue)
 {
-    return tableSetterByRowAndField(
-        _tableFactory, SYS_BLOCK_NUMBER_2_NONCES, _row, SYS_VALUE, _noncesValue);
+    return syncTableSetter(_tableFactory, SYS_BLOCK_NUMBER_2_NONCES, _row, SYS_VALUE, _noncesValue);
 }
 
 bool StorageSetter::setSysConfig(const TableFactoryInterface::Ptr& _tableFactory,
@@ -197,49 +191,15 @@ bool StorageSetter::setConsensusConfig(
     return false;
 }
 
-void StorageSetter::writeTxToBlock(
-    const Block::Ptr& _block, const TableFactoryInterface::Ptr& _tableFactory)
-{
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-    TableInterface::Ptr tb = _tableFactory->openTable(SYS_TX_HASH_2_BLOCK_NUMBER);
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-    if (tb)
-    {
-        auto txHashList = blockTxHashListGetter(_block);
-        auto constructVector_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-        auto blockNumberStr = boost::lexical_cast<std::string>(_block->blockHeader()->number());
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, txHashList->size()), [&](const tbb::blocked_range<size_t>& _r) {
-              for (size_t i = _r.begin(); i != _r.end(); ++i)
-              {
-                  auto entry = tb->newEntry();
-                  // entry: <blockNumber, txIndex>
-                  entry->setField(SYS_VALUE, blockNumberStr);
-                  entry->setField("index", boost::lexical_cast<std::string>(i));
-                  tb->setRow(txHashList->at(i).hex(), entry);
-              }
-            });
-        auto insertTable_time_cost = utcTime() - record_time;
-        LEDGER_LOG(DEBUG) << LOG_BADGE("WriteTxOnCommit")
-                          << LOG_DESC("Write tx to block time record")
-                          << LOG_KV("openTableTimeCost", openTable_time_cost)
-                          << LOG_KV("constructVectorTimeCost", constructVector_time_cost)
-                          << LOG_KV("insertTableTimeCost", insertTable_time_cost)
-                          << LOG_KV("totalTimeCost", utcTime() - start_time);
-    }
-    else
-    {
-        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_TX_HASH_2_BLOCK_NUMBER));
-    }
-}
-
-bool StorageSetter::setHashToTx(const bcos::storage::TableFactoryInterface::Ptr _tableFactory,
+bool StorageSetter::setHashToTx(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _txHash, const std::string& _encodeTx)
 {
-    return tableSetterByRowAndField(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE, _encodeTx);
+    return syncTableSetter(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE, _encodeTx);
+}
+
+bool StorageSetter::setHashToReceipt(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _txHash, const std::string& _encodeReceipt)
+{
+    return syncTableSetter(_tableFactory, SYS_HASH_2_RECEIPT, _txHash, SYS_VALUE, _encodeReceipt);
 }
 
 } // namespace bcos::ledger
