@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(testBlockCacheAdd)
 
     auto crypto = createCryptoSuite();
     auto blockFactory = createBlockFactory(crypto);
-    auto block1 = fakeBlock(crypto, blockFactory, 10, 10);
+    auto block1 = fakeBlock(crypto, blockFactory, 10, 10, 1);
     _blockFIFOCache.add(block1->blockHeader()->number(), block1);
     auto block1_get = _blockFIFOCache.get(block1->blockHeader()->number());
     BOOST_CHECK_EQUAL(block1_get.first, block1->blockHeader()->number());

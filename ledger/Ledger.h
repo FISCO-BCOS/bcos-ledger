@@ -170,7 +170,7 @@ private:
     }
 
     inline protocol::TransactionReceiptFactory::Ptr getReceiptFactory(){
-        return m_receiptFactory;
+        return m_blockFactory->receiptFactory();
     }
 
     inline StorageGetter::Ptr getStorageGetter(){

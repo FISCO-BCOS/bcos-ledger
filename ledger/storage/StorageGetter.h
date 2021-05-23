@@ -126,15 +126,6 @@ public:
         const crypto::KeyFactory::Ptr& _keyFactory,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig);
 
-    /**
-     * @brief get encode tx by tx hash in table SYS_HASH_2_TX
-     * @param _txHash
-     * @param _tableFactory
-     */
-    void getTxByTxHash(const std::string& _txHash,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
-
     void getBatchTxByHashList(
         const std::shared_ptr<std::vector<std::string>>& _hashList,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,

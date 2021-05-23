@@ -62,32 +62,6 @@ private:
     std::string m_tableName;
     std::unordered_map<std::string, Entry::Ptr> m_fakeStorage;
 };
-class MockTableFactory : public TableFactory
-{
-public:
-    MockTableFactory(): TableFactory(nullptr, nullptr, 0){}
-    using Ptr = std::shared_ptr<MockTableFactory>;
-    std::shared_ptr<TableInterface> openTable(const std::string &_tableName) override
-    {
-        auto it = m_name2Table.find(_tableName);
-        if (it != m_name2Table.end())
-        {
-            return it->second;
-        }
-        auto table = std::make_shared<MockTable>(_tableName);
-        m_name2Table.insert({_tableName, table});
-        return table;
-    }
-    std::pair<size_t, Error::Ptr> commit() override
-    {
-        m_name2Table.clear();
-        auto success = std::make_shared<Error>(0, "");
-        return {1, success};
-    }
-
-private:
-    tbb::concurrent_unordered_map<std::string, Table::Ptr> m_name2Table;
-};
 
 class MockErrorTableFactory : public TableFactory
 {

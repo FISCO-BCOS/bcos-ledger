@@ -54,7 +54,7 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
 
     // db sync commit
     auto retPair = _tableFactory->commit();
-    if (retPair.second->errorCode() == CommonError::SUCCESS && retPair.first > 0)
+    if ((retPair.second == nullptr || retPair.second->errorCode() == CommonError::SUCCESS) && retPair.first > 0)
     {
         LEDGER_LOG(TRACE) << LOG_DESC("[#buildGenesisBlock]Storage commit success")
                           << LOG_KV("commitSize", retPair.first);
@@ -152,7 +152,10 @@ bool StorageSetter::setSysConfig(const TableFactoryInterface::Ptr& _tableFactory
                           << LOG_KV("totalTimeCost", utcTime() - start_time);
         return ret;
     }
-    return false;
+    else
+    {
+        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_CONFIG));
+    }
 }
 
 bool StorageSetter::setConsensusConfig(
@@ -172,7 +175,7 @@ bool StorageSetter::setConsensusConfig(
     if (table)
     {
         bool ret = true;
-        for (const auto & node : _nodeList)
+        for (const auto& node : _nodeList)
         {
             auto entry = table->newEntry();
             entry->setField(NODE_TYPE, _type);
@@ -188,7 +191,10 @@ bool StorageSetter::setConsensusConfig(
                           << LOG_KV("totalTimeCost", utcTime() - start_time);
         return ret;
     }
-    return false;
+    else
+    {
+        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_CONSENSUS));
+    }
 }
 
 bool StorageSetter::setHashToTx(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,

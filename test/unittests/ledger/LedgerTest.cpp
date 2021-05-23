@@ -23,7 +23,7 @@
 #include "../ledger/utilities/BlockUtilities.h"
 #include "mock/MockKeyFactor.h"
 #include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/HashImpl.h>
+#include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -104,12 +104,10 @@ public:
     }
 
     inline void initBlocks(int _number) {
-        m_fakeBlocks = fakeBlocks(m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number);
-        for (int i = 0; i < _number; i++)
-        {
-            auto & block = m_fakeBlocks->at(i);
-            block->blockHeader()->setNumber(1 + i);
-        }
+        m_ledger->asyncGetBlockHashByNumber(0, [&](Error::Ptr, const HashType& _hash) {
+            m_fakeBlocks = fakeBlocks(
+                m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number, _hash.hex());
+        });
     }
 
     inline void initChain(int _number) {
@@ -128,14 +126,16 @@ public:
             }
             m_storage->addStateCache(i + 1, table);
             m_ledger->asyncStoreTransactions(txDataList, txHashList,
-                [&](Error::Ptr _error) { BOOST_CHECK_EQUAL(_error->errorCode(), 0); });
+                [&](Error::Ptr _error) { BOOST_CHECK_EQUAL(_error, nullptr); });
             m_ledger->asyncStoreReceipts(table, m_fakeBlocks->at(i),
-                [&](Error::Ptr _error) { BOOST_CHECK_EQUAL(_error->errorCode(), 0); });
+                [&](Error::Ptr _error) { BOOST_CHECK_EQUAL(_error, nullptr); });
 
             m_ledger->asyncCommitBlock(m_fakeBlocks->at(i)->blockHeader(),
                 [&](Error::Ptr _error, LedgerConfig::Ptr _config) {
-                    BOOST_CHECK_EQUAL(_error->errorCode(), 0);
+                    BOOST_CHECK_EQUAL(_error, nullptr);
                     BOOST_CHECK_EQUAL(_config->blockNumber(), i + 1);
+                    BOOST_CHECK(!_config->consensusNodeList().empty());
+                    BOOST_CHECK(!_config->observerNodeList().empty());
                 });
         }
     }
@@ -199,14 +199,14 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
 
     m_ledger->asyncGetSystemConfigByKey(
         SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
-          BOOST_CHECK(_error->errorCode() == 0);
+          BOOST_CHECK(_error == nullptr);
           BOOST_CHECK_EQUAL(_value, "1000");
           BOOST_CHECK_EQUAL(_number, 0);
         });
 
     m_ledger->asyncGetNodeListByType(
         CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
-            BOOST_CHECK(_error->errorCode() == 0);
+            BOOST_CHECK(_error == nullptr);
             BOOST_CHECK_EQUAL(_nodeList->at(0)->nodeID()->hex(),
                 m_param->observerNodeList().at(0)->nodeID()->hex());
         });
@@ -258,13 +258,13 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
 
     m_storageGetter->getBlockHashByNumber(
         0, getStateTable(0), [&](Error::Ptr _error, std::shared_ptr<std::string> _hash) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), 0);
-          auto table = getStateTable(0);
-          m_storageSetter->setHash2Number(getStateTable(0), *_hash, "");
-          table->commit();
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            auto table = getStateTable(0);
+            m_storageSetter->setHash2Number(getStateTable(0), *_hash, "");
+            table->commit();
             m_ledger->asyncGetBlockNumberByHash(
                 HashType(*_hash), [&](Error::Ptr _error, BlockNumber _number) {
-                    BOOST_CHECK_EQUAL(_error->errorCode(), 0);
+                    BOOST_CHECK(_error != nullptr);
                     BOOST_CHECK_EQUAL(_number, -1);
                 });
         });
@@ -314,10 +314,9 @@ BOOST_AUTO_TEST_CASE(commit)
             BOOST_CHECK(_config == nullptr);
         });
 
-    // null block in storage
-    m_ledger->asyncCommitBlock(m_fakeBlocks->at(3)->blockHeader(),
-        [&](Error::Ptr _error, LedgerConfig::Ptr _config)
-        {
+    // null header in storage
+    m_ledger->asyncCommitBlock(
+        nullptr, [&](Error::Ptr _error, LedgerConfig::Ptr _config) {
             BOOST_CHECK_EQUAL(_error->errorCode(), -1);
             BOOST_CHECK(_config == nullptr);
         });
@@ -332,10 +331,9 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
     // error number
     m_ledger->asyncGetBlockDataByNumber(1000, FULL_BLOCK, [&](Error::Ptr _error, Block::Ptr _block)
         {
-            BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+            BOOST_CHECK(_error != nullptr);
             BOOST_CHECK_EQUAL(_block, nullptr);
         });
-
     // cache hit
     m_ledger->asyncGetBlockDataByNumber(15, FULL_BLOCK, [&](Error::Ptr _error, Block::Ptr _block)
     {
@@ -354,11 +352,23 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
       BOOST_CHECK(_block->receiptsSize()!=0);
     });
 
+    m_ledger->asyncGetBlockDataByNumber(5, TRANSACTIONS, [&](Error::Ptr _error, Block::Ptr _block)
+    {
+      BOOST_CHECK_EQUAL(_error, nullptr);
+      BOOST_CHECK(_block->transactionsSize() != 0);
+    });
+    m_ledger->asyncGetBlockDataByNumber(5, RECEIPTS, [&](Error::Ptr _error, Block::Ptr _block)
+    {
+      BOOST_CHECK_EQUAL(_error, nullptr);
+      BOOST_CHECK(_block->receiptsSize() != 0);
+    });
+
     m_ledger->asyncGetBlockDataByNumber(0, TRANSACTIONS, [&](Error::Ptr _error, Block::Ptr _block)
     {
       BOOST_CHECK_EQUAL(_error->errorCode(), -1);
       BOOST_CHECK_EQUAL(_block, nullptr);
     });
+
     m_ledger->asyncGetBlockDataByNumber(0, RECEIPTS, [&](Error::Ptr _error, Block::Ptr _block)
     {
       BOOST_CHECK_EQUAL(_error->errorCode(), -1);
@@ -378,7 +388,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     m_ledger->asyncGetBatchTxsByHashList(hashList, true,
         [&](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), 0);
+            BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
             auto getHash = _txList->at(1)->hash().hex();
             BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
@@ -388,7 +398,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     m_ledger->asyncGetBatchTxsByHashList(hashList, false,
         [&](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), 0);
+            BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
             BOOST_CHECK(_proof == nullptr);
         });
@@ -415,25 +425,12 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
                 _receipt->hash().hex(), m_fakeBlocks->at(3)->receipt(0)->hash().hex());
             BOOST_CHECK(_proof == nullptr);
         });
-
-    // size == 0
-    auto table = getTableFactory(6);
-    auto block = fakeBlock(m_blockFactory->cryptoSuite(), m_blockFactory, 0, 0);
-    m_storage->addStateCache(6, table);
-    m_ledger->asyncCommitBlock(block->blockHeader(),
-        [&](Error::Ptr _error, LedgerConfig::Ptr) { BOOST_CHECK_EQUAL(_error->errorCode(), 0); });
-    m_ledger->asyncGetTransactionReceiptByHash(block->blockHeader()->hash(), false,
-        [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), -1);
-            BOOST_CHECK_EQUAL(_receipt, nullptr);
-            BOOST_CHECK(_proof == nullptr);
-        });
 }
 
 BOOST_AUTO_TEST_CASE(getNonceList) {
     initFixture();
     initChain(5);
-    m_ledger->asyncGetNonceList(3, 5,
+    m_ledger->asyncGetNonceList(3, 6,
         [&](Error::Ptr _error,
             std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> _nonceMap) {
             BOOST_CHECK_EQUAL(_error, nullptr);
@@ -448,33 +445,39 @@ BOOST_AUTO_TEST_CASE(getNonceList) {
             BOOST_CHECK(_error != nullptr);
             BOOST_CHECK(_nonceMap == nullptr);
         });
-
-    // size == 0
-    auto table = getTableFactory(6);
-    auto block = fakeBlock(m_blockFactory->cryptoSuite(), m_blockFactory, 0, 0);
-    m_storage->addStateCache(6, table);
-    m_ledger->asyncCommitBlock(block->blockHeader(),
-        [&](Error::Ptr _error, LedgerConfig::Ptr) { BOOST_CHECK_EQUAL(_error->errorCode(), 0); });
-    m_ledger->asyncGetNonceList(6, 0,
-        [&](Error::Ptr _error,
-            std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> _nonceMap) {
-            BOOST_CHECK(_error != nullptr);
-            BOOST_CHECK(_nonceMap == nullptr);
-        });
 }
 
 BOOST_AUTO_TEST_CASE(preStoreTransaction)
 {
-//    initFixture();
-//    initBlocks(5);
-//    auto hash = m_fakeBlocks->at(3)->transaction(0)->hash();
-//    auto tx = m_fakeBlocks->at(3)->transaction(0)->encode();
-//    m_ledger->asyncStoreTransactions(
-//        tx, hash, [&](Error::Ptr _error) { BOOST_CHECK_EQUAL(_error->errorCode(), 0); });
-//
-//    // null hash
-//    m_ledger->asyncStoreTransactions(
-//        tx, HashType(""), [&](Error::Ptr _error) { BOOST_CHECK_EQUAL(_error->errorCode(), -1); });
+    initFixture();
+    initBlocks(5);
+    auto txBytesList = std::make_shared<std::vector<bytesPointer>>();
+    auto hashList = std::make_shared<crypto::HashList>();
+    for (size_t i = 0; i < m_fakeBlocks->at(3)->transactionsSize(); ++i)
+    {
+        auto txData = m_fakeBlocks->at(3)->transaction(i)->encode();
+        auto txPointer = std::make_shared<bytes>(txData.toBytes());
+        auto hash = m_fakeBlocks->at(3)->transaction(i)->hash();
+        txBytesList->emplace_back(txPointer);
+        hashList->emplace_back(hash);
+    }
+    m_ledger->asyncStoreTransactions(
+        txBytesList, hashList, [&](Error::Ptr _error) { BOOST_CHECK_EQUAL(_error, nullptr); });
+
+    // null pointer
+    m_ledger->asyncStoreTransactions(
+        txBytesList, nullptr, [&](Error::Ptr _error) { BOOST_CHECK_EQUAL(_error->errorCode(), -1); });
+    m_ledger->asyncStoreTransactions(
+        nullptr, hashList, [&](Error::Ptr _error) { BOOST_CHECK_EQUAL(_error->errorCode(), -1); });
+}
+
+BOOST_AUTO_TEST_CASE(preStoreReceipt)
+{
+    initFixture();
+    initBlocks(5);
+    m_ledger->asyncStoreReceipts(nullptr, m_fakeBlocks->at(1), [&](Error::Ptr _error) {
+        BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+    });
 }
 
 BOOST_AUTO_TEST_CASE(getSystemConfig)
@@ -484,7 +487,7 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
 
     m_ledger->asyncGetSystemConfigByKey(
         SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
-          BOOST_CHECK(_error->errorCode() == 0);
+          BOOST_CHECK(_error == nullptr);
           BOOST_CHECK_EQUAL(_value, "1000");
           BOOST_CHECK_EQUAL(_number, 0);
         });
@@ -492,7 +495,7 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     // hit cache
     m_ledger->asyncGetSystemConfigByKey(
         SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
-          BOOST_CHECK(_error->errorCode() == 0);
+          BOOST_CHECK(_error == nullptr);
           BOOST_CHECK_EQUAL(_value, "1000");
           BOOST_CHECK_EQUAL(_number, 0);
         });

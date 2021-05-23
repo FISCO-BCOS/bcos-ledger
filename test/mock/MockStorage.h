@@ -110,8 +110,7 @@ public:
                 }
             }
         }
-        auto success = std::make_shared<Error>(0, "");
-        return {total, success};
+        return {total, nullptr};
     }
 
     void asyncGetPrimaryKeys(const std::shared_ptr<TableInfo>& _tableInfo,
@@ -124,8 +123,8 @@ public:
         _callback(error, keyList);
     }
 
-    void asyncGetRow(const std::shared_ptr<TableInfo>& _tableInfo, const std::string& _key,
-        std::function<void(const Error::Ptr&, const std::shared_ptr<Entry>&)> _callback) override
+    void asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string_view& _key,
+        std::function<void(const Error::Ptr&, const Entry::Ptr&)> _callback) override
     {
         auto entry = getRow(_tableInfo, _key);
         boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
@@ -155,10 +154,12 @@ public:
     }
 
     // cache TableFactory
-    void asyncAddStateCache(protocol::BlockNumber, const std::shared_ptr<TableFactoryInterface>&,
-        std::function<void(const Error::Ptr&)>) override
+    void asyncAddStateCache(protocol::BlockNumber _number, const std::shared_ptr<TableFactoryInterface>& _table,
+        std::function<void(const Error::Ptr&)> _callback) override
     {
-
+        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+        addStateCache(_number, _table);
+        _callback(nullptr);
     }
     void asyncDropStateCache(protocol::BlockNumber, std::function<void(const Error::Ptr&)>) override {}
     void asyncGetStateCache(protocol::BlockNumber _blockNumber,
@@ -198,19 +199,20 @@ public:
         return {"", nullptr};
     }
     Error::Ptr remove(const std::string_view&, const std::string_view&) override { return nullptr; }
-    void asyncRemove(
-        const std::string&, const std::string&, std::function<void(const Error::Ptr&)>) override
+    void asyncRemove(const std::string_view&, const std::string_view&,
+        std::function<void(const Error::Ptr&)>) override
     {}
-    void asyncPut(const std::string&, const std::string&, const std::shared_ptr<bytes>&,
-                  std::function<void(const Error::Ptr&)>) override
+    void asyncPut(const std::string_view&, const std::string_view&, const std::string_view&,
+        std::function<void(const Error::Ptr&)>) override
     {}
-    void asyncGet(const std::string&, const std::string&,
-                  std::function<void(const Error::Ptr&, const std::string& value)>) override
+    void asyncGet(const std::string_view&, const std::string_view&,
+        std::function<void(const Error::Ptr&, const std::string& value)>) override
     {}
-    void asyncGetBatch(const std::string&, const std::shared_ptr<std::vector<std::string>>&,
-                       std::function<void(const Error::Ptr&, const std::shared_ptr<std::vector<std::string>>&)>)
-    override
+    void asyncGetBatch(const std::string_view&, const std::shared_ptr<std::vector<std::string>>&,
+        std::function<void(const Error::Ptr&, const std::shared_ptr<std::vector<std::string>>&)>)
+        override
     {}
+
 private:
     std::map<std::string, std::map<std::string, Entry::Ptr>> data;
     mutable std::mutex m_mutex;

@@ -23,7 +23,7 @@
 #include "mock/MockTable.h"
 #include "bcos-framework/libtable/TableFactory.h"
 #include "bcos-framework/libtable/Table.h"
-#include <bcos-framework/testutils/HashImpl.h>
+#include <bcos-framework/testutils/crypto/HashImpl.h>
 
 namespace bcos::test{
 inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockNumber){

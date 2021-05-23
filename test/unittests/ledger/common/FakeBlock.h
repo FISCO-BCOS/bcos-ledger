@@ -24,7 +24,7 @@
 #include "FakeReceipt.h"
 #include "libprotocol/protobuf/PBBlock.h"
 #include "libprotocol/protobuf/PBBlockFactory.h"
-#include <bcos-framework/testutils/HashImpl.h>
+#include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::protocol;
@@ -50,11 +50,11 @@ inline BlockFactory::Ptr createBlockFactory(CryptoSuite::Ptr _cryptoSuite)
 }
 
 inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _blockFactory,
-                                    size_t _txsNum, size_t _receiptsNum)
+                                    size_t _txsNum, size_t _receiptsNum, BlockNumber _blockNumber)
 {
     auto block = _blockFactory->createBlock();
 
-    auto blockHeader = testPBBlockHeader(_cryptoSuite);
+    auto blockHeader = testPBBlockHeader(_cryptoSuite, _blockNumber);
     block->setBlockHeader(blockHeader);
     block->setBlockType(CompleteBlock);
     // fake transactions
@@ -66,7 +66,7 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
     // fake receipts
     for (size_t i = 0; i < _receiptsNum; i++)
     {
-        auto receipt = testPBTransactionReceipt(_cryptoSuite);
+        auto receipt = testPBTransactionReceipt(_cryptoSuite, _blockNumber);
         block->appendReceipt(receipt);
     }
     // fake txsHash
@@ -90,13 +90,22 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
 }
 
 inline BlocksPtr fakeBlocks(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _blockFactory,
-    size_t _txsNumBegin, size_t _receiptsNumBegin, size_t _blockNumber)
+    size_t _txsNumBegin, size_t _receiptsNumBegin, size_t _blockNumber, std::string hash = "")
 {
     BlocksPtr blocks = std::make_shared<Blocks>();
+    ParentInfo parentInfo;
+    parentInfo.blockNumber = 0;
+    parentInfo.blockHash = HashType(hash);
     for (size_t i = 0; i < _blockNumber; ++i)
     {
+        ParentInfoList parentInfos;
         auto block =
-            fakeBlock(_cryptoSuite, _blockFactory, _txsNumBegin + i, _receiptsNumBegin + i);
+            fakeBlock(_cryptoSuite, _blockFactory, _txsNumBegin + i, _receiptsNumBegin + i, i+1);
+        parentInfos.push_back(parentInfo);
+        block->blockHeader()->setNumber(1 + i);
+        block->blockHeader()->setParentInfo(parentInfos);
+        parentInfo.blockNumber = block->blockHeader()->number();
+        parentInfo.blockHash = block->blockHeader()->hash();
         blocks->emplace_back(block);
     }
     return blocks;

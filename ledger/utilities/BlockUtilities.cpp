@@ -43,9 +43,9 @@ protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr&
     return txs;
 }
 
-protocol::HashListPtr blockTxHashListGetter(const protocol::Block::Ptr& _block)
+std::shared_ptr<std::vector<std::string>> blockTxHashListGetter(const protocol::Block::Ptr& _block)
 {
-    auto txHashList = std::make_shared<crypto::HashList>();
+    auto txHashList = std::make_shared<std::vector<std::string>>();
     if(_block == nullptr){
         LEDGER_LOG(DEBUG)<<LOG_DESC("Block is null, return nullptr");
         return nullptr;
@@ -57,7 +57,7 @@ protocol::HashListPtr blockTxHashListGetter(const protocol::Block::Ptr& _block)
     }
     for (size_t i = 0; i < txHashSize; ++i)
     {
-        txHashList->emplace_back(_block->transactionHash(i));
+        txHashList->emplace_back(_block->transactionHash(i).hex());
     }
     return txHashList;
 }

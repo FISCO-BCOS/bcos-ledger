@@ -21,8 +21,8 @@
 #pragma once
 #include "libprotocol/protobuf/PBTransactionReceiptFactory.h"
 #include "libutilities/Common.h"
-#include <bcos-framework/testutils/HashImpl.h>
-#include <bcos-framework/testutils/SignatureImpl.h>
+#include <bcos-framework/testutils/crypto/HashImpl.h>
+#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -49,7 +49,7 @@ inline LogEntriesPtr fakeLogEntries(Hash::Ptr _hashImpl, size_t _size)
     return logEntries;
 }
 
-inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _cryptoSuite)
+inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _cryptoSuite, BlockNumber _blockNumber)
 {
     auto hashImpl = _cryptoSuite->hashImpl();
     int32_t version = 1;
@@ -65,7 +65,7 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _crypto
     }
     auto factory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
     auto receipt = factory->createReceipt(version, stateRoot, gasUsed, contractAddress.asBytes(),
-        logEntries, (int32_t)status, output, 0);
+        logEntries, (int32_t)status, output, _blockNumber);
     return receipt;
 }
 
@@ -78,7 +78,7 @@ inline ReceiptsPtr fakeReceipts(int _size)
     ReceiptsPtr receipts = std::make_shared<Receipts>();
     for (int i = 0; i < _size; ++i)
     {
-        receipts->emplace_back(testPBTransactionReceipt(cryptoSuite));
+        receipts->emplace_back(testPBTransactionReceipt(cryptoSuite, i+1));
     }
     return receipts;
 }

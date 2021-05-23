@@ -109,8 +109,7 @@ void StorageGetter::getNoncesBatchFromStorage(const bcos::protocol::BlockNumber&
                                       << LOG_KV("selectTimeCost", select_time_cost)
                                       << LOG_KV("getFieldTimeCost", get_field_time_cost)
                                       << LOG_KV("totalTimeCost", utcTime() - start_time);
-                    auto success = std::make_shared<Error>(CommonError::SUCCESS, "");
-                    _onGetData(success, retMap);
+                    _onGetData(nullptr, retMap);
                 }
                 else{
                     // TODO: add error code and msg
@@ -126,7 +125,7 @@ void StorageGetter::getNoncesBatchFromStorage(const bcos::protocol::BlockNumber&
         // TODO: add error code and msg
         auto error =
             std::make_shared<Error>(-1, "");
-        _onGetData(error, retMap);
+        _onGetData(error, nullptr);
     }
 }
 
@@ -183,9 +182,7 @@ void StorageGetter::getSysConfig(const std::string& _key, const TableFactoryInte
                         << LOG_KV("selectTimeCost", select_time_cost)
                         << LOG_KV("getFieldTimeCost", get_field_time_cost)
                         << LOG_KV("totalTimeCost", utcTime() - start_time);
-                    // TODO: success msg
-                    auto success = std::make_shared<Error>(CommonError::SUCCESS, "");
-                    _onGetConfig(success, ret);
+                    _onGetConfig(nullptr, ret);
                 }
                 else
                 {
@@ -209,7 +206,7 @@ void StorageGetter::getSysConfig(const std::string& _key, const TableFactoryInte
         LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_CONFIG table error from db");
         // TODO: add error msg
         auto error = std::make_shared<Error>(-1, "");
-        _onGetConfig(error, ret);
+        _onGetConfig(error, nullptr);
     }
 }
 
@@ -258,6 +255,7 @@ void StorageGetter::getConsensusConfig(const std::string& _nodeType,
                                               << LOG_KV("openTableTimeCost", openTable_time_cost)
                                               << LOG_KV("getFieldTimeCost", get_field_time_cost)
                                               << LOG_KV("totalTimeCost", utcTime() - start_time);
+                            _onGetConfig(nullptr, nodeList);
                         }
                         else
                         {
@@ -281,7 +279,7 @@ void StorageGetter::getConsensusConfig(const std::string& _nodeType,
     {
         LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_CONSENSUS table error from db");
         auto error = std::make_shared<Error>(-1, "");
-        _onGetConfig(error, nodeList);
+        _onGetConfig(error, nullptr);
     }
 }
 
@@ -339,12 +337,6 @@ void StorageGetter::asyncTableGetter(
     }
 }
 
-void StorageGetter::getTxByTxHash(const std::string& _txHash,
-    const TableFactoryInterface::Ptr& _tableFactory,
-    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
-{
-    asyncTableGetter(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE, _onGetString);
-}
 void StorageGetter::getBatchTxByHashList(
     const std::shared_ptr<std::vector<std::string>>& _hashList,
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
@@ -385,8 +377,7 @@ void StorageGetter::getBatchTxByHashList(
                                       << LOG_KV("selectTimeCost", select_time_cost)
                                       << LOG_KV("getFieldTimeCost", get_field_time_cost)
                                       << LOG_KV("totalTimeCost", utcTime() - start_time);
-                    auto success = std::make_shared<Error>(CommonError::SUCCESS, "");
-                    _onGetTx(success, txList);
+                    _onGetTx(nullptr, txList);
                 }
                 else
                 {
@@ -453,8 +444,7 @@ void StorageGetter::getBatchReceiptsByHashList(
                                       << LOG_KV("selectTimeCost", select_time_cost)
                                       << LOG_KV("getFieldTimeCost", get_field_time_cost)
                                       << LOG_KV("totalTimeCost", utcTime() - start_time);
-                    auto success = std::make_shared<Error>(CommonError::SUCCESS, "");
-                    _onGetReceipt(success, receiptList);
+                    _onGetReceipt(nullptr, receiptList);
                 }
                 else
                 {
