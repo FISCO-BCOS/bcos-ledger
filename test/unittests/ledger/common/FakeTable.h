@@ -35,7 +35,8 @@ inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockN
 }
 
 inline storage::TableFactory::Ptr fakeErrorTableFactory(){
-    auto tableFactory = std::make_shared<MockErrorTableFactory>();
+    auto storage = std::make_shared<MockStorage>();
+    auto tableFactory = std::make_shared<MockErrorTableFactory>(storage);
     return tableFactory;
 }
 }

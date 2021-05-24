@@ -39,7 +39,6 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
 {
     auto configFields = boost::join(std::vector{SYS_VALUE, SYS_CONFIG_ENABLE_BLOCK_NUMBER}, ",");
     auto consensusFields = boost::join(std::vector{NODE_TYPE, NODE_WEIGHT, NODE_ENABLE_NUMBER}, ",");
-    auto txFields = boost::join(std::vector{SYS_VALUE, TX_INDEX}, ",");
 
     _tableFactory->createTable(SYS_CONFIG, SYS_KEY, configFields);
     _tableFactory->createTable(SYS_CONSENSUS, "node_id", consensusFields);
@@ -162,9 +161,6 @@ bool StorageSetter::setConsensusConfig(
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _type,
     const consensus::ConsensusNodeList& _nodeList, const std::string& _enableBlock)
 {
-    if(_type != CONSENSUS_SEALER && _type != CONSENSUS_OBSERVER){
-        return false;
-    }
     auto start_time = utcTime();
     auto record_time = utcTime();
 
@@ -174,7 +170,7 @@ bool StorageSetter::setConsensusConfig(
 
     if (table)
     {
-        bool ret = true;
+        bool ret = (!_nodeList.empty());
         for (const auto& node : _nodeList)
         {
             auto entry = table->newEntry();
