@@ -66,7 +66,7 @@ private:
 class MockErrorTableFactory : public TableFactory
 {
 public:
-    MockErrorTableFactory(storage::StorageInterface::Ptr _db) : TableFactory(_db, nullptr, -1) {
+    explicit MockErrorTableFactory(storage::StorageInterface::Ptr _db) : TableFactory(_db, nullptr, -1) {
         m_sysTables.push_back(SYS_TABLE);
     }
     std::shared_ptr<TableInterface> openTable(const std::string & _tableName) override

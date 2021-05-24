@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_CASE(testBlockTxListSetterGetter)
     BOOST_CHECK_EQUAL(txs_get->size(), 10);
     BOOST_CHECK_EQUAL(txs_get->at(5)->hash().hex(),txs->at(5)->hash().hex());
 }
-BOOST_AUTO_TEST_CASE(testBlockTxHashListSetterGetter)
+BOOST_AUTO_TEST_CASE(blockTxHashListSetterGetter)
 {
     auto txs = fakeTransactions(10);
     auto crypto = createCryptoSuite();
@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(testBlockTxHashListSetterGetter)
     BOOST_CHECK_EQUAL(block1->transactionsSize(), 10);
     auto tx_hash_get = bcos::ledger::blockTxHashListGetter(block1);
     BOOST_CHECK_EQUAL(tx_hash_get->size(), 10);
-    BOOST_CHECK_EQUAL(tx_hash_get->at(5),txs->at(5)->hash().hex());
+    BOOST_CHECK_EQUAL(tx_hash_get->at(5), txs->at(5)->hash().hex());
 }
 BOOST_AUTO_TEST_CASE(testNullTxSetter){
     auto txs = fakeTransactions(10);
