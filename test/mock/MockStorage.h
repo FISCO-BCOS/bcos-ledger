@@ -24,6 +24,7 @@
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/libtable/Table.h"
+#define SLEEP_MILLI_SECONDS 10
 
 using namespace bcos::storage;
 using namespace bcos::ledger;
@@ -38,7 +39,8 @@ public:
     virtual ~MockStorage() = default;
 
     std::vector<std::string> getPrimaryKeys(
-        std::shared_ptr<TableInfo> _tableInfo, std::shared_ptr<Condition> _condition) const override
+        const std::shared_ptr<TableInfo>& _tableInfo,
+        const Condition::Ptr& _condition) const override
     {
         std::vector<std::string> ret;
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -55,7 +57,7 @@ public:
         return ret;
     }
     std::shared_ptr<Entry> getRow(
-        std::shared_ptr<TableInfo> _tableInfo, const std::string_view& _key) override
+       const std::shared_ptr<TableInfo>& _tableInfo, const std::string_view& _key) override
     {
         std::shared_ptr<Entry> ret = nullptr;
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -69,7 +71,8 @@ public:
         return ret;
     }
     std::map<std::string, std::shared_ptr<Entry>> getRows(
-        std::shared_ptr<TableInfo> _tableInfo, const std::vector<std::string>& _keys) override
+        const std::shared_ptr<TableInfo>& _tableInfo,
+        const std::vector<std::string>& _keys) override
     {
         std::map<std::string, std::shared_ptr<Entry>> ret;
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -85,97 +88,134 @@ public:
         }
         return ret;
     }
-    size_t commitTables(const std::vector<std::shared_ptr<TableInfo>> _tableInfos,
-                        std::vector<std::shared_ptr<std::map<std::string, std::shared_ptr<Entry>>>>& _tableDatas)
-    override
+    std::pair<size_t, Error::Ptr> commitBlock(protocol::BlockNumber,
+        const std::vector<std::shared_ptr<TableInfo>>& _tableInfos,
+        const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _tableDatas) override
     {
+        size_t total = 0;
         if (_tableInfos.size() != _tableDatas.size())
         {
-            return 0;
+            auto error = std::make_shared<Error>(-1, "");
+            return {0, error};
         }
         std::lock_guard<std::mutex> lock(m_mutex);
         for (size_t i = 0; i < _tableInfos.size(); ++i)
         {
-            for (auto& tableData : *(_tableDatas.at(i)))
+            for (auto& item : *_tableDatas[i])
             {
-                if (data[_tableInfos[i]->name].count(tableData.first))
+                if (item.second->getStatus() == Entry::Status::NORMAL)
                 {
-                    data[_tableInfos[i]->name].at(tableData.first) = tableData.second;
-                }
-                else
-                {
-                    data[_tableInfos[i]->name].insert(tableData);
+                    data[_tableInfos[i]->name][item.first] = item.second;
+                    ++total;
                 }
             }
         }
-        return _tableInfos.size();
+        return {total, nullptr};
     }
-    void asyncGetPrimaryKeys(std::shared_ptr<TableInfo>, std::shared_ptr<Condition>,
-                             std::function<void(Error, std::vector<std::string>)>) override
-    {}
-    void asyncGetRow(std::shared_ptr<TableInfo>, std::shared_ptr<std::string>,
-                     std::function<void(Error, std::shared_ptr<Entry>)>) override
-    {}
-    void asyncGetRows(std::shared_ptr<TableInfo>, std::shared_ptr<std::vector<std::string>>,
-                      std::function<void(Error, std::map<std::string, std::shared_ptr<Entry>>)>) override
-    {}
-    void asyncCommitTables(std::shared_ptr<std::vector<std::shared_ptr<TableInfo>>>,
-                           std::shared_ptr<std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>&,
-                           std::function<void(Error, size_t)>) override
-    {}
+
+    void asyncGetPrimaryKeys(const std::shared_ptr<TableInfo>& _tableInfo,
+        const Condition::Ptr& _condition,
+        std::function<void(const Error::Ptr&, const std::vector<std::string>&)> _callback) override
+    {
+        auto keyList = getPrimaryKeys(_tableInfo, _condition);
+        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+        auto error = std::make_shared<Error>(0, "");
+        _callback(error, keyList);
+    }
+
+    void asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string_view& _key,
+        std::function<void(const Error::Ptr&, const Entry::Ptr&)> _callback) override
+    {
+        auto entry = getRow(_tableInfo, _key);
+        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+        auto error = std::make_shared<Error>(0, "");
+        _callback(error, entry);
+    }
+    void asyncGetRows(const std::shared_ptr<TableInfo>& _tableInfo,
+        const std::shared_ptr<std::vector<std::string>>& _keyList,
+        std::function<void(const Error::Ptr&, const std::map<std::string, Entry::Ptr>&)> _callback)
+        override
+    {
+        auto rowMap = getRows(_tableInfo, *_keyList);
+        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+        auto error = std::make_shared<Error>(0, "");
+        _callback(error, rowMap);
+    }
+
+    void asyncCommitBlock(protocol::BlockNumber _number,
+        const std::shared_ptr<std::vector<std::shared_ptr<TableInfo>>>& _tableInfo,
+        const std::shared_ptr<std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>& _tableMap,
+        std::function<void(const Error::Ptr&, size_t)> _callback) override
+    {
+        auto retPair = commitBlock(_number, *_tableInfo, *_tableMap);
+        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+        auto error = std::make_shared<Error>(0, "");
+        _callback(error, retPair.first);
+    }
 
     // cache TableFactory
-    void asyncAddStateCache(protocol::BlockNumber, protocol::Block::Ptr,
-                            std::shared_ptr<TableFactory>, std::function<void(Error)>) override
-    {}
-    void asyncDropStateCache(protocol::BlockNumber, std::function<void(Error)>) override {}
-    void asyncGetBlock(
-        protocol::BlockNumber, std::function<void(Error, protocol::Block::Ptr)>) override
-    {}
-    void asyncGetStateCache(
-        protocol::BlockNumber, std::function<void(Error, std::shared_ptr<TableFactory>)>) override
-    {}
-    protocol::Block::Ptr getBlock(protocol::BlockNumber _blockNumber) override
+    void asyncAddStateCache(protocol::BlockNumber _number, const std::shared_ptr<TableFactoryInterface>& _table,
+        std::function<void(const Error::Ptr&)> _callback) override
     {
-        if (m_number2TableFactory.count(_blockNumber))
-        {
-            return m_number2TableFactory[_blockNumber].block;
-        }
-        return nullptr;
+        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+        addStateCache(_number, _table);
+        _callback(nullptr);
+    }
+    void asyncDropStateCache(protocol::BlockNumber, std::function<void(const Error::Ptr&)>) override {}
+    void asyncGetStateCache(protocol::BlockNumber _blockNumber,
+        std::function<void(const Error::Ptr&, const std::shared_ptr<TableFactoryInterface>&)> _callback)
+        override
+    {
+        auto tableFactory = getStateCache(_blockNumber);
+        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+        auto error = std::make_shared<Error>(0, "");
+        _callback(error, tableFactory);
     }
 
-    std::shared_ptr<TableFactory> getStateCache(protocol::BlockNumber _blockNumber) override
+    std::shared_ptr<TableFactoryInterface> getStateCache(protocol::BlockNumber _blockNumber) override
     {
         if (m_number2TableFactory.count(_blockNumber))
         {
-            return m_number2TableFactory[_blockNumber].tableFactory;
+            return m_number2TableFactory[_blockNumber];
         }
         return nullptr;
     }
 
     void dropStateCache(protocol::BlockNumber) override {}
     void addStateCache(
-        protocol::BlockNumber _blockNumber, protocol::Block::Ptr _block, std::shared_ptr<TableFactory> _tableFactory) override
+        protocol::BlockNumber _blockNumber, const std::shared_ptr<TableFactoryInterface>& _tableFactory) override
     {
-        m_number2TableFactory[_blockNumber] = BlockCache{_block, _tableFactory};
+        m_number2TableFactory[_blockNumber] = _tableFactory;
     }
     // KV store in split database, used to store data off-chain
-    bool put(const std::string&, const std::string_view&, const std::string_view&) override
+    Error::Ptr put(
+        const std::string_view&, const std::string_view&, const std::string_view&) override
     {
-        return true;
+        return nullptr;
     }
-    std::string get(const std::string&, const std::string_view&) override { return ""; }
-    void asyncGetBatch(const std::string&, std::shared_ptr<std::vector<std::string_view>>,
-                       std::function<void(Error, std::shared_ptr<std::vector<std::string>>)>) override
-    {}
-    struct BlockCache
+    std::pair<std::string, Error::Ptr> get(
+        const std::string_view&, const std::string_view&) override
     {
-        protocol::Block::Ptr block;
-        std::shared_ptr<TableFactory> tableFactory;
-    };
+        return {"", nullptr};
+    }
+    Error::Ptr remove(const std::string_view&, const std::string_view&) override { return nullptr; }
+    void asyncRemove(const std::string_view&, const std::string_view&,
+        std::function<void(const Error::Ptr&)>) override
+    {}
+    void asyncPut(const std::string_view&, const std::string_view&, const std::string_view&,
+        std::function<void(const Error::Ptr&)>) override
+    {}
+    void asyncGet(const std::string_view&, const std::string_view&,
+        std::function<void(const Error::Ptr&, const std::string& value)>) override
+    {}
+    void asyncGetBatch(const std::string_view&, const std::shared_ptr<std::vector<std::string>>&,
+        std::function<void(const Error::Ptr&, const std::shared_ptr<std::vector<std::string>>&)>)
+        override
+    {}
+
 private:
     std::map<std::string, std::map<std::string, Entry::Ptr>> data;
     mutable std::mutex m_mutex;
-    std::map<protocol::BlockNumber, BlockCache> m_number2TableFactory;
+    std::map<protocol::BlockNumber, TableFactoryInterface::Ptr> m_number2TableFactory;
 };
 }

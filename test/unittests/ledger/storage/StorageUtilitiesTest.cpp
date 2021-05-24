@@ -20,9 +20,11 @@
 
 #include "unittests/ledger/common/FakeTable.h"
 #include "unittests/ledger/common/FakeBlock.h"
+#include "mock/MockKeyFactor.h"
 #include "../ledger/storage/StorageGetter.h"
 #include "../ledger/storage/StorageSetter.h"
 #include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <boost/test/unit_test.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -51,107 +53,170 @@ public:
 BOOST_FIXTURE_TEST_SUITE(StorageUtilitiesTest, TableFactoryFixture)
 BOOST_AUTO_TEST_CASE(testTableSetterGetterByRowAndField)
 {
-    bool setterRet = storageSetter->tableSetterByRowAndField(
-        tableFactory, "_sys_config_", "test", SYS_VALUE, "world");
+    bool setterRet =
+        storageSetter->syncTableSetter(tableFactory, SYS_HASH_2_NUMBER, "test", SYS_VALUE, "world");
     BOOST_CHECK(setterRet);
 
-    auto ret =
-        storageGetter->tableGetterByRowAndField(tableFactory, "_sys_config_", "test", SYS_VALUE);
-    BOOST_CHECK_EQUAL(ret, "world");
+    storageGetter->asyncTableGetter(tableFactory, SYS_HASH_2_NUMBER, "test", SYS_VALUE,
+        [&](Error::Ptr _error, std::shared_ptr<std::string> _ret) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(*_ret, "world");
+        });
 }
 BOOST_AUTO_TEST_CASE(testErrorOpenTable)
 {
     auto tableFactory = fakeErrorTableFactory();
     auto storageSetter = StorageSetter::storageSetterFactory();
-    BOOST_CHECK_THROW(storageSetter->tableSetterByRowAndField(tableFactory, "errorTable", "error", "error", ""),
+    BOOST_CHECK_THROW(
+        storageSetter->syncTableSetter(tableFactory, "errorTable", "error", "error", ""),
                       OpenSysTableFailed);
-    BOOST_CHECK_EQUAL(storageSetter->setSysConfig(tableFactory,"","",""),
-        false);
-    BOOST_CHECK_THROW(storageSetter->writeTxToBlock(nullptr, tableFactory),
+    BOOST_CHECK_THROW(
+        storageSetter->setConsensusConfig(tableFactory, CONSENSUS_SEALER, consensus::ConsensusNodeList(), "error"),
         OpenSysTableFailed);
-}
-BOOST_AUTO_TEST_CASE(testWritTx2Block){
-    auto crypto = createCryptoSuite();
-    auto blockFactory = createBlockFactory(crypto);
-    auto block = fakeBlock(crypto, blockFactory, 10, 10);
-    auto second_tx = block->transactionHash(2);
+    BOOST_CHECK_THROW(storageSetter->setSysConfig(tableFactory, "", "", ""), OpenSysTableFailed);
 
-    storageSetter->writeTxToBlock(block, tableFactory);
-    auto numberIndex =
-        storageGetter->getBlockNumberAndIndexByHash(second_tx.hex(), tableFactory);
-    BOOST_CHECK_EQUAL(numberIndex->first, std::to_string(block->blockHeader()->number()));
-    BOOST_CHECK_EQUAL(numberIndex->second, std::to_string(2));
+    auto storageGetter = StorageGetter::storageGetterFactory();
+    storageGetter->asyncTableGetter(tableFactory, "errorTable", "row", "filed",
+        [&](Error::Ptr _error, std::shared_ptr<std::string> _value) {
+            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK_EQUAL(_value, nullptr);
+        });
+
+    storageGetter->getBatchTxByHashList(
+        nullptr, tableFactory, nullptr, [&](Error::Ptr _error, TransactionsPtr _txs) {
+            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK_EQUAL(_txs, nullptr);
+        });
+
+    storageGetter->getBatchReceiptsByHashList(
+        nullptr, tableFactory, nullptr, [&](Error::Ptr _error, ReceiptsPtr _receipts) {
+            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK_EQUAL(_receipts, nullptr);
+        });
+
+    storageGetter->getNoncesBatchFromStorage(0, 1, tableFactory, nullptr,
+        [&](Error::Ptr _error,
+            std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> _nonce) {
+            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK_EQUAL(_nonce, nullptr);
+        });
+
+    storageGetter->getConsensusConfig("", 0, tableFactory, nullptr,
+        [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodes) {
+            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK_EQUAL(_nodes, nullptr);
+        });
+
+    storageGetter->getSysConfig(
+        "", tableFactory, [&](Error::Ptr _error, std::shared_ptr<stringsPair> _config) {
+          BOOST_CHECK(_error->errorCode() == -1);
+          BOOST_CHECK_EQUAL(_config, nullptr);
+        });
 }
 BOOST_AUTO_TEST_CASE(testGetterSetter)
 {
     auto crypto = createCryptoSuite();
     auto blockFactory = createBlockFactory(crypto);
-    auto block = fakeBlock(crypto, blockFactory, 10, 10);
+    auto block = fakeBlock(crypto, blockFactory, 10, 10, 1);
 
     auto number = block->blockHeader()->number();
     auto numberStr = boost::lexical_cast<std::string>(number);
     auto hash = block->blockHeader()->hash();
     auto hashStr = hash.hex();
 
-    // SYS_NUMBER_2_BLOCK
-    auto setNumber2BlockRet = storageSetter->setNumber2Block(tableFactory, numberStr, "test1");
-    auto getFullBlockFromStorageRet = storageGetter->getFullBlockFromStorage(number, tableFactory);
-    BOOST_CHECK(setNumber2BlockRet);
-    BOOST_CHECK_EQUAL(getFullBlockFromStorageRet, "test1");
-
-    auto setNumber2BlockRet2 = storageSetter->setNumber2Block(tableFactory, "123", "");
-    auto getFullBlockFromStorageRet2 = storageGetter->getFullBlockFromStorage(123, tableFactory);
-    BOOST_CHECK(setNumber2BlockRet2);
-    BOOST_CHECK_EQUAL(getFullBlockFromStorageRet2, "");
-
     // SYS_CURRENT_STATE
     auto setCurrentStateRet = storageSetter->setCurrentState(tableFactory, "test", "test2");
-    auto getCurrentStateRet = storageGetter->getCurrentState("test", tableFactory);
     BOOST_CHECK(setCurrentStateRet);
-    BOOST_CHECK_EQUAL(getCurrentStateRet, "test2");
+    storageGetter->getCurrentState("test", tableFactory,
+        [&](Error::Ptr _error, std::shared_ptr<std::string> getCurrentStateRet) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(*getCurrentStateRet, "test2");
+        });
 
     // SYS_NUMBER_2_HEADER
     auto setNumber2HeaderRet = storageSetter->setNumber2Header(tableFactory, numberStr, "");
-    auto getBlockHeaderFromStorageRet = storageGetter->getBlockHeaderFromStorage(number, tableFactory);
     BOOST_CHECK(setNumber2HeaderRet);
-    BOOST_CHECK_EQUAL(getBlockHeaderFromStorageRet, "");
+    storageGetter->getBlockHeaderFromStorage(number, tableFactory,
+        [&](Error::Ptr _error, std::shared_ptr<std::string> getBlockHeaderFromStorageRet) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(*getBlockHeaderFromStorageRet, "");
+        });
 
     // SYS_NUMBER_2_TXS
     auto setNumber2TxsRet = storageSetter->setNumber2Txs(tableFactory, numberStr, "");
-    auto getTxsFromStorageRet = storageGetter->getTxsFromStorage(number, tableFactory);
     BOOST_CHECK(setNumber2TxsRet);
-    BOOST_CHECK_EQUAL(getTxsFromStorageRet, "");
+    storageGetter->getTxsFromStorage(number, tableFactory,
+        [&](Error::Ptr _error, std::shared_ptr<std::string> getTxsFromStorageRet) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(*getTxsFromStorageRet, "");
+        });
 
     // SYS_NUMBER_2_RECEIPTS
-    auto setNumber2ReceiptsRet = storageSetter->setNumber2Receipts(tableFactory, numberStr, "");
-    auto getReceiptsFromStorageRet = storageGetter->getReceiptsFromStorage(number, tableFactory);
+    auto setNumber2ReceiptsRet = storageSetter->setHashToReceipt(tableFactory, "txHash", "");
     BOOST_CHECK(setNumber2ReceiptsRet);
-    BOOST_CHECK_EQUAL(getReceiptsFromStorageRet, "");
+    storageGetter->getReceiptByTxHash("txHash", tableFactory,
+        [&](Error::Ptr _error, std::shared_ptr<std::string> getReceiptsFromStorageRet) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(*getReceiptsFromStorageRet, "");
+        });
 
     // SYS_HASH_2_NUMBER
     auto setHash2NumberRet = storageSetter->setHash2Number(tableFactory, hashStr, "");
-    auto getBlockNumberByHashRet = storageGetter->getBlockNumberByHash(hashStr, tableFactory);
     BOOST_CHECK(setHash2NumberRet);
-    BOOST_CHECK_EQUAL(getBlockNumberByHashRet, "");
+    storageGetter->getBlockNumberByHash(hashStr, tableFactory,
+        [&](Error::Ptr _error, std::shared_ptr<std::string> getBlockNumberByHashRet) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(*getBlockNumberByHashRet, "");
+        });
 
     // SYS_NUMBER_2_HASH
     auto setNumber2HashRet = storageSetter->setNumber2Hash(tableFactory, numberStr, "");
-    auto getBlockHashByNumberRet = storageGetter->getBlockHashByNumber(number, tableFactory);
     BOOST_CHECK(setNumber2HashRet);
-    BOOST_CHECK_EQUAL(getBlockHashByNumberRet, "");
+    storageGetter->getBlockHashByNumber(number, tableFactory,
+        [&](Error::Ptr _error, std::shared_ptr<std::string> getBlockHashByNumberRet) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(*getBlockHashByNumberRet, "");
+        });
 
     // SYS_NUMBER_NONCES
     auto setNumber2NoncesRet = storageSetter->setNumber2Nonces(tableFactory, numberStr, "");
-    auto getNoncesFromStorageRet = storageGetter->getNoncesFromStorage(number, tableFactory);
     BOOST_CHECK(setNumber2NoncesRet);
-    BOOST_CHECK_EQUAL(getNoncesFromStorageRet, "");
+
+    storageGetter->getNoncesFromStorage(number, tableFactory,
+        [&](Error::Ptr _error, std::shared_ptr<std::string> getNoncesFromStorageRet) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(*getNoncesFromStorageRet, "");
+        });
 
     // SYS_CONFIG
     auto setSysConfigRet = storageSetter->setSysConfig(tableFactory, "test", "test4", "0");
-    auto getSysConfigRet = storageGetter->getSysConfig("test", tableFactory);
     BOOST_CHECK(setSysConfigRet);
-    BOOST_CHECK_EQUAL(getSysConfigRet->first, "test4");
-    BOOST_CHECK_EQUAL(getSysConfigRet->second, "0");
+    storageGetter->getSysConfig(
+        "test", tableFactory, [&](Error::Ptr _error, std::shared_ptr<stringsPair> getSysConfigRet) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(getSysConfigRet->first, "test4");
+            BOOST_CHECK_EQUAL(getSysConfigRet->second, "0");
+        });
+
+    // SYS_CONSENSUS
+    auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
+    consensus::ConsensusNodeList consensusNodeList;
+    consensus::ConsensusNodeList observerNodeList;
+    for (int i = 0; i < 4; ++i)
+    {
+        auto node = std::make_shared<consensus::ConsensusNode>(
+            signImpl->generateKeyPair()->publicKey(), 10 + i);
+        consensusNodeList.emplace_back(node);
+    }
+    auto keyFactory = std::make_shared<MockKeyFactory>();
+    auto setConsensusConfigRet =
+        storageSetter->setConsensusConfig(tableFactory, CONSENSUS_SEALER, consensusNodeList, "0");
+    BOOST_CHECK(setConsensusConfigRet);
+    storageGetter->getConsensusConfig(
+        CONSENSUS_SEALER, 0, tableFactory, keyFactory, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+          BOOST_CHECK_EQUAL(_error, nullptr);
+          BOOST_CHECK(!_nodeList->empty());
+        });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

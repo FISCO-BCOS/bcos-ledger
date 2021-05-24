@@ -22,9 +22,8 @@
 #include "libprotocol/Common.h"
 #include "libprotocol/protobuf/PBBlockHeaderFactory.h"
 #include "libutilities/Common.h"
-#include <bcos-framework/testutils/HashImpl.h>
-#include <bcos-framework/testutils/HashImpl.h>
-#include <bcos-framework/testutils/SignatureImpl.h>
+#include <bcos-framework/testutils/crypto/HashImpl.h>
+#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::protocol;
@@ -103,17 +102,17 @@ inline SignatureList fakeSignatureList(SignatureCrypto::Ptr _signImpl,
     return signatureList;
 }
 
-inline BlockHeader::Ptr testPBBlockHeader(CryptoSuite::Ptr _cryptoSuite)
+inline BlockHeader::Ptr testPBBlockHeader(CryptoSuite::Ptr _cryptoSuite, BlockNumber _blockNumber)
 {
     auto hashImpl = _cryptoSuite->hashImpl();
     auto signImpl = _cryptoSuite->signatureImpl();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
     int version = 10;
-    auto parentInfo = fakeParentInfo(hashImpl, 3);
+    auto parentInfo = fakeParentInfo(hashImpl, 1);
     auto txsRoot = hashImpl->hash((std::string) "txsRoot");
     auto receiptRoot = hashImpl->hash((std::string) "receiptRoot");
     auto stateRoot = hashImpl->hash((std::string) "stateRoot");
-    int64_t number = random();
+    int64_t number = _blockNumber;
     u256 gasUsed = 3453456346534;
     int64_t timestamp = 9234234234;
     int64_t sealer = 100;

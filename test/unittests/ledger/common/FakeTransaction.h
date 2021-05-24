@@ -21,8 +21,8 @@
 #pragma once
 #include "bcos-framework/libprotocol/protobuf/PBTransactionFactory.h"
 #include "bcos-framework/libutilities/Common.h"
-#include <bcos-framework/testutils/HashImpl.h>
-#include <bcos-framework/testutils/SignatureImpl.h>
+#include <bcos-framework/testutils/crypto/HashImpl.h>
+#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

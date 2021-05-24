@@ -33,3 +33,4 @@ find_package(bcos-framework)
 target_link_libraries(${TEST_BINARY_NAME} ${BCOS_LEDGER_TARGET} ${BCOS_EVENT_FILTER_TARGET} wedpr-crypto::crypto
         bcos-framework::utilities bcos-framework::protocol bcos-framework::protocol-pb bcos-framework::codec
         Boost::unit_test_framework wedpr-crypto::crypto)
+target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)

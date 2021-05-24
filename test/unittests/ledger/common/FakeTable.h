@@ -23,13 +23,14 @@
 #include "mock/MockTable.h"
 #include "bcos-framework/libtable/TableFactory.h"
 #include "bcos-framework/libtable/Table.h"
-#include <bcos-framework/testutils/HashImpl.h>
+#include <bcos-framework/testutils/crypto/HashImpl.h>
 
 namespace bcos::test{
 inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockNumber){
     auto hashImpl = std::make_shared<Keccak256Hash>();
     auto storage = std::make_shared<MockStorage>();
     auto tableFactory = std::make_shared<TableFactory>(storage, hashImpl, _blockNumber);
+    storage->addStateCache(0, tableFactory);
     return tableFactory;
 }
 
