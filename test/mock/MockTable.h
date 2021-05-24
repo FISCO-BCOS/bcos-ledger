@@ -66,10 +66,27 @@ private:
 class MockErrorTableFactory : public TableFactory
 {
 public:
-    MockErrorTableFactory(): TableFactory(nullptr, nullptr, -1){}
-    std::shared_ptr<TableInterface> openTable(const std::string &) override
-    {
-        return nullptr;
+    explicit MockErrorTableFactory(storage::StorageInterface::Ptr _db) : TableFactory(_db, nullptr, -1) {
+        m_sysTables.push_back(SYS_TABLE);
     }
+    std::shared_ptr<TableInterface> openTable(const std::string & _tableName) override
+    {
+        if(_tableName == SYS_TABLE)
+        {
+            return TableFactory::openTable(_tableName);
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+    bool createTable(const std::string& _tableName, const std::string& _keyField,
+        const std::string& _valueFields) override
+    {
+        return TableFactory::createTable(_tableName, _keyField, _valueFields);
+    }
+    std::pair<size_t, Error::Ptr> commit() override { return {0, std::make_shared<Error>(-1, "")}; }
+
+    std::vector<std::string> m_sysTables;
 };
 }

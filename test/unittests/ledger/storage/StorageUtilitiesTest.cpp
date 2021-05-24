@@ -67,6 +67,7 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
 {
     auto tableFactory = fakeErrorTableFactory();
     auto storageSetter = StorageSetter::storageSetterFactory();
+    BOOST_CHECK_THROW(storageSetter->createTables(tableFactory), CreateSysTableFailed);
     BOOST_CHECK_THROW(
         storageSetter->syncTableSetter(tableFactory, "errorTable", "error", "error", ""),
                       OpenSysTableFailed);

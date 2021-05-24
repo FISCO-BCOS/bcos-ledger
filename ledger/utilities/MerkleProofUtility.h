@@ -18,6 +18,10 @@
  * @date 2021-04-29
  */
 
+#pragma once
+
+#include "Common.h"
+#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/libcodec/scale/Scale.h>
 #include <bcos-framework/libprotocol/ParallelMerkleProof.h>
 #include <tbb/parallel_for.h>
@@ -25,100 +29,75 @@
 
 namespace bcos::ledger
 {
-template <typename T>
-void encodeToCalculateMerkle(std::vector<bytes>& _encodedList, T _protocolDataList)
-{
-    auto protocolDataSize = _protocolDataList->size();
-    _encodedList.resize(protocolDataSize);
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, protocolDataSize), [&](const tbb::blocked_range<size_t>& _r) {
-            for (auto i = _r.begin(); i < _r.end(); ++i)
-            {
-                bcos::codec::scale::ScaleEncoderStream stream;
-                stream << i;
-                bytes encodedData = stream.data();
-                auto hash = ((*_protocolDataList)[i])->hash();
-                encodedData.insert(encodedData.end(), hash.begin(), hash.end());
-                _encodedList[i] = std::move(encodedData);
-            }
-        });
-}
-
-std::shared_ptr<Parent2ChildListMap> getTransactionProof(crypto::CryptoSuite::Ptr _crypto, protocol::TransactionsPtr _txs)
-{
-    auto merklePath = std::make_shared<Parent2ChildListMap>();
-    std::vector<bytes> transactionList;
-    encodeToCalculateMerkle(transactionList, _txs);
-    protocol::calculateMerkleProof(_crypto,transactionList,merklePath);
-    return merklePath;
-}
-
-std::shared_ptr<Parent2ChildListMap> getReceiptProof(crypto::CryptoSuite::Ptr _crypto, protocol::ReceiptsPtr _receipts){
-    auto merklePath = std::make_shared<Parent2ChildListMap>();
-    std::vector<bytes> receiptList;
-    encodeToCalculateMerkle(receiptList, _receipts);
-    protocol::calculateMerkleProof(_crypto,receiptList,merklePath);
-    return merklePath;
-}
-
-void getMerkleProof(const crypto::HashType& _txHash, const Parent2ChildListMap& parent2ChildList,
-    const Child2ParentMap& child2Parent, MerkleProof& merkleProof)
-{
-    std::string merkleNode = _txHash.hex();
-    // get child=>parent info
-    auto itChild2Parent = child2Parent.find(merkleNode);
-    while (itChild2Parent != child2Parent.end())
+class MerkleProofUtility{
+public:
+    using Ptr = std::shared_ptr<MerkleProofUtility>;
+    template <typename T>
+    void encodeToCalculateMerkle(std::vector<bytes>& _encodedList, T _protocolDataList)
     {
-        // find parent=>childrenList info
-        auto itParent2ChildList = parent2ChildList.find(itChild2Parent->second);
-        if (itParent2ChildList == parent2ChildList.end())
-        {
-            break;
-        }
-        // get index from itParent2ChildList->second by merkleNode
-        auto itChildList = std::find(
-            itParent2ChildList->second.begin(), itParent2ChildList->second.end(), merkleNode);
-        if (itChildList == itParent2ChildList->second.end())
-        {
-            break;
-        }
-        // leftPath = [childrenList.begin, index)
-        std::vector<std::string> leftPath{};
-        // rightPath = (index, childrenList.end]
-        std::vector<std::string> rightPath{};
-        leftPath.insert(leftPath.end(), itParent2ChildList->second.begin(), itChildList);
-        rightPath.insert(rightPath.end(), std::next(itChildList), itParent2ChildList->second.end());
-
-        auto singleTree = std::make_pair(std::move(leftPath), std::move(rightPath));
-        merkleProof.emplace_back(singleTree);
-
-        // node=parent
-        merkleNode = itChild2Parent->second;
-        itChild2Parent = child2Parent.find(merkleNode);
+        auto protocolDataSize = _protocolDataList->size();
+        _encodedList.resize(protocolDataSize);
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, protocolDataSize), [&](const tbb::blocked_range<size_t>& _r) {
+              for (auto i = _r.begin(); i < _r.end(); ++i)
+              {
+                  bcos::codec::scale::ScaleEncoderStream stream;
+                  stream << i;
+                  bytes encodedData = stream.data();
+                  auto hash = ((*_protocolDataList)[i])->hash();
+                  encodedData.insert(encodedData.end(), hash.begin(), hash.end());
+                  _encodedList[i] = std::move(encodedData);
+              }
+            });
     }
-}
 
-void parseMerkleMap(
-    const std::shared_ptr<Parent2ChildListMap>& parent2ChildList,
-    Child2ParentMap& child2Parent)
-{
-    // trans parent2ChildList into child2Parent concurrently
-    tbb::parallel_for_each(parent2ChildList->begin(), parent2ChildList->end(),
-        [&](std::pair<const std::string, std::vector<std::string>>& _childListIterator) {
-            auto childList = _childListIterator.second;
-            auto parent = _childListIterator.first;
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, childList.size()),
-                [&](const tbb::blocked_range<size_t>& range) {
-                    for (size_t i = range.begin(); i < range.end(); i++)
-                    {
-                        std::string child = childList[i];
-                        if (!child.empty())
-                        {
-                            child2Parent[child] = parent;
-                        }
-                    }
-                });
-        });
-}
+    std::shared_ptr<Parent2ChildListMap> getTransactionProof(
+        crypto::CryptoSuite::Ptr _crypto, protocol::TransactionsPtr _txs);
+
+    std::shared_ptr<Parent2ChildListMap> getReceiptProof(
+        crypto::CryptoSuite::Ptr _crypto, protocol::ReceiptsPtr _receipts);
+
+    void getMerkleProof(const crypto::HashType& _txHash,
+        const Parent2ChildListMap& parent2ChildList, const Child2ParentMap& child2Parent,
+        MerkleProof& merkleProof);
+
+    void parseMerkleMap(const std::shared_ptr<Parent2ChildListMap>& parent2ChildList,
+        Child2ParentMap& child2Parent);
+
+    std::shared_ptr<Child2ParentMap> getChild2ParentCacheByReceipt(
+        std::shared_ptr<Parent2ChildListMap> _parent2ChildList, protocol::BlockNumber _blockNumber);
+    std::shared_ptr<Child2ParentMap> getChild2ParentCacheByTransaction(
+        std::shared_ptr<Parent2ChildListMap> _parent2Child, protocol::BlockNumber _blockNumber);
+
+    std::shared_ptr<Child2ParentMap> getChild2ParentCache(SharedMutex& _mutex,
+        std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
+        std::shared_ptr<Parent2ChildListMap> _parent2Child, protocol::BlockNumber _blockNumber);
+
+    std::shared_ptr<Parent2ChildListMap> getParent2ChildListByReceiptProofCache(
+        protocol::BlockNumber _blockNumber, protocol::ReceiptsPtr _receipts,
+        crypto::CryptoSuite::Ptr _crypto);
+
+    std::shared_ptr<Parent2ChildListMap> getParent2ChildListByTxsProofCache(
+        protocol::BlockNumber _blockNumber, protocol::TransactionsPtr _txs,
+        crypto::CryptoSuite::Ptr _crypto);
+
+private:
+    std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Parent2ChildListMap>>
+        m_transactionWithProof = std::make_pair(0, nullptr);
+    mutable SharedMutex m_transactionWithProofMutex;
+
+    std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Parent2ChildListMap>>
+        m_receiptWithProof = std::make_pair(0, nullptr);
+    mutable SharedMutex m_receiptWithProofMutex;
+
+    std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>>
+        m_receiptChild2ParentCache;
+    mutable SharedMutex x_receiptChild2ParentCache;
+
+    std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>> m_txsChild2ParentCache;
+    mutable SharedMutex x_txsChild2ParentCache;
+
+};
+
 
 } // namespace bcos::ledger

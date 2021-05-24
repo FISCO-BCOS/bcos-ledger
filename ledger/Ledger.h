@@ -30,6 +30,7 @@
 #include "bcos-framework/libutilities/ThreadPool.h"
 #include "utilities/Common.h"
 #include "utilities/FIFOCache.h"
+#include "utilities/MerkleProofUtility.h"
 #include "storage/StorageGetter.h"
 #include "storage/StorageSetter.h"
 
@@ -48,7 +49,8 @@ public:
       : m_blockFactory(_blockFactory),
         m_storage(_storage),
         m_storageGetter(StorageGetter::storageGetterFactory()),
-        m_storageSetter(StorageSetter::storageSetterFactory())
+        m_storageSetter(StorageSetter::storageSetterFactory()),
+        m_merkleProofUtility(std::make_shared<MerkleProofUtility>())
     {
         assert(m_blockFactory);
         assert(m_storage);
@@ -134,22 +136,6 @@ private:
         const crypto::HashType& _txHash, std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
     LedgerConfig::Ptr getLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash);
 
-    /****** merkle methods, TODO: should be removed ******/
-    std::shared_ptr<Child2ParentMap> getChild2ParentCacheByReceipt(
-        std::shared_ptr<Parent2ChildListMap> _parent2ChildList, protocol::BlockNumber _blockNumber);
-    std::shared_ptr<Child2ParentMap> getChild2ParentCacheByTransaction(
-        std::shared_ptr<Parent2ChildListMap> _parent2Child, protocol::BlockNumber _blockNumber);
-
-    std::shared_ptr<Child2ParentMap> getChild2ParentCache(SharedMutex& _mutex,
-        std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
-        std::shared_ptr<Parent2ChildListMap> _parent2Child, protocol::BlockNumber _blockNumber);
-
-    std::shared_ptr<Parent2ChildListMap> getParent2ChildListByReceiptProofCache(
-        protocol::BlockNumber _blockNumber, protocol::ReceiptsPtr _receipts);
-
-    std::shared_ptr<Parent2ChildListMap> getParent2ChildListByTxsProofCache(
-        protocol::BlockNumber _blockNumber, protocol::TransactionsPtr _txs);
-
     /****** Ledger attribute getter ******/
 
     // TODO: if storage merge table factory, it can use new tableFactory
@@ -213,30 +199,14 @@ private:
         m_transactionsCache;
     FIFOCache<protocol::ReceiptsPtr, protocol::Receipts> m_receiptCache;
 
-    std::pair<bcos::protocol::BlockNumber,
-        std::shared_ptr<Parent2ChildListMap>>
-        m_transactionWithProof = std::make_pair(0, nullptr);
-    mutable SharedMutex m_transactionWithProofMutex;
-
-    std::pair<bcos::protocol::BlockNumber,
-        std::shared_ptr<Parent2ChildListMap>>
-        m_receiptWithProof = std::make_pair(0, nullptr);
-    mutable SharedMutex m_receiptWithProofMutex;
-
-    std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>> m_receiptChild2ParentCache;
-    mutable SharedMutex x_receiptChild2ParentCache;
-
-    std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>> m_txsChild2ParentCache;
-    mutable SharedMutex x_txsChild2ParentCache;
-
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
 
     size_t m_timeout = 10000;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     bcos::storage::StorageInterface::Ptr m_storage;
     StorageGetter::Ptr m_storageGetter;
     StorageSetter::Ptr m_storageSetter;
+    ledger::MerkleProofUtility::Ptr m_merkleProofUtility;
 };
 } // namespace bcos

@@ -218,4 +218,92 @@ private:
     mutable std::mutex m_mutex;
     std::map<protocol::BlockNumber, TableFactoryInterface::Ptr> m_number2TableFactory;
 };
+
+class MockErrorStorage : public MockStorage
+{
+public:
+    MockErrorStorage() :MockStorage(){}
+    std::vector<std::string> getPrimaryKeys(
+        const std::shared_ptr<TableInfo>& _tableInfo, const Condition::Ptr& _condition) const override
+    {
+        return MockStorage::getPrimaryKeys(_tableInfo, _condition);
+    }
+    std::shared_ptr<Entry> getRow(
+        const std::shared_ptr<TableInfo>& _tableInfo, const std::string_view& _key) override
+    {
+        return MockStorage::getRow(_tableInfo, _key);
+    }
+    std::map<std::string, std::shared_ptr<Entry>> getRows(
+        const std::shared_ptr<TableInfo>& _tableInfo, const std::vector<std::string>& _keys) override
+    {
+        return MockStorage::getRows(_tableInfo, _keys);
+    }
+    std::pair<size_t, Error::Ptr> commitBlock(protocol::BlockNumber number,
+        const std::vector<std::shared_ptr<TableInfo>>& _tableInfos,
+        const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _tableDatas) override
+    {
+        return MockStorage::commitBlock(number, _tableInfos, _tableDatas);
+    }
+    std:: shared_ptr<TableFactoryInterface> getStateCache(protocol::BlockNumber _blockNumber) override
+    {
+        return MockStorage::getStateCache(_blockNumber);
+    }
+    void addStateCache(protocol::BlockNumber _blockNumber,
+        const std::shared_ptr<TableFactoryInterface>& _tableFactory) override
+    {
+        MockStorage::addStateCache(_blockNumber, _tableFactory);
+    }
+    void asyncGetPrimaryKeys(const std::shared_ptr<TableInfo>& _tableInfo, const Condition::Ptr& _condition,
+        std::function<void(const Error::Ptr&, const std::vector<std::string>&)> _callback) override
+    {
+        MockStorage::asyncGetPrimaryKeys(_tableInfo, _condition, _callback);
+    }
+    void asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string_view& _key,
+        std::function<void(const Error::Ptr&, const Entry::Ptr&)> _callback) override
+    {
+        MockStorage::asyncGetRow(_tableInfo, _key, _callback);
+    }
+    void asyncGetRows(const std::shared_ptr<TableInfo>& _tableInfo,
+        const std::shared_ptr<std::vector<std::string>>& _keyList,
+        std::function<void(const Error::Ptr&, const std::map<std::string, Entry::Ptr>&)> _callback)
+        override
+    {
+        MockStorage::asyncGetRows(_tableInfo, _keyList, _callback);
+    }
+    void asyncCommitBlock(protocol::BlockNumber,
+        const std::shared_ptr<std::vector<std::shared_ptr<TableInfo>>>&,
+        const std::shared_ptr<std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>&,
+        std::function<void(const Error::Ptr&, size_t)> _callback) override
+    {
+        _callback(std::make_shared<Error>(-1, ""), 0);
+    }
+    void asyncAddStateCache(protocol::BlockNumber,
+        const std::shared_ptr<TableFactoryInterface>&,
+        std::function<void(const Error::Ptr&)> _callback) override
+    {
+        _callback(std::make_shared<Error>(-1, ""));
+    }
+    void asyncGetStateCache(protocol::BlockNumber _number,
+        std::function<void(const Error::Ptr&, const std::shared_ptr<TableFactoryInterface>&)>
+            _callback) override
+    {
+        // random get success
+        auto rand = random();
+        if(rand & 1)
+        {
+            if(rand & 3)
+            {
+                _callback(nullptr, nullptr);
+            }
+            else
+            {
+                _callback(std::make_shared<Error>(-1, ""), nullptr);
+            }
+        }
+        else
+        {
+            MockStorage::asyncGetStateCache(_number, _callback);
+        }
+    }
+};
 }

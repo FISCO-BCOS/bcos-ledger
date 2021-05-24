@@ -72,6 +72,7 @@ size_t blockTransactionListSetter(const protocol::Block::Ptr& _block, const prot
     for (const auto& tx : *_txs)
     {
         _block->appendTransaction(tx);
+        _block->appendTransactionHash(tx->hash());
     }
     return _block->transactionsSize();
 }
