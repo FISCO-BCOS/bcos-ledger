@@ -92,7 +92,6 @@ public:
         const std::vector<std::shared_ptr<TableInfo>>& _tableInfos,
         const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _tableDatas) override
     {
-
         size_t total = 0;
         if (_tableInfos.size() != _tableDatas.size())
         {

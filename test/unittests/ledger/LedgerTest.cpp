@@ -465,11 +465,6 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     fullHashList->emplace_back(m_fakeBlocks->at(3)->transactionHash(2));
     fullHashList->emplace_back(m_fakeBlocks->at(3)->transactionHash(3));
 
-    for (auto& hash :*hashList)
-    {
-        std::cout << hash.hex() << std::endl;
-    }
-
     m_ledger->asyncGetBatchTxsByHashList(hashList, true,
         [&](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
