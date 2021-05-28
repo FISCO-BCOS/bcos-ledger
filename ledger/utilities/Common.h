@@ -32,28 +32,13 @@ using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 // child=>parent
 using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 
-static const std::string SYS_KEY_CURRENT_NUMBER = "current_number";
-static const std::string SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
-static const std::string SYS_KEY_TOTAL_FAILED_TRANSACTION = "total_failed_transaction_count";
 static const std::string SYS_VALUE = "value";
 static const std::string SYS_KEY = "key";
-static const std::string TX_INDEX = "index";
-static const std::string SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_block_num";
+static const std::string SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_block_number";
 
-static const std::string SYS_CONSENSUS = "s_consensus";
-static const std::string SYS_CONFIG = "s_config";
-static const std::string SYS_CURRENT_STATE = "s_current_state";
-static const std::string SYS_HASH_2_NUMBER = "s_hash_2_number";
-static const std::string SYS_NUMBER_2_HASH = "s_number_2_hash";
-static const std::string SYS_BLOCK_NUMBER_2_NONCES = "s_block_number_2_nonces";
-static const std::string SYS_NUMBER_2_BLOCK_HEADER = "s_number_2_header";
-static const std::string SYS_NUMBER_2_TXS = "s_number_2_txs";
-static const std::string SYS_HASH_2_TX = "s_hash_2_tx";
-static const std::string SYS_HASH_2_RECEIPT = "s_hash_2_receipt";
-
-static const std::string NODE_TYPE = "_type_";
-static const std::string NODE_WEIGHT = "_weight_";
-static const std::string NODE_ENABLE_NUMBER = "_enable_block_number";
+static const std::string NODE_TYPE = "type";
+static const std::string NODE_WEIGHT = "weight";
+static const std::string NODE_ENABLE_NUMBER = "enable_block_number";
 
 struct LedgerConfigCache
 {

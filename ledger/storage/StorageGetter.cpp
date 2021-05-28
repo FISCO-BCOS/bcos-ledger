@@ -19,6 +19,7 @@
  */
 
 #include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include "StorageGetter.h"
 #include "../utilities/Common.h"
 #include "../utilities/BlockUtilities.h"

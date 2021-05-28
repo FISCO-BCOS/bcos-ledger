@@ -165,7 +165,7 @@ private:
     inline StorageSetter::Ptr getStorageSetter(){
         return m_storageSetter;
     }
-    inline bcos::storage::StorageInterface::Ptr getState(){
+    inline bcos::storage::StorageInterface::Ptr getStorage(){
         return m_storage;
     }
 
