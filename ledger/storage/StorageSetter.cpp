@@ -23,7 +23,6 @@
 #include "../utilities/BlockUtilities.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 
 using namespace bcos;

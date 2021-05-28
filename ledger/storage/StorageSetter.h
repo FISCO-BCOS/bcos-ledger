@@ -27,6 +27,7 @@
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/interfaces/storage/TableInterface.h"
 #include "bcos-framework/interfaces/consensus/ConsensusNode.h"
+#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 
 namespace bcos::ledger
 {
