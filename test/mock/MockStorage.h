@@ -88,7 +88,7 @@ public:
         }
         return ret;
     }
-    std::pair<size_t, Error::Ptr> commitBlock(protocol::BlockNumber,
+    std::pair<size_t, Error::Ptr> commitBlock(protocol::BlockNumber _number,
         const std::vector<std::shared_ptr<TableInfo>>& _tableInfos,
         const std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>& _tableDatas) override
     {
@@ -98,15 +98,46 @@ public:
             auto error = std::make_shared<Error>(-1, "");
             return {0, error};
         }
-        std::lock_guard<std::mutex> lock(m_mutex);
-        for (size_t i = 0; i < _tableInfos.size(); ++i)
+        std::shared_ptr<TableFactoryInterface> stateTableFactory = nullptr;
+        if (_number != 0)
         {
-            for (auto& item : *_tableDatas[i])
+            if (m_number2TableFactory.count(_number))
             {
-                if (item.second->getStatus() == Entry::Status::NORMAL)
+                stateTableFactory = m_number2TableFactory[_number];
+            }
+            else
+            {
+                return {0, std::make_shared<Error>(StorageErrorCode::StateCacheNotFound,
+                               std::to_string(_number) + "state cache not found")};
+            }
+            auto stateData = stateTableFactory->exportData();
+            stateData.first.insert(stateData.first.end(), _tableInfos.begin(), _tableInfos.end());
+            stateData.second.insert(stateData.second.end(), _tableDatas.begin(), _tableDatas.end());
+            std::lock_guard<std::mutex> lock(m_mutex);
+            for (size_t i = 0; i < stateData.first.size(); ++i)
+            {
+                for (auto& item : *stateData.second[i])
                 {
-                    data[_tableInfos[i]->name][item.first] = item.second;
-                    ++total;
+                    if (item.second->getStatus() == Entry::Status::NORMAL)
+                    {
+                        data[stateData.first[i]->name][item.first] = item.second;
+                        ++total;
+                    }
+                }
+            }
+        }
+        else
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            for (size_t i = 0; i < _tableInfos.size(); ++i)
+            {
+                for (auto& item : *_tableDatas[i])
+                {
+                    if (item.second->getStatus() == Entry::Status::NORMAL)
+                    {
+                        data[_tableInfos[i]->name][item.first] = item.second;
+                        ++total;
+                    }
                 }
             }
         }

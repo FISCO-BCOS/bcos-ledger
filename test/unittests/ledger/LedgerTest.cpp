@@ -454,18 +454,30 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     initChain(5);
     auto hashList = std::make_shared<protocol::HashList>();
     auto errorHashList = std::make_shared<protocol::HashList>();
+    auto fullHashList = std::make_shared<protocol::HashList>();
     hashList->emplace_back(m_fakeBlocks->at(3)->transactionHash(0));
     hashList->emplace_back(m_fakeBlocks->at(3)->transactionHash(1));
     hashList->emplace_back(m_fakeBlocks->at(4)->transactionHash(0));
     errorHashList->emplace_back(HashType("123"));
     errorHashList->emplace_back(HashType("456"));
+    fullHashList->emplace_back(m_fakeBlocks->at(3)->transactionHash(0));
+    fullHashList->emplace_back(m_fakeBlocks->at(3)->transactionHash(1));
+    fullHashList->emplace_back(m_fakeBlocks->at(3)->transactionHash(2));
+    fullHashList->emplace_back(m_fakeBlocks->at(3)->transactionHash(3));
 
     m_ledger->asyncGetBatchTxsByHashList(hashList, true,
         [&](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
-            auto getHash = _txList->at(1)->hash().hex();
+            BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
+        });
+
+    m_ledger->asyncGetBatchTxsByHashList(fullHashList, true,
+        [&](Error::Ptr _error, protocol::TransactionsPtr _txList,
+            std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK(_txList != nullptr);
             BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
         });
 

@@ -57,60 +57,32 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
     auto ledgerConfig = getLedgerConfig(_header->number(), _header->hash());
     try
     {
-        getState()->asyncGetStateCache(
-            _header->number(), [this, _header, _onCommitBlock, ledgerConfig](Error::Ptr _error,
-                             std::shared_ptr<TableFactoryInterface> _tableFactory) {
-              auto blockNumber = _header->number();
-                if (!_error || _error->errorCode() == CommonError::SUCCESS)
-                {
-                    if(_tableFactory)
-                    {
-                        tbb::parallel_invoke(
-                            [this, _header, _tableFactory]() { writeNumber(_header->number(), _tableFactory); },
-                            [this, _header, _tableFactory]() { writeHash2Number(_header, _tableFactory); },
-                            [this, _header, _tableFactory]() { writeNumber2BlockHeader(_header, _tableFactory); });
+        auto blockNumber = _header->number();
 
-                        _tableFactory->asyncCommit(
-                            [blockNumber, _header, _onCommitBlock, ledgerConfig, this](
-                                Error::Ptr _error, size_t _commitSize) {
-                                if ((!_error || _error->errorCode() == CommonError::SUCCESS) &&
-                                    _commitSize > 0)
-                                {
-                                    m_blockHeaderCache.add(blockNumber, _header);
-                                    _onCommitBlock(nullptr, ledgerConfig);
-                                }
-                                else
-                                {
-                                    LEDGER_LOG(ERROR) << LOG_DESC("Commit Block failed in storage")
-                                                      << LOG_KV("number", blockNumber);
-                                    // TODO: add error code
-                                    auto error = std::make_shared<Error>(_error->errorCode(),
-                                        "[#asyncCommitBlock] Commit block error in storage" +
-                                            _error->errorMessage());
-                                    _onCommitBlock(error, nullptr);
-                                }
-                            });
-                    }
-                    else
-                    {
-                        LEDGER_LOG(ERROR)
-                            << LOG_BADGE("asyncCommitBlock") << LOG_DESC("get null table factory")
-                            << LOG_KV("number", blockNumber);
-                        auto error = std::make_shared<Error>(
-                            -1, "[#asyncCommitBlock] get state cache table error");
-                        _onCommitBlock(error, nullptr);
-                    }
-                }
-                else
-                {
-                    LEDGER_LOG(ERROR) << LOG_BADGE("asyncCommitBlock") << LOG_DESC("async get state cache failed")
-                                      << LOG_KV("number", blockNumber);
-                    auto error = std::make_shared<Error>(_error->errorCode(),
-                        "[#asyncCommitBlock] get state cache table error" + _error->errorMessage());
-                    _onCommitBlock(error, nullptr);
-                }
-            });
+        auto tableFactory = getMemoryTableFactory(blockNumber);
 
+        tbb::parallel_invoke(
+            [this, _header, tableFactory]() { writeNumber(_header->number(), tableFactory); },
+            [this, _header, tableFactory]() { writeHash2Number(_header, tableFactory); },
+            [this, _header, tableFactory]() { writeNumber2BlockHeader(_header, tableFactory); });
+
+        tableFactory->asyncCommit([blockNumber, _header, _onCommitBlock, ledgerConfig, this](
+                                      Error::Ptr _error, size_t _commitSize) {
+            if ((!_error || _error->errorCode() == CommonError::SUCCESS) && _commitSize > 0)
+            {
+                m_blockHeaderCache.add(blockNumber, _header);
+                _onCommitBlock(nullptr, ledgerConfig);
+            }
+            else
+            {
+                LEDGER_LOG(ERROR) << LOG_DESC("Commit Block failed in storage")
+                                  << LOG_KV("number", blockNumber);
+                // TODO: add error code
+                auto error = std::make_shared<Error>(_error->errorCode(),
+                    "[#asyncCommitBlock] Commit block error in storage" + _error->errorMessage());
+                _onCommitBlock(error, nullptr);
+            }
+        });
         LEDGER_LOG(DEBUG) << LOG_BADGE("asyncCommitBlock") << LOG_DESC("Commit block time record")
                           << LOG_KV("totalTimeCost", utcTime() - start_time);
     }
@@ -140,59 +112,47 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
         try
         {
             auto write_record_time = utcTime();
-            getState()->asyncGetStateCache(
-                _number, [this, _txHashList, _txToStore, _onTxStored](Error::Ptr _error, TableFactoryInterface::Ptr _tableFactory) {
+            auto tableFactory = getMemoryTableFactory(_number + 1);
+            if (tableFactory)
+            {
+                for (size_t i = 0; i < _txHashList->size(); ++i)
+                {
+                    auto txHashHex = _txHashList->at(i).hex();
+                    getStorageSetter()->setHashToTx(
+                        tableFactory, txHashHex, asString(*(_txToStore->at(i))));
+                    LEDGER_LOG(TRACE)
+                        << LOG_BADGE("setHashToTx") << LOG_DESC("write HASH_2_TX success")
+                        << LOG_KV("txHashHex", txHashHex);
+                }
+                tableFactory->asyncCommit([_onTxStored](Error::Ptr _error, size_t _commitSize) {
                     if (!_error || _error->errorCode() == CommonError::SUCCESS)
                     {
-                        if (_tableFactory)
-                        {
-                            for (size_t i = 0; i < _txHashList->size(); ++i)
-                            {
-                                auto txHashHex = _txHashList->at(i).hex();
-                                getStorageSetter()->setHashToTx(
-                                    _tableFactory, txHashHex, asString(*(_txToStore->at(i))));
-                            }
-                            _tableFactory->asyncCommit(
-                                [_onTxStored](Error::Ptr _error, size_t _commitSize) {
-                                    if (!_error || _error->errorCode() == CommonError::SUCCESS)
-                                    {
-                                        LEDGER_LOG(TRACE) << LOG_BADGE("asyncStoreTransactions")
-                                                          << LOG_DESC("write db success")
-                                                          << LOG_KV("commitSize", _commitSize);
-                                        _onTxStored(nullptr);
-                                    }
-                                    else
-                                    {
-                                        LEDGER_LOG(ERROR) << LOG_BADGE("asyncStoreTransactions")
-                                                          << LOG_DESC("table commit failed");
-                                        // TODO: add error code and msg
-                                        auto error = std::make_shared<Error>(_error->errorCode(),
-                                            "[#asyncStoreTransactions] table commit failed" +
-                                                _error->errorMessage());
-                                        _onTxStored(error);
-                                    }
-                                });
-                        }
-                        else
-                        {
-                            LEDGER_LOG(ERROR) << LOG_BADGE("asyncStoreTransactions")
-                                              << LOG_DESC("get a null tableFactory in state cache");
-                            // TODO: add error code
-                            auto error = std::make_shared<Error>(-1,
-                                "[#asyncStoreTransactions] get a null tableFactory in state cache");
-                            _onTxStored(error);
-                        }
+                        LEDGER_LOG(TRACE)
+                            << LOG_BADGE("asyncStoreTransactions") << LOG_DESC("write db success")
+                            << LOG_KV("commitSize", _commitSize);
+                        _onTxStored(nullptr);
                     }
                     else
                     {
                         LEDGER_LOG(ERROR) << LOG_BADGE("asyncStoreTransactions")
-                                          << LOG_DESC("get state cache from db failed");
+                                          << LOG_DESC("table commit failed");
                         // TODO: add error code and msg
                         auto error = std::make_shared<Error>(
-                            _error->errorCode(), "get state cache failed" + _error->errorMessage());
+                            _error->errorCode(), "[#asyncStoreTransactions] table commit failed" +
+                                                     _error->errorMessage());
                         _onTxStored(error);
                     }
                 });
+            }
+            else
+            {
+                LEDGER_LOG(ERROR) << LOG_BADGE("asyncStoreTransactions")
+                                  << LOG_DESC("get a null tableFactory in state cache");
+                // TODO: add error code
+                auto error = std::make_shared<Error>(
+                    -1, "[#asyncStoreTransactions] get a null tableFactory in state cache");
+                _onTxStored(error);
+            }
             auto write_table_time = utcTime() - write_record_time;
             LEDGER_LOG(DEBUG) << LOG_BADGE("asyncStoreTransactions")
                               << LOG_DESC("Store Txs time record")
@@ -234,7 +194,7 @@ void Ledger::asyncStoreReceipts(storage::TableFactoryInterface::Ptr _tableFactor
             [this, _block, _tableFactory]() { writeNumber2Transactions(_block, _tableFactory); },
             [this, _block, _tableFactory]() { writeHash2Receipt(_block, _tableFactory); });
 
-        getState()->asyncAddStateCache(blockNumber, _tableFactory,
+        getStorage()->asyncAddStateCache(blockNumber, _tableFactory,
             [_block, _onReceiptStored, blockNumber, this](Error::Ptr _error) {
                 if (!_error || _error->errorCode() == CommonError::SUCCESS)
                 {
@@ -1782,21 +1742,22 @@ void Ledger::writeNumber2Transactions(
 void Ledger::writeHash2Receipt(const bcos::protocol::Block::Ptr& _block,
     const TableFactoryInterface::Ptr& _tableFactory)
 {
-    bool ret;
     tbb::parallel_for(tbb::blocked_range<size_t>(0, _block->transactionsHashSize()),
         [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end() ; ++i)
+            for (size_t i = range.begin(); i < range.end(); ++i)
             {
                 auto encodeReceipt = _block->receipt(i)->encode();
-                ret = getStorageSetter()->setHashToReceipt(
+                auto ret = getStorageSetter()->setHashToReceipt(
                     _tableFactory, _block->transactionHash(i).hex(), asString(encodeReceipt));
+                if (!ret)
+                {
+                    LEDGER_LOG(DEBUG) << LOG_BADGE("writeHash2Receipt")
+                                      << LOG_DESC("Write row in SYS_HASH_2_RECEIPT error")
+                                      << LOG_KV("txHash", _block->transactionHash(i).hex())
+                                      << LOG_KV("blockNumber", _block->blockHeader()->number());
+                }
             }
         });
-    if(!ret){
-        LEDGER_LOG(DEBUG) << LOG_BADGE("writeHash2Receipt")
-                          << LOG_DESC("Write row in SYS_HASH_2_RECEIPT error")
-                          << LOG_KV("blockNumber", _block->blockHeader()->number());
-    }
 }
 bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig)
 {
@@ -1810,7 +1771,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig)
     {
         auto txLimit = _ledgerConfig->blockTxCountLimit();
         LEDGER_LOG(TRACE) << LOG_DESC("test") << LOG_KV("txLimit", txLimit);
-        auto tableFactory = getState()->getStateCache(0);
+        auto tableFactory = getStorage()->getStateCache(0);
         // build a block
         block = m_blockFactory->createBlock();
         auto header = getBlockHeaderFactory()->createBlockHeader();
