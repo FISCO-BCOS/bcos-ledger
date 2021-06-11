@@ -42,6 +42,8 @@ public:
         return std::make_shared<StorageGetter>();
     }
 
+    bool checkTableExist(
+        std::string _tableName, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
     /**
      * @brief get transactions in SYS_NUMBER_2_TXS table
      * @param _blockNumber the number of block

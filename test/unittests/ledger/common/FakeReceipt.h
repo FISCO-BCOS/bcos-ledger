@@ -52,8 +52,6 @@ inline LogEntriesPtr fakeLogEntries(Hash::Ptr _hashImpl, size_t _size)
 inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _cryptoSuite, BlockNumber _blockNumber)
 {
     auto hashImpl = _cryptoSuite->hashImpl();
-    int32_t version = 1;
-    auto stateRoot = hashImpl->hash((std::string) "stateRoot");
     u256 gasUsed = 12343242342;
     auto contractAddress = toAddress("5fe3c4c3e2079879a0dba1937aca95ac16e68f0f");
     auto logEntries = fakeLogEntries(hashImpl, 2);
@@ -64,7 +62,7 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _crypto
         output += contractAddress.asBytes();
     }
     auto factory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
-    auto receipt = factory->createReceipt(version, stateRoot, gasUsed, contractAddress.asBytes(),
+    auto receipt = factory->createReceipt(gasUsed, contractAddress.asBytes(),
         logEntries, (int32_t)status, output, _blockNumber);
     return receipt;
 }
