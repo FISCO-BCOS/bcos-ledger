@@ -30,6 +30,13 @@ using namespace bcos::consensus;
 
 namespace bcos::ledger
 {
+bool StorageGetter::checkTableExist(
+    std::string _tableName, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
+{
+    auto table = _tableFactory->openTable(_tableName);
+    return table != nullptr;
+}
+
 void StorageGetter::getTxsFromStorage(
     const BlockNumber& _blockNumber, const TableFactoryInterface::Ptr& _tableFactory,
     std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)

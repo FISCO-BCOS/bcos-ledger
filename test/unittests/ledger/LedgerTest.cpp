@@ -93,24 +93,27 @@ public:
         m_param->setObserverNodeList(observerNodeList);
 
         auto tableFactory = getTableFactory(0);
-        m_storageSetter->createTables(tableFactory);
         m_storage->addStateCache(0, tableFactory);
-        auto result = m_ledger->buildGenesisBlock(m_param);
+        auto result = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
         BOOST_CHECK(result);
     }
 
     inline void initEmptyFixture(){
         m_param = std::make_shared<LedgerConfig>();
-        m_param->setBlockNumber(-1);
+        m_param->setBlockNumber(0);
         m_param->setHash(HashType(""));
-        m_param->setBlockTxCountLimit(-1);
+        m_param->setBlockTxCountLimit(0);
         m_param->setConsensusTimeout(-1);
 
         auto tableFactory = getTableFactory(0);
-        m_storageSetter->createTables(tableFactory);
         m_storage->addStateCache(0, tableFactory);
-        auto result = m_ledger->buildGenesisBlock(m_param);
-        BOOST_CHECK(result);
+        auto result1 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
+        BOOST_CHECK(!result1);
+        m_param->setConsensusTimeout(10);
+        auto result2 = m_ledger->buildGenesisBlock(m_param, 30, "");
+        BOOST_CHECK(!result2);
+        auto result3 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
+        BOOST_CHECK(result3);
     }
 
     inline void initBlocks(int _number) {

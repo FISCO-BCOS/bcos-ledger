@@ -119,7 +119,7 @@ public:
     }
 
     /****** init ledger ******/
-    bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig);
+    bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit, std::string _genesisData);
 
 private:
     /****** base block data getter ******/
