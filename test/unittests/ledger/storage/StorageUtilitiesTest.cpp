@@ -21,8 +21,8 @@
 #include "unittests/ledger/common/FakeTable.h"
 #include "unittests/ledger/common/FakeBlock.h"
 #include "mock/MockKeyFactor.h"
-#include "../ledger/storage/StorageGetter.h"
-#include "../ledger/storage/StorageSetter.h"
+#include "bcos-ledger/ledger/storage/StorageGetter.h"
+#include "bcos-ledger/ledger/storage/StorageSetter.h"
 #include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <boost/test/unit_test.hpp>
@@ -51,6 +51,22 @@ public:
 };
 
 BOOST_FIXTURE_TEST_SUITE(StorageUtilitiesTest, TableFactoryFixture)
+
+BOOST_AUTO_TEST_CASE(testCreateTable)
+{
+    auto table = tableFactory->openTable(FS_ROOT);
+    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_TYPE)->getField(SYS_VALUE), "directory");
+    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_SUB)->getField(SYS_VALUE),
+        "{\"subdirectories\":[{\"fileName\":\"usr\",\"type\":\"directory\"},{\"fileName\":\"bin\",\"type\":\"directory\"},{\"fileName\":\"data\",\"type\":\"directory\"}]}\n");
+
+    table = tableFactory->openTable("/usr");
+    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_TYPE)->getField(SYS_VALUE), "directory");
+    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_SUB)->getField(SYS_VALUE), "{\"subdirectories\":[{\"fileName\":\"bin\",\"type\":\"directory\"},{\"fileName\":\"local\",\"type\":\"directory\"}]}\n");
+
+    table = tableFactory->openTable("/bin");
+    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_TYPE)->getField(SYS_VALUE), "directory");
+    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_SUB)->getField(SYS_VALUE), "{\"subdirectories\":[{\"fileName\":\"extensions\",\"type\":\"directory\"}]}\n");
+}
 BOOST_AUTO_TEST_CASE(testTableSetterGetterByRowAndField)
 {
     bool setterRet =
@@ -83,14 +99,15 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
             BOOST_CHECK_EQUAL(_value, nullptr);
         });
 
+    auto fakeHashList = std::make_shared<std::vector<std::string>>();
     storageGetter->getBatchTxByHashList(
-        nullptr, tableFactory, nullptr, [&](Error::Ptr _error, TransactionsPtr _txs) {
+        fakeHashList, tableFactory, nullptr, [&](Error::Ptr _error, TransactionsPtr _txs) {
             BOOST_CHECK(_error->errorCode() == -1);
             BOOST_CHECK_EQUAL(_txs, nullptr);
         });
 
     storageGetter->getBatchReceiptsByHashList(
-        nullptr, tableFactory, nullptr, [&](Error::Ptr _error, ReceiptsPtr _receipts) {
+        fakeHashList, tableFactory, nullptr, [&](Error::Ptr _error, ReceiptsPtr _receipts) {
             BOOST_CHECK(_error->errorCode() == -1);
             BOOST_CHECK_EQUAL(_receipts, nullptr);
         });

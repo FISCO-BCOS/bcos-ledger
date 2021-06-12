@@ -19,8 +19,8 @@
  */
 #include "common/FakeTable.h"
 #include "common/FakeBlock.h"
-#include "../ledger/Ledger.h"
-#include "../ledger/utilities/BlockUtilities.h"
+#include "bcos-ledger/ledger/Ledger.h"
+#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
 #include "mock/MockKeyFactor.h"
 #include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>

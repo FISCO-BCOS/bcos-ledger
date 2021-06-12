@@ -43,6 +43,9 @@ public:
 
     void createTables(const storage::TableFactoryInterface::Ptr& _tableFactory);
 
+    void createFileSystemTables(const storage::TableFactoryInterface::Ptr& _tableFactory);
+    void recursiveBuildDir(
+        const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _absoluteDir);
     /**
      * @brief update tableName set fieldName=fieldValue where row=_row
      * @param _tableFactory

@@ -40,13 +40,18 @@ static const std::string NODE_TYPE = "type";
 static const std::string NODE_WEIGHT = "weight";
 static const std::string NODE_ENABLE_NUMBER = "enable_block_number";
 
-struct LedgerConfigCache
-{
-    std::string value;
-    bcos::protocol::BlockNumber enableNumber;
-    bcos::protocol::BlockNumber curBlockNum = -1;  // at which block gets the configuration value
-    LedgerConfigCache(const std::string& _value, bcos::protocol::BlockNumber const& _enableNumber,
-        bcos::protocol::BlockNumber const& _num)
-      : value(_value), enableNumber(_enableNumber), curBlockNum(_num){};
-};
+// FileSystem paths
+static const std::string FS_ROOT = "/";
+static const std::string FS_USER_BIN = "/usr/bin";
+static const std::string FS_USER_LOCAL = "/usr/local";
+static const std::string FS_SYS_BIN = "/bin/extensions";
+static const std::string FS_USER_DATA = "/data";
+// FileSystem keys
+static const std::string FS_KEY_TYPE = "type";
+static const std::string FS_KEY_SUB = "subdirectories";
+static const std::string FS_KEY_NUM = "enable_number";
+// FileSystem file type
+static const std::string FS_TYPE_DIR = "directory";
+static const std::string FS_TYPE_CONTRACT = "contract";
+static const std::string FS_TYPE_LINK = "link";
 } // namespace bcos
