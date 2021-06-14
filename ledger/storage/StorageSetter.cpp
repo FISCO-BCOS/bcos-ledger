@@ -53,12 +53,12 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     auto retPair = _tableFactory->commit();
     if ((retPair.second == nullptr || retPair.second->errorCode() == CommonError::SUCCESS) && retPair.first > 0)
     {
-        LEDGER_LOG(TRACE) << LOG_DESC("[#buildGenesisBlock]Storage commit success")
+        LEDGER_LOG(TRACE) << LOG_BADGE("createTables") << LOG_DESC("Storage commit success")
                           << LOG_KV("commitSize", retPair.first);
     }
     else
     {
-        LEDGER_LOG(ERROR) << LOG_DESC("[#buildGenesisBlock]Storage commit error");
+        LEDGER_LOG(ERROR) << LOG_BADGE("createTables") << LOG_DESC("Storage commit error");
         BOOST_THROW_EXCEPTION(CreateSysTableFailed() << errinfo_comment(""));
     }
 }

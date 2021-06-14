@@ -182,11 +182,21 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
 {
     initFixture();
     m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, BlockNumber _number) {
+        if (_error)
+        {
+            std::cout << "[testFixtureLedger] error message:" << _error->errorMessage()
+                      << std::endl;
+        }
         BOOST_CHECK(_error == nullptr);
         BOOST_CHECK_EQUAL(_number, 0);
     });
 
     m_ledger->asyncGetBlockHashByNumber(0, [&](Error::Ptr _error, const crypto::HashType _hash) {
+        if (_error)
+        {
+            std::cout << "[testFixtureLedger] error message:" << _error->errorMessage()
+                      << std::endl;
+        }
         BOOST_CHECK(_error == nullptr);
         BOOST_CHECK(_hash != HashType(""));
         m_ledger->asyncGetBlockNumberByHash(_hash, [&](Error::Ptr _error, BlockNumber _number) {
@@ -196,6 +206,11 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
     });
 
     m_ledger->asyncGetBlockDataByNumber(0, HEADER, [&](Error::Ptr _error, Block::Ptr _block) {
+        if (_error)
+        {
+            std::cout << "[testFixtureLedger] error message:" << _error->errorMessage()
+                      << std::endl;
+        }
         BOOST_CHECK(_error == nullptr);
         BOOST_CHECK(_block != nullptr);
         BOOST_CHECK_EQUAL(_block->blockHeader()->number(), 0);
@@ -204,6 +219,11 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
     m_ledger->asyncGetTotalTransactionCount(
         [&](Error::Ptr _error, int64_t _totalTxCount, int64_t _failedTxCount,
             protocol::BlockNumber _latestBlockNumber) {
+            if (_error)
+            {
+                std::cout << "[testFixtureLedger] error message:" << _error->errorMessage()
+                          << std::endl;
+            }
             BOOST_CHECK(_error == nullptr);
             BOOST_CHECK_EQUAL(_totalTxCount, 0);
             BOOST_CHECK_EQUAL(_failedTxCount, 0);
@@ -212,13 +232,23 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
 
     m_ledger->asyncGetSystemConfigByKey(
         SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
-          BOOST_CHECK(_error == nullptr);
-          BOOST_CHECK_EQUAL(_value, "1000");
-          BOOST_CHECK_EQUAL(_number, 0);
+            if (_error)
+            {
+                std::cout << "[testFixtureLedger] error message:" << _error->errorMessage()
+                          << std::endl;
+            }
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_value, "1000");
+            BOOST_CHECK_EQUAL(_number, 0);
         });
 
     m_ledger->asyncGetNodeListByType(
         CONSENSUS_OBSERVER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+            if (_error)
+            {
+                std::cout << "[testFixtureLedger] error message:" << _error->errorMessage()
+                          << std::endl;
+            }
             BOOST_CHECK(_error == nullptr);
             BOOST_CHECK_EQUAL(_nodeList->at(0)->nodeID()->hex(),
                 m_param->observerNodeList().at(0)->nodeID()->hex());

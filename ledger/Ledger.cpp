@@ -244,40 +244,38 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                 _onGetBlock(error, nullptr);
                 return;
             }
-        getBlock(_blockNumber, _blockFlag,
-            [_blockNumber, _onGetBlock](
-                Error::Ptr _error, protocol::Block::Ptr _block) {
-                if (!_error || _error->errorCode() == CommonError::SUCCESS)
-                {
-                    if (_block)
+            getBlock(_blockNumber, _blockFlag,
+                [_blockNumber, _onGetBlock](Error::Ptr _error, protocol::Block::Ptr _block) {
+                    if (!_error || _error->errorCode() == CommonError::SUCCESS)
                     {
-                        _onGetBlock(nullptr, _block);
+                        if (_block)
+                        {
+                            _onGetBlock(nullptr, _block);
+                        }
+                        else
+                        {
+                            LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBlockDataByNumber")
+                                              << LOG_DESC("Get a null block")
+                                              << LOG_KV("blockNumber", _blockNumber);
+                            // TODO: to add errorCode and message
+                            auto error = std::make_shared<Error>(-1, "get block return null");
+                            _onGetBlock(error, nullptr);
+                        }
                     }
                     else
                     {
                         LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBlockDataByNumber")
-                                          << LOG_DESC("Get a null block")
+                                          << LOG_DESC("callback error when get block")
+                                          << LOG_KV("errorCode", _error->errorCode())
+                                          << LOG_KV("errorMsg", _error->errorMessage())
                                           << LOG_KV("blockNumber", _blockNumber);
                         // TODO: to add errorCode and message
-                        auto error = std::make_shared<Error>(-1, "get block return null");
+                        auto error = std::make_shared<Error>(_error->errorCode(),
+                            "callback error in getBlock" + _error->errorMessage());
                         _onGetBlock(error, nullptr);
                     }
-                }
-                else
-                {
-                    LEDGER_LOG(ERROR)
-                        << LOG_BADGE("asyncGetBlockDataByNumber")
-                        << LOG_DESC("callback error when get block")
-                        << LOG_KV("errorCode", _error->errorCode())
-                        << LOG_KV("errorMsg", _error->errorMessage())
-                        << LOG_KV("blockNumber", _blockNumber);
-                    // TODO: to add errorCode and message
-                    auto error = std::make_shared<Error>(
-                        _error->errorCode(), "callback error in getBlock" + _error->errorMessage());
-                    _onGetBlock(error, nullptr);
-                }
-            });
-    });
+                });
+        });
 }
 
 void Ledger::asyncGetBlockNumber(
@@ -953,82 +951,86 @@ void Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag,
                 m_signalled.notify_all();
             });
         }
-        if(!fetchResult)
+
+        // it means _blockFlag has multiple 1 in binary
+        // should wait for all datum callback
+        if (_blockFlag & (_blockFlag - 1))
         {
-            auto error = std::make_shared<Error>(-1, "some data fetch failed");
-            _onGetBlock(error, nullptr);
-            return;
-        }
-        else
-        {
-            // it means _blockFlag has multiple 1 in binary
-            // should wait for all datum callback
-            if (_blockFlag & (_blockFlag - 1))
+            auto start_fetch_time = utcSteadyTime();
+            auto fetchSuccess = false;
+            while (utcSteadyTime() - start_fetch_time < m_timeout)
             {
-                auto start_fetch_time = utcSteadyTime();
-                auto fetchSuccess = false;
-                while (utcSteadyTime() - start_fetch_time < m_timeout)
+                // if fetch FULL_BLOCK, then fetchFlag should be 8+4+2
+                // if not, then fetchFlag should have multiple 1 in binary
+                if ((!(_blockFlag ^ FULL_BLOCK) &&
+                        (fetchFlag & (HEADER | TRANSACTIONS | RECEIPTS))) ||
+                    ((_blockFlag ^ FULL_BLOCK) && (fetchFlag & (fetchFlag - 1))))
                 {
-                    // if fetch FULL_BLOCK, then fetchFlag should be 8+4+2
-                    // if not, then fetchFlag should have multiple 1 in binary
-                    if ((!(_blockFlag ^ FULL_BLOCK) &&
-                         (fetchFlag & (HEADER | TRANSACTIONS | RECEIPTS))) ||
-                        ((_blockFlag ^ FULL_BLOCK) && (fetchFlag & (fetchFlag - 1))))
-                    {
-                        fetchSuccess = true;
-                        break;
-                    }
-                    boost::unique_lock<boost::mutex> l(x_signalled);
-                    m_signalled.wait_for(l, boost::chrono::milliseconds(10));
+                    fetchSuccess = true;
+                    break;
                 }
-                if (!fetchSuccess)
-                {
-                    LEDGER_LOG(ERROR)
-                        << LOG_BADGE("getBlock") << LOG_DESC("Get block from db timeout")
-                        << LOG_KV("blockFlag", _blockFlag);
-                    // TODO: add error code
-                    auto error = std::make_shared<Error>(-1, "timeout for getBlock");
-                    _onGetBlock(error, nullptr);
-                    return;
-                }
-                else
-                {
-                    if (!(_blockFlag ^ FULL_BLOCK))
-                    {
-                        // get full block data
-                        LEDGER_LOG(TRACE)
-                            << LOG_BADGE("getBlock") << LOG_DESC("Write to cache");
-                        m_blockCache.add(_blockNumber, block);
-                    }
-                    _onGetBlock(nullptr, block);
-                }
+                boost::unique_lock<boost::mutex> l(x_signalled);
+                m_signalled.wait_for(l, boost::chrono::milliseconds(10));
+            }
+            if (!fetchSuccess)
+            {
+                LEDGER_LOG(ERROR) << LOG_BADGE("getBlock") << LOG_DESC("Get block from db timeout")
+                                  << LOG_KV("blockFlag", _blockFlag);
+                // TODO: add error code
+                auto error = std::make_shared<Error>(-1, "timeout for getBlock");
+                _onGetBlock(error, nullptr);
+                return;
             }
             else
             {
-                auto start_fetch_time = utcSteadyTime();
-                auto fetchSuccess = false;
-                while (utcSteadyTime() - start_fetch_time < m_timeout)
+                if (!fetchResult)
                 {
-                    if (fetchFlag > 0)
-                    {
-                        fetchSuccess = true;
-                        break;
-                    }
-                }
-                if (!fetchSuccess)
-                {
-                    LEDGER_LOG(ERROR)
-                        << LOG_BADGE("getBlock") << LOG_DESC("Get block data from db timeout")
-                        << LOG_KV("blockFlag", _blockFlag);
-                    // TODO: add error code
-                    auto error = std::make_shared<Error>(-1, "timeout for get block data");
+                    auto error = std::make_shared<Error>(-1, "some data fetch failed");
                     _onGetBlock(error, nullptr);
                     return;
                 }
-                else
+                if (!(_blockFlag ^ FULL_BLOCK))
                 {
-                    _onGetBlock(nullptr, block);
+                    // get full block data
+                    LEDGER_LOG(TRACE) << LOG_BADGE("getBlock") << LOG_DESC("Write to cache");
+                    m_blockCache.add(_blockNumber, block);
                 }
+                _onGetBlock(nullptr, block);
+            }
+        }
+        else
+        {
+            auto start_fetch_time = utcSteadyTime();
+            auto fetchSuccess = false;
+            while (utcSteadyTime() - start_fetch_time < m_timeout)
+            {
+                if (fetchFlag > 0)
+                {
+                    fetchSuccess = true;
+                    break;
+                }
+                boost::unique_lock<boost::mutex> l(x_signalled);
+                m_signalled.wait_for(l, boost::chrono::milliseconds(10));
+            }
+            if (!fetchSuccess)
+            {
+                LEDGER_LOG(ERROR) << LOG_BADGE("getBlock")
+                                  << LOG_DESC("Get block data from db timeout")
+                                  << LOG_KV("blockFlag", _blockFlag);
+                // TODO: add error code
+                auto error = std::make_shared<Error>(-1, "timeout for get block data");
+                _onGetBlock(error, nullptr);
+                return;
+            }
+            else
+            {
+                if (!fetchResult)
+                {
+                    auto error = std::make_shared<Error>(-1, "some data fetch failed");
+                    _onGetBlock(error, nullptr);
+                    return;
+                }
+                _onGetBlock(nullptr, block);
             }
         }
         auto assemble_block = utcTime() - record_time;

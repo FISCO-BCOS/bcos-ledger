@@ -21,6 +21,7 @@
 #pragma once
 
 #include "bcos-ledger/ledger/utilities/Common.h"
+#include "bcos-framework/libutilities/ThreadPool.h"
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/libtable/Table.h"
@@ -35,6 +36,7 @@ class MockStorage : public StorageInterface
 public:
     MockStorage(){
         data[storage::SYS_TABLE] = std::map<std::string, Entry::Ptr>();
+        m_threadPool = std::make_shared<bcos::ThreadPool>("mockStorage", 100);
     }
     virtual ~MockStorage() = default;
 
@@ -61,12 +63,24 @@ public:
     {
         std::shared_ptr<Entry> ret = nullptr;
         std::lock_guard<std::mutex> lock(m_mutex);
-        if (data.count(_tableInfo->name))
+        LEDGER_LOG(TRACE) << LOG_BADGE("getRow") << LOG_KV("tableName", _tableInfo->name)
+                          << LOG_KV("key", _key);
+        if (data.find(_tableInfo->name) != data.end())
         {
-            if (data[_tableInfo->name].count(std::string(_key)))
+            if (data[_tableInfo->name].find(std::string(_key)) != data[_tableInfo->name].end())
             {
                 return data[_tableInfo->name][std::string(_key)];
             }
+            else
+            {
+                LEDGER_LOG(TRACE) << LOG_BADGE("getRow") << LOG_DESC("can't find key")
+                                  << LOG_KV("key", _key);
+            }
+        }
+        else
+        {
+            LEDGER_LOG(TRACE) << LOG_BADGE("getRow") << LOG_DESC("can't find table")
+                              << LOG_KV("tableName", _tableInfo->name);
         }
         return ret;
     }
@@ -148,29 +162,66 @@ public:
         const Condition::Ptr& _condition,
         std::function<void(const Error::Ptr&, const std::vector<std::string>&)> _callback) override
     {
-        auto keyList = getPrimaryKeys(_tableInfo, _condition);
-        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        auto error = std::make_shared<Error>(0, "");
-        _callback(error, keyList);
+        auto self =
+            std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
+        m_threadPool->enqueue([_tableInfo, _condition, _callback, self]() {
+            auto storage = self.lock();
+            if (storage)
+            {
+                auto keyList = storage->getPrimaryKeys(_tableInfo, _condition);
+                boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+                auto success = std::make_shared<Error>(0, "");
+                _callback(success, keyList);
+            }
+            else
+            {
+                _callback(std::make_shared<Error>(-1, ""), {});
+            }
+        });
+
     }
 
     void asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string_view& _key,
         std::function<void(const Error::Ptr&, const Entry::Ptr&)> _callback) override
     {
-        auto entry = getRow(_tableInfo, _key);
-        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        auto error = std::make_shared<Error>(0, "");
-        _callback(error, entry);
+        auto self =
+            std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
+        m_threadPool->enqueue([_tableInfo, _key, _callback, self]() {
+            auto storage = self.lock();
+            if (storage)
+            {
+                auto entry = storage->getRow(_tableInfo, _key);
+                boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+                auto error = std::make_shared<Error>(0, "");
+                _callback(error, entry);
+            }
+            else
+            {
+                _callback(std::make_shared<Error>(-1, ""), nullptr);
+            }
+        });
     }
     void asyncGetRows(const std::shared_ptr<TableInfo>& _tableInfo,
         const std::shared_ptr<std::vector<std::string>>& _keyList,
         std::function<void(const Error::Ptr&, const std::map<std::string, Entry::Ptr>&)> _callback)
         override
     {
-        auto rowMap = getRows(_tableInfo, *_keyList);
-        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        auto error = std::make_shared<Error>(0, "");
-        _callback(error, rowMap);
+        auto self =
+            std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
+        m_threadPool->enqueue([_tableInfo, _keyList, _callback, self]() {
+            auto storage = self.lock();
+            if (storage)
+            {
+                auto rowMap = storage->getRows(_tableInfo, *_keyList);
+                boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+                auto error = std::make_shared<Error>(0, "");
+                _callback(error, rowMap);
+            }
+            else
+            {
+                _callback(std::make_shared<Error>(-1, ""), {});
+            }
+        });
     }
 
     void asyncCommitBlock(protocol::BlockNumber _number,
@@ -178,29 +229,65 @@ public:
         const std::shared_ptr<std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>& _tableMap,
         std::function<void(const Error::Ptr&, size_t)> _callback) override
     {
-        auto retPair = commitBlock(_number, *_tableInfo, *_tableMap);
-        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        auto error = std::make_shared<Error>(0, "");
-        _callback(error, retPair.first);
+        auto self =
+            std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
+        m_threadPool->enqueue([_number, _tableInfo, _tableMap, _callback, self]() {
+            auto storage = self.lock();
+            if (storage)
+            {
+                auto retPair = storage->commitBlock(_number, *_tableInfo, *_tableMap);
+                boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+                auto error = std::make_shared<Error>(0, "");
+                _callback(error, retPair.first);
+            }
+            else
+            {
+                _callback(std::make_shared<Error>(-1, ""), -1);
+            }
+        });
     }
 
     // cache TableFactory
     void asyncAddStateCache(protocol::BlockNumber _number, const std::shared_ptr<TableFactoryInterface>& _table,
         std::function<void(const Error::Ptr&)> _callback) override
     {
-        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        addStateCache(_number, _table);
-        _callback(nullptr);
+        auto self =
+            std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
+        m_threadPool->enqueue([_number, _table, _callback, self]() {
+            auto storage = self.lock();
+            if (storage)
+            {
+                boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+                storage->addStateCache(_number, _table);
+                _callback(nullptr);
+            }
+            else
+            {
+                _callback(std::make_shared<Error>(-1, ""));
+            }
+        });
     }
     void asyncDropStateCache(protocol::BlockNumber, std::function<void(const Error::Ptr&)>) override {}
     void asyncGetStateCache(protocol::BlockNumber _blockNumber,
         std::function<void(const Error::Ptr&, const std::shared_ptr<TableFactoryInterface>&)> _callback)
         override
     {
-        auto tableFactory = getStateCache(_blockNumber);
-        boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-        auto error = std::make_shared<Error>(0, "");
-        _callback(error, tableFactory);
+        auto self =
+            std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
+        m_threadPool->enqueue([_blockNumber, _callback, self]() {
+            auto storage = self.lock();
+            if (storage)
+            {
+                auto tableFactory = storage->getStateCache(_blockNumber);
+                boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
+                auto error = std::make_shared<Error>(0, "");
+                _callback(error, tableFactory);
+            }
+            else
+            {
+                _callback(std::make_shared<Error>(-1, ""), nullptr);
+            }
+        });
     }
 
     std::shared_ptr<TableFactoryInterface> getStateCache(protocol::BlockNumber _blockNumber) override
@@ -245,6 +332,7 @@ public:
     {}
 
 private:
+    bcos::ThreadPool::Ptr m_threadPool = nullptr;
     std::map<std::string, std::map<std::string, Entry::Ptr>> data;
     mutable std::mutex m_mutex;
     std::map<protocol::BlockNumber, TableFactoryInterface::Ptr> m_number2TableFactory;
