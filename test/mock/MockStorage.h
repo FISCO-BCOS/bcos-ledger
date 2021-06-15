@@ -36,9 +36,12 @@ class MockStorage : public StorageInterface
 public:
     MockStorage(){
         data[storage::SYS_TABLE] = std::map<std::string, Entry::Ptr>();
-        m_threadPool = std::make_shared<bcos::ThreadPool>("mockStorage", 100);
+        m_threadPool = std::make_shared<bcos::ThreadPool>("mockStorage", 4);
     }
-    virtual ~MockStorage() = default;
+    virtual ~MockStorage()
+    {
+        m_threadPool->stop();
+    }
 
     std::vector<std::string> getPrimaryKeys(
         const std::shared_ptr<TableInfo>& _tableInfo,
@@ -77,11 +80,6 @@ public:
                                   << LOG_KV("key", _key);
             }
         }
-        else
-        {
-            LEDGER_LOG(TRACE) << LOG_BADGE("getRow") << LOG_DESC("can't find table")
-                              << LOG_KV("tableName", _tableInfo->name);
-        }
         return ret;
     }
     std::map<std::string, std::shared_ptr<Entry>> getRows(
@@ -90,6 +88,8 @@ public:
     {
         std::map<std::string, std::shared_ptr<Entry>> ret;
         std::lock_guard<std::mutex> lock(m_mutex);
+        LEDGER_LOG(TRACE) << LOG_BADGE("getRow") << LOG_KV("tableName", _tableInfo->name)
+                          << LOG_KV("keySize", _keys.size());
         if (data.count(_tableInfo->name))
         {
             for (auto& key : _keys)
@@ -184,13 +184,14 @@ public:
     void asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string_view& _key,
         std::function<void(const Error::Ptr&, const Entry::Ptr&)> _callback) override
     {
+        auto key = std::string(_key);
         auto self =
             std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
-        m_threadPool->enqueue([_tableInfo, _key, _callback, self]() {
+        m_threadPool->enqueue([_tableInfo, key, _callback, self]() {
             auto storage = self.lock();
             if (storage)
             {
-                auto entry = storage->getRow(_tableInfo, _key);
+                auto entry = storage->getRow(_tableInfo, key);
                 boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
                 auto error = std::make_shared<Error>(0, "");
                 _callback(error, entry);

@@ -126,9 +126,10 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
         });
 
     storageGetter->getSysConfig(
-        "", tableFactory, [&](Error::Ptr _error, std::shared_ptr<stringsPair> _config) {
+        "", tableFactory, [&](Error::Ptr _error, std::string _value, std::string _number) {
           BOOST_CHECK(_error->errorCode() == -1);
-          BOOST_CHECK_EQUAL(_config, nullptr);
+          BOOST_CHECK_EQUAL(_value, "");
+          BOOST_CHECK_EQUAL(_number, "");
         });
 }
 BOOST_AUTO_TEST_CASE(testGetterSetter)
@@ -210,10 +211,10 @@ BOOST_AUTO_TEST_CASE(testGetterSetter)
     auto setSysConfigRet = storageSetter->setSysConfig(tableFactory, "test", "test4", "0");
     BOOST_CHECK(setSysConfigRet);
     storageGetter->getSysConfig(
-        "test", tableFactory, [&](Error::Ptr _error, std::shared_ptr<stringsPair> getSysConfigRet) {
+        "test", tableFactory, [&](Error::Ptr _error, std::string _value, std::string _number) {
             BOOST_CHECK_EQUAL(_error, nullptr);
-            BOOST_CHECK_EQUAL(getSysConfigRet->first, "test4");
-            BOOST_CHECK_EQUAL(getSysConfigRet->second, "0");
+            BOOST_CHECK_EQUAL(_value, "test4");
+            BOOST_CHECK_EQUAL(_number, "0");
         });
 
     // SYS_CONSENSUS

@@ -132,7 +132,7 @@ void StorageSetter::recursiveBuildDir(
         fsValue["fileName"] = dir;
         fsValue["type"] = FS_TYPE_DIR;
         bool exist = false;
-        for (const Json::Value& _v: value[FS_KEY_SUB])
+        for (const Json::Value& _v : value[FS_KEY_SUB])
         {
             if (_v["fileName"].asString() == dir)
             {

@@ -114,7 +114,7 @@ public:
      * @return return a string pair <value, enableBlockNumber>
      */
     void getSysConfig(std::string _key, const storage::TableFactoryInterface::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, std::shared_ptr<stringsPair>)> _onGetConfig);
+        std::function<void(Error::Ptr, std::string, std::string)> _onGetConfig);
 
     /**
      * @brief get consensus node list in table SYS_CONSENSUS
@@ -126,7 +126,7 @@ public:
     void getConsensusConfig(const std::string& _nodeType,
         protocol::BlockNumber _blockNumber,
         const storage::TableFactoryInterface::Ptr& _tableFactory,
-        const crypto::KeyFactory::Ptr& _keyFactory,
+        crypto::KeyFactory::Ptr _keyFactory,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig);
 
     void getBatchTxByHashList(

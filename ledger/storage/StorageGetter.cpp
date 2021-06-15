@@ -71,13 +71,7 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
         _onGetData)
 {
     auto retMap = std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
-
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-
     auto table = _tableFactory->openTable(SYS_BLOCK_NUMBER_2_NONCES);
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
 
     if (table)
     {
@@ -88,11 +82,9 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
         }
 
         table->asyncGetRows(numberList,
-            [&](const Error::Ptr& _error, const std::map<std::string, Entry::Ptr>& numberEntryMap) {
+            [=](const Error::Ptr& _error, const std::map<std::string, Entry::Ptr>& numberEntryMap) {
                 if (!_error || _error->errorCode() == CommonError::SUCCESS)
                 {
-                    auto select_time_cost = utcTime() - record_time;
-                    record_time = utcTime();
                     if (numberEntryMap.size() != size_t(_endNumber - _startNumber + 1))
                     {
                         LEDGER_LOG(DEBUG) << LOG_DESC(
@@ -111,12 +103,7 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
                         auto nonceList = std::make_shared<protocol::NonceList>(block->nonceList());
                         retMap->emplace(std::make_pair(boost::lexical_cast<BlockNumber>(number), nonceList));
                     }
-                    auto get_field_time_cost = utcTime() - record_time;
-                    LEDGER_LOG(DEBUG) << LOG_DESC("Get Nonce list from db")
-                                      << LOG_KV("openTableTimeCost", openTable_time_cost)
-                                      << LOG_KV("selectTimeCost", select_time_cost)
-                                      << LOG_KV("getFieldTimeCost", get_field_time_cost)
-                                      << LOG_KV("totalTimeCost", utcTime() - start_time);
+                    LEDGER_LOG(DEBUG) << LOG_DESC("Get Nonce list from db");
                     _onGetData(nullptr, retMap);
                 }
                 else{
@@ -160,44 +147,31 @@ void StorageGetter::getCurrentState(std::string _row,
 }
 
 void StorageGetter::getSysConfig(std::string _key, const TableFactoryInterface::Ptr& _tableFactory,
-    std::function<void(Error::Ptr, std::shared_ptr<stringsPair>)> _onGetConfig)
+    std::function<void(Error::Ptr, std::string, std::string)> _onGetConfig)
 {
-    auto ret = std::make_shared<stringsPair>(std::make_pair("", ""));
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-
     auto table = _tableFactory->openTable(SYS_CONFIG);
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
     if (table)
     {
-        table->asyncGetRow(_key, [&](const Error::Ptr& _error, std::shared_ptr<Entry> _entry) {
+        table->asyncGetRow(_key, [_onGetConfig](const Error::Ptr& _error, std::shared_ptr<Entry> _entry) {
             if(!_error || _error->errorCode() == CommonError::SUCCESS)
             {
-                auto select_time_cost = utcTime() - record_time;
                 if (_entry)
                 {
                     auto value = _entry->getField(SYS_VALUE);
                     auto number = _entry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER);
-                    auto get_field_time_cost = utcTime() - record_time;
-
-                    ret->first.swap(value);
-                    ret->second.swap(number);
 
                     LEDGER_LOG(DEBUG)
-                        << LOG_DESC("Get config from db") << LOG_KV("openTable", SYS_CONFIG)
-                        << LOG_KV("openTableTimeCost", openTable_time_cost)
-                        << LOG_KV("selectTimeCost", select_time_cost)
-                        << LOG_KV("getFieldTimeCost", get_field_time_cost)
-                        << LOG_KV("totalTimeCost", utcTime() - start_time);
-                    _onGetConfig(nullptr, ret);
+                        << LOG_BADGE("getSysConfig") << LOG_DESC("Get config from db")
+                        << LOG_KV("openTable", SYS_CONFIG) << LOG_KV("value", value)
+                        << LOG_KV("number", number);
+                    _onGetConfig(nullptr, value, number);
                 }
                 else
                 {
                     // TODO: add error msg
                     auto error =
                         std::make_shared<Error>(-1, "");
-                    _onGetConfig(error, ret);
+                    _onGetConfig(error, "", "");
                 }
             }
             else
@@ -205,7 +179,7 @@ void StorageGetter::getSysConfig(std::string _key, const TableFactoryInterface::
                 // TODO: add error msg
                 auto error =
                     std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
-                _onGetConfig(error, ret);
+                _onGetConfig(error, "", "");
             }
         });
     }
@@ -214,13 +188,13 @@ void StorageGetter::getSysConfig(std::string _key, const TableFactoryInterface::
         LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_CONFIG table error from db");
         // TODO: add error msg
         auto error = std::make_shared<Error>(-1, "");
-        _onGetConfig(error, nullptr);
+        _onGetConfig(error, "", "");
     }
 }
 
 void StorageGetter::getConsensusConfig(const std::string& _nodeType,
     BlockNumber _blockNumber, const TableFactoryInterface::Ptr& _tableFactory,
-    const crypto::KeyFactory::Ptr& _keyFactory,
+    crypto::KeyFactory::Ptr _keyFactory,
     std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
 {
     ConsensusNodeListPtr nodeList = std::make_shared<ConsensusNodeList>();
@@ -232,14 +206,16 @@ void StorageGetter::getConsensusConfig(const std::string& _nodeType,
 
     if (table)
     {
-        table->asyncGetPrimaryKeys(nullptr, [_onGetConfig, &table, _nodeType, _blockNumber, &_keyFactory, nodeList](const Error::Ptr& _error, std::vector<std::string> _keys) {
+        table->asyncGetPrimaryKeys(nullptr, [_onGetConfig, table, _nodeType, _blockNumber,
+                                                _keyFactory, nodeList](const Error::Ptr& _error,
+                                                std::vector<std::string> _keys) {
             if (!_error || _error->errorCode() == CommonError::SUCCESS)
             {
-                if(!_keys.empty())
+                if (!_keys.empty())
                 {
                     auto keys = std::make_shared<std::vector<std::string>>(_keys);
                     table->asyncGetRows(
-                        keys, [_nodeType, _blockNumber, &_keyFactory, _onGetConfig, nodeList](
+                        keys, [_nodeType, _blockNumber, _keyFactory, _onGetConfig, nodeList](
                                   const Error::Ptr& _error,
                                   const std::map<std::string, Entry::Ptr>& _entryMap) {
                             if (!_error || _error->errorCode() == CommonError::SUCCESS)
@@ -355,7 +331,7 @@ void StorageGetter::getBatchTxByHashList(
     if (table)
     {
         table->asyncGetRows(_hashList,
-            [&_txFactory, _onGetTx, _hashList, txList](
+            [_txFactory, _onGetTx, _hashList, txList](
                 const Error::Ptr& _error, const std::map<std::string, Entry::Ptr>& _hashEntryMap) {
                 if (!_error || _error->errorCode() == CommonError::SUCCESS)
                 {
