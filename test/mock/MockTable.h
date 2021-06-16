@@ -19,7 +19,7 @@
  */
 #pragma once
 
-#include "../../ledger/utilities/Common.h"
+#include "bcos-ledger/ledger/utilities/Common.h"
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/libtable/Table.h"
 #include "bcos-framework/libtable/TableFactory.h"
@@ -67,11 +67,11 @@ class MockErrorTableFactory : public TableFactory
 {
 public:
     explicit MockErrorTableFactory(storage::StorageInterface::Ptr _db) : TableFactory(_db, nullptr, -1) {
-        m_sysTables.push_back(SYS_TABLE);
+        m_sysTables.emplace_back(SYS_TABLE);
     }
     std::shared_ptr<TableInterface> openTable(const std::string & _tableName) override
     {
-        if(_tableName == SYS_TABLE)
+        if (std::find(m_sysTables.begin(), m_sysTables.end(), _tableName) != m_sysTables.end())
         {
             return TableFactory::openTable(_tableName);
         }
@@ -83,6 +83,8 @@ public:
     bool createTable(const std::string& _tableName, const std::string& _keyField,
         const std::string& _valueFields) override
     {
+        if(_tableName.at(0) == '/')
+            m_sysTables.emplace_back(_tableName);
         return TableFactory::createTable(_tableName, _keyField, _valueFields);
     }
     std::pair<size_t, Error::Ptr> commit() override { return {0, std::make_shared<Error>(-1, "")}; }

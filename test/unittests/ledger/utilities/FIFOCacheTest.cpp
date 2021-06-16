@@ -18,7 +18,7 @@
  * @date 2021-04-14
  */
 
-#include "../ledger/utilities/FIFOCache.h"
+#include "bcos-ledger/ledger/utilities/FIFOCache.h"
 #include "unittests/ledger/common/FakeBlock.h"
 #include <bcos-framework/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>

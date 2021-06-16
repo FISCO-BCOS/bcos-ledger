@@ -19,11 +19,12 @@
  */
 
 #include "StorageSetter.h"
-#include "../utilities/Common.h"
-#include "../utilities/BlockUtilities.h"
+#include "bcos-ledger/ledger/utilities/Common.h"
+#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <json/json.h>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -47,18 +48,118 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     _tableFactory->createTable(SYS_NUMBER_2_TXS, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_HASH_2_RECEIPT, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_BLOCK_NUMBER_2_NONCES, "block_num", SYS_VALUE);
-
+    createFileSystemTables(_tableFactory);
     // db sync commit
     auto retPair = _tableFactory->commit();
     if ((retPair.second == nullptr || retPair.second->errorCode() == CommonError::SUCCESS) && retPair.first > 0)
     {
-        LEDGER_LOG(TRACE) << LOG_DESC("[#buildGenesisBlock]Storage commit success")
+        LEDGER_LOG(TRACE) << LOG_BADGE("createTables") << LOG_DESC("Storage commit success")
                           << LOG_KV("commitSize", retPair.first);
     }
     else
     {
-        LEDGER_LOG(ERROR) << LOG_DESC("[#buildGenesisBlock]Storage commit error");
+        LEDGER_LOG(ERROR) << LOG_BADGE("createTables") << LOG_DESC("Storage commit error");
         BOOST_THROW_EXCEPTION(CreateSysTableFailed() << errinfo_comment(""));
+    }
+}
+
+void StorageSetter::createFileSystemTables(const storage::TableFactoryInterface::Ptr& _tableFactory)
+{
+    _tableFactory->createTable(FS_ROOT, SYS_KEY, SYS_VALUE);
+    auto table = _tableFactory->openTable(FS_ROOT);
+    auto typeEntry = table->newEntry();
+    typeEntry->setField(SYS_VALUE, FS_TYPE_DIR);
+    table->setRow(FS_KEY_TYPE, typeEntry);
+
+    auto subEntry = table->newEntry();
+    subEntry->setField(SYS_VALUE, "{}");
+    table->setRow(FS_KEY_SUB, subEntry);
+
+    recursiveBuildDir(_tableFactory, FS_USER_BIN);
+    recursiveBuildDir(_tableFactory, FS_USER_LOCAL);
+    recursiveBuildDir(_tableFactory, FS_SYS_BIN);
+    recursiveBuildDir(_tableFactory, FS_USER_DATA);
+}
+void StorageSetter::recursiveBuildDir(
+    const TableFactoryInterface::Ptr& _tableFactory, const std::string& _absoluteDir)
+{
+    if (_absoluteDir.empty())
+    {
+        return;
+    }
+    auto dirList = std::make_shared<std::vector<std::string>>();
+    std::string absoluteDir = _absoluteDir;
+    if (absoluteDir[0] == '/')
+    {
+        absoluteDir = absoluteDir.substr(1);
+    }
+    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
+    {
+        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
+    }
+    boost::split(*dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
+    std::string root = "/";
+    Json::Reader reader;
+    Json::Value value, fsValue;
+    Json::FastWriter fastWriter;
+    for (auto& dir : *dirList)
+    {
+        auto table = _tableFactory->openTable(root);
+        if (root != "/")
+        {
+            root += "/";
+        }
+        if (!table)
+        {
+            LEDGER_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
+                              << LOG_DESC("can not open table root") << LOG_KV("root", root);
+            return;
+        }
+        auto entry = table->getRow(FS_KEY_SUB);
+        if (!entry)
+        {
+            LEDGER_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
+                              << LOG_DESC("can get entry of FS_KEY_SUB") << LOG_KV("root", root);
+            return;
+        }
+        auto subdirectories = entry->getField(SYS_VALUE);
+        if (!reader.parse(subdirectories, value))
+        {
+            LEDGER_LOG(ERROR) << LOG_BADGE("recursiveBuildDir") << LOG_DESC("parse json error")
+                              << LOG_KV("jsonStr", subdirectories);
+            return;
+        }
+        fsValue["fileName"] = dir;
+        fsValue["type"] = FS_TYPE_DIR;
+        bool exist = false;
+        for (const Json::Value& _v : value[FS_KEY_SUB])
+        {
+            if (_v["fileName"].asString() == dir)
+            {
+                exist = true;
+                break;
+            }
+        }
+        if (exist)
+        {
+            root += dir;
+            continue;
+        }
+        value[FS_KEY_SUB].append(fsValue);
+        entry->setField(SYS_VALUE, fastWriter.write(value));
+        table->setRow(FS_KEY_SUB, entry);
+
+        std::string newDir = root + dir;
+        _tableFactory->createTable(newDir, SYS_KEY, SYS_VALUE);
+        auto newTable = _tableFactory->openTable(newDir);
+        auto typeEntry = newTable->newEntry();
+        typeEntry->setField(SYS_VALUE, FS_TYPE_DIR);
+        newTable->setRow(FS_KEY_TYPE, typeEntry);
+
+        auto subEntry = newTable->newEntry();
+        subEntry->setField(SYS_VALUE, "{}");
+        newTable->setRow(FS_KEY_SUB, subEntry);
+        root += dir;
     }
 }
 
@@ -200,5 +301,4 @@ bool StorageSetter::setHashToReceipt(const bcos::storage::TableFactoryInterface:
 {
     return syncTableSetter(_tableFactory, SYS_HASH_2_RECEIPT, _txHash, SYS_VALUE, _encodeReceipt);
 }
-
 } // namespace bcos::ledger
