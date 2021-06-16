@@ -29,7 +29,8 @@
 
 namespace bcos::ledger
 {
-class MerkleProofUtility{
+class MerkleProofUtility
+{
 public:
     using Ptr = std::shared_ptr<MerkleProofUtility>;
     template <typename T>
@@ -37,17 +38,17 @@ public:
     {
         auto protocolDataSize = _protocolDataList->size();
         _encodedList.resize(protocolDataSize);
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, protocolDataSize), [&](const tbb::blocked_range<size_t>& _r) {
-              for (auto i = _r.begin(); i < _r.end(); ++i)
-              {
-                  bcos::codec::scale::ScaleEncoderStream stream;
-                  stream << i;
-                  bytes encodedData = stream.data();
-                  auto hash = ((*_protocolDataList)[i])->hash();
-                  encodedData.insert(encodedData.end(), hash.begin(), hash.end());
-                  _encodedList[i] = std::move(encodedData);
-              }
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, protocolDataSize),
+            [&](const tbb::blocked_range<size_t>& _r) {
+                for (auto i = _r.begin(); i < _r.end(); ++i)
+                {
+                    bcos::codec::scale::ScaleEncoderStream stream;
+                    stream << i;
+                    bytes encodedData = stream.data();
+                    auto hash = ((*_protocolDataList)[i])->hash();
+                    encodedData.insert(encodedData.end(), hash.begin(), hash.end());
+                    _encodedList[i] = std::move(encodedData);
+                }
             });
     }
 
@@ -96,8 +97,7 @@ private:
 
     std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>> m_txsChild2ParentCache;
     mutable SharedMutex x_txsChild2ParentCache;
-
 };
 
 
-} // namespace bcos::ledger
+}  // namespace bcos::ledger

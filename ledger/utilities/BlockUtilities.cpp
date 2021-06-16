@@ -21,18 +21,20 @@
 #include "BlockUtilities.h"
 #include <bcos-framework/interfaces/protocol/Block.h>
 
-namespace bcos::ledger{
-
+namespace bcos::ledger
+{
 protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr& _block)
 {
     auto txs = std::make_shared<protocol::Transactions>();
-    if(_block == nullptr){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block is null, return nullptr");
+    if (_block == nullptr)
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Block is null, return nullptr");
         return nullptr;
     }
     auto txSize = _block->transactionsSize();
-    if(txSize == 0){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block transactions size is 0, return empty");
+    if (txSize == 0)
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Block transactions size is 0, return empty");
         return txs;
     }
     for (size_t i = 0; i < txSize; ++i)
@@ -46,13 +48,15 @@ protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr&
 std::shared_ptr<std::vector<std::string>> blockTxHashListGetter(const protocol::Block::Ptr& _block)
 {
     auto txHashList = std::make_shared<std::vector<std::string>>();
-    if(_block == nullptr){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block is null, return nullptr");
+    if (_block == nullptr)
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Block is null, return nullptr");
         return nullptr;
     }
     auto txHashSize = _block->transactionsHashSize();
-    if(txHashSize == 0){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block transactions size is 0, return empty");
+    if (txHashSize == 0)
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Block transactions size is 0, return empty");
         return txHashList;
     }
     for (size_t i = 0; i < txHashSize; ++i)
@@ -63,10 +67,12 @@ std::shared_ptr<std::vector<std::string>> blockTxHashListGetter(const protocol::
 }
 
 
-size_t blockTransactionListSetter(const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs){
-
-    if(_block == nullptr || _txs == nullptr){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("blockTransactionListSetter set error");
+size_t blockTransactionListSetter(
+    const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs)
+{
+    if (_block == nullptr || _txs == nullptr)
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("blockTransactionListSetter set error");
         return -1;
     }
     for (const auto& tx : *_txs)
@@ -80,13 +86,15 @@ size_t blockTransactionListSetter(const protocol::Block::Ptr& _block, const prot
 protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block)
 {
     auto receipts = std::make_shared<protocol::Receipts>();
-    if(_block == nullptr){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block is null, return nullptr");
+    if (_block == nullptr)
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Block is null, return nullptr");
         return nullptr;
     }
     auto receiptSize = _block->receiptsSize();
-    if(receiptSize == 0){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block receipts size is 0, return empty");
+    if (receiptSize == 0)
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Block receipts size is 0, return empty");
         return receipts;
     }
     for (size_t i = 0; i < receiptSize; ++i)
@@ -97,10 +105,12 @@ protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block)
     return receipts;
 }
 
-size_t blockReceiptListSetter(const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts)
+size_t blockReceiptListSetter(
+    const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts)
 {
-    if(_block == nullptr || _receipts == nullptr){
-        LEDGER_LOG(DEBUG)<<LOG_DESC("Block receipts set error");
+    if (_block == nullptr || _receipts == nullptr)
+    {
+        LEDGER_LOG(DEBUG) << LOG_DESC("Block receipts set error");
         return -1;
     }
     for (const auto& rcpt : *_receipts)
@@ -141,4 +151,4 @@ bcos::protocol::TransactionReceipt::Ptr decodeReceipt(
     receipt = _receiptFactory->createReceipt(asBytes(_receiptStr));
     return receipt;
 }
-}
+}  // namespace bcos::ledger

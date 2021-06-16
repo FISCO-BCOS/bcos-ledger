@@ -32,7 +32,6 @@ namespace bcos
 {
 namespace test
 {
-
 inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, int32_t _version,
     const ParentInfoList& _parentInfo, h256 const& _txsRoot, h256 const& _receiptRoot,
     h256 const& _stateRoot, int64_t _number, u256 const& _gasUsed, int64_t _timestamp,
@@ -87,7 +86,7 @@ inline std::vector<bytes> fakeSealerList(
 }
 
 inline SignatureList fakeSignatureList(SignatureCrypto::Ptr _signImpl,
-                                       std::vector<KeyPairInterface::Ptr>& _keyPairVec, h256 const& _hash)
+    std::vector<KeyPairInterface::Ptr>& _keyPairVec, h256 const& _hash)
 {
     auto sealerIndex = 0;
     SignatureList signatureList;
@@ -123,7 +122,7 @@ inline BlockHeader::Ptr testPBBlockHeader(CryptoSuite::Ptr _cryptoSuite, BlockNu
 
     auto blockHeader =
         fakeAndTestBlockHeader(cryptoSuite, version, parentInfo, txsRoot, receiptRoot, stateRoot,
-                               number, gasUsed, timestamp, sealer, sealerList, extraData, signatureList);
+            number, gasUsed, timestamp, sealer, sealerList, extraData, signatureList);
     return blockHeader;
 }
 }  // namespace test

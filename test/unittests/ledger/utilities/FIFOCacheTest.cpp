@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(testBlockCacheAddMax)
     auto crypto = createCryptoSuite();
     auto blockFactory = createBlockFactory(crypto);
     auto blocks = fakeBlocks(crypto, blockFactory, 1, 1, 11);
-    for (auto & block : *blocks)
+    for (auto& block : *blocks)
     {
         _blockFIFOCache.add(block->blockHeader()->number(), block);
     }
@@ -79,4 +79,4 @@ BOOST_AUTO_TEST_CASE(testGetEmpty)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-}  // namespace bcos
+}  // namespace bcos::test

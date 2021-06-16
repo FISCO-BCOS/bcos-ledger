@@ -19,42 +19,48 @@
  */
 #pragma once
 
-#include "bcos-ledger/ledger/utilities/Common.h"
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/libtable/Table.h"
 #include "bcos-framework/libtable/TableFactory.h"
+#include "bcos-ledger/ledger/utilities/Common.h"
 #include <tbb/concurrent_unordered_map.h>
 
 using namespace bcos::storage;
 using namespace bcos::ledger;
 
-namespace bcos::test{
+namespace bcos::test
+{
 class MockTable : public Table
 {
 public:
     using Ptr = std::shared_ptr<MockTable>;
 
-    explicit MockTable(std::string const& _tableName):Table(nullptr, nullptr, nullptr, 0),
-        m_tableName(_tableName) {}
+    explicit MockTable(std::string const& _tableName)
+      : Table(nullptr, nullptr, nullptr, 0), m_tableName(_tableName)
+    {}
 
-    std::shared_ptr<Entry> getRow(const std::string &_key) override
+    std::shared_ptr<Entry> getRow(const std::string& _key) override
     {
         auto entry = m_fakeStorage[_key];
-        if(entry){
+        if (entry)
+        {
             return entry;
         }
         return nullptr;
     }
 
-    bool setRow(const std::string &_key, const std::shared_ptr<Entry>& _entry) override{
+    bool setRow(const std::string& _key, const std::shared_ptr<Entry>& _entry) override
+    {
         m_fakeStorage[_key] = _entry;
         return true;
     }
 
-    std::vector<std::string> getPrimaryKeys(const Condition::Ptr&) const override{
+    std::vector<std::string> getPrimaryKeys(const Condition::Ptr&) const override
+    {
         std::vector<std::string> keys;
         keys.reserve(m_fakeStorage.size());
-        std::transform(m_fakeStorage.begin(), m_fakeStorage.end(), keys.begin(), [](auto pair){return pair.first;});
+        std::transform(m_fakeStorage.begin(), m_fakeStorage.end(), keys.begin(),
+            [](auto pair) { return pair.first; });
         return keys;
     }
 
@@ -66,10 +72,12 @@ private:
 class MockErrorTableFactory : public TableFactory
 {
 public:
-    explicit MockErrorTableFactory(storage::StorageInterface::Ptr _db) : TableFactory(_db, nullptr, -1) {
+    explicit MockErrorTableFactory(storage::StorageInterface::Ptr _db)
+      : TableFactory(_db, nullptr, -1)
+    {
         m_sysTables.emplace_back(SYS_TABLE);
     }
-    std::shared_ptr<TableInterface> openTable(const std::string & _tableName) override
+    std::shared_ptr<TableInterface> openTable(const std::string& _tableName) override
     {
         if (std::find(m_sysTables.begin(), m_sysTables.end(), _tableName) != m_sysTables.end())
         {
@@ -83,7 +91,7 @@ public:
     bool createTable(const std::string& _tableName, const std::string& _keyField,
         const std::string& _valueFields) override
     {
-        if(_tableName.at(0) == '/')
+        if (_tableName.at(0) == '/')
             m_sysTables.emplace_back(_tableName);
         return TableFactory::createTable(_tableName, _keyField, _valueFields);
     }
@@ -91,4 +99,4 @@ public:
 
     std::vector<std::string> m_sysTables;
 };
-}
+}  // namespace bcos::test

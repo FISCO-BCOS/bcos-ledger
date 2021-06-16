@@ -69,7 +69,7 @@ class DirInfo
 {
 public:
     DirInfo() = default;
-    DirInfo(const std::vector<FileInfo>& subDir) : subDir(subDir) {}
+    explicit DirInfo(const std::vector<FileInfo>& subDir) : subDir(subDir) {}
     const std::vector<FileInfo>& getSubDir() const { return subDir; }
     std::vector<FileInfo>& getMutableSubDir() { return subDir; }
     std::string toString();

@@ -19,14 +19,16 @@
  */
 #pragma once
 
+#include "bcos-framework/libtable/Table.h"
+#include "bcos-framework/libtable/TableFactory.h"
 #include "mock/MockStorage.h"
 #include "mock/MockTable.h"
-#include "bcos-framework/libtable/TableFactory.h"
-#include "bcos-framework/libtable/Table.h"
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 
-namespace bcos::test{
-inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockNumber){
+namespace bcos::test
+{
+inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockNumber)
+{
     auto hashImpl = std::make_shared<Keccak256Hash>();
     auto storage = std::make_shared<MockStorage>();
     auto tableFactory = std::make_shared<TableFactory>(storage, hashImpl, _blockNumber);
@@ -34,9 +36,10 @@ inline storage::TableFactory::Ptr fakeTableFactory(protocol::BlockNumber _blockN
     return tableFactory;
 }
 
-inline storage::TableFactory::Ptr fakeErrorTableFactory(){
+inline storage::TableFactory::Ptr fakeErrorTableFactory()
+{
     auto storage = std::make_shared<MockStorage>();
     auto tableFactory = std::make_shared<MockErrorTableFactory>(storage);
     return tableFactory;
 }
-}
+}  // namespace bcos::test

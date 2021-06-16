@@ -20,9 +20,9 @@
 
 #include "StorageSetter.h"
 #include "bcos-ledger/ledger/utilities/Common.h"
-#include <boost/lexical_cast.hpp>
-#include <boost/algorithm/string.hpp>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -30,7 +30,6 @@ using namespace bcos::storage;
 
 namespace bcos::ledger
 {
-
 std::string FileInfo::toString()
 {
     std::stringstream ss;
@@ -49,9 +48,8 @@ bool FileInfo::fromString(FileInfo& _f, std::string _str)
     }
     catch (boost::archive::archive_exception const& e)
     {
-        LEDGER_LOG(ERROR) << LOG_BADGE("FileInfo::fromString")
-                          << LOG_DESC("deserialization error") << LOG_KV("e.what", e.what())
-                          << LOG_KV("str", _str);
+        LEDGER_LOG(ERROR) << LOG_BADGE("FileInfo::fromString") << LOG_DESC("deserialization error")
+                          << LOG_KV("e.what", e.what()) << LOG_KV("str", _str);
         return false;
     }
     return true;
@@ -75,9 +73,8 @@ bool DirInfo::fromString(DirInfo& _dir, std::string _str)
     }
     catch (boost::archive::archive_exception const& e)
     {
-        LEDGER_LOG(ERROR) << LOG_BADGE("DirInfo::fromString")
-                          << LOG_DESC("deserialization error") << LOG_KV("e.what", e.what())
-                          << LOG_KV("str", _str);
+        LEDGER_LOG(ERROR) << LOG_BADGE("DirInfo::fromString") << LOG_DESC("deserialization error")
+                          << LOG_KV("e.what", e.what()) << LOG_KV("str", _str);
         return false;
     }
     return true;
@@ -86,7 +83,8 @@ bool DirInfo::fromString(DirInfo& _dir, std::string _str)
 void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tableFactory)
 {
     auto configFields = boost::join(std::vector{SYS_VALUE, SYS_CONFIG_ENABLE_BLOCK_NUMBER}, ",");
-    auto consensusFields = boost::join(std::vector{NODE_TYPE, NODE_WEIGHT, NODE_ENABLE_NUMBER}, ",");
+    auto consensusFields =
+        boost::join(std::vector{NODE_TYPE, NODE_WEIGHT, NODE_ENABLE_NUMBER}, ",");
 
     _tableFactory->createTable(SYS_CONFIG, SYS_KEY, configFields);
     _tableFactory->createTable(SYS_CONSENSUS, "node_id", consensusFields);
@@ -101,7 +99,8 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     createFileSystemTables(_tableFactory);
     // db sync commit
     auto retPair = _tableFactory->commit();
-    if ((retPair.second == nullptr || retPair.second->errorCode() == CommonError::SUCCESS) && retPair.first > 0)
+    if ((retPair.second == nullptr || retPair.second->errorCode() == CommonError::SUCCESS) &&
+        retPair.first > 0)
     {
         LEDGER_LOG(TRACE) << LOG_BADGE("createTables") << LOG_DESC("Storage commit success")
                           << LOG_KV("commitSize", retPair.first);
@@ -181,7 +180,8 @@ void StorageSetter::recursiveBuildDir(
         bool exist = false;
         for (const FileInfo& _f : parentDir.getSubDir())
         {
-            if(_f.getName() == dir){
+            if (_f.getName() == dir)
+            {
                 exist = true;
                 break;
             }
@@ -213,9 +213,9 @@ void StorageSetter::recursiveBuildDir(
     }
 }
 
-bool StorageSetter::syncTableSetter(
-    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName,
-    const std::string& _row, const std::string& _fieldName, const std::string& _fieldValue)
+bool StorageSetter::syncTableSetter(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    const std::string& _tableName, const std::string& _row, const std::string& _fieldName,
+    const std::string& _fieldValue)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -224,19 +224,21 @@ bool StorageSetter::syncTableSetter(
     auto openTable_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    if(table){
+    if (table)
+    {
         auto entry = table->newEntry();
         entry->setField(_fieldName, _fieldValue);
         auto ret = table->setRow(_row, entry);
         auto insertTable_time_cost = utcTime() - record_time;
 
-        LEDGER_LOG(DEBUG) << LOG_BADGE("Write data to DB")
-                          << LOG_KV("openTable", _tableName)
+        LEDGER_LOG(DEBUG) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", _tableName)
                           << LOG_KV("openTableTimeCost", openTable_time_cost)
                           << LOG_KV("insertTableTimeCost", insertTable_time_cost)
                           << LOG_KV("totalTimeCost", utcTime() - start_time);
         return ret;
-    } else{
+    }
+    else
+    {
         BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(_tableName));
     }
 }
@@ -264,7 +266,7 @@ bool StorageSetter::setHash2Number(const TableFactoryInterface::Ptr& _tableFacto
 }
 
 bool StorageSetter::setNumber2Hash(const TableFactoryInterface::Ptr& _tableFactory,
-                                   const std::string& _row, const std::string& _hashValue)
+    const std::string& _row, const std::string& _hashValue)
 {
     return syncTableSetter(_tableFactory, SYS_NUMBER_2_HASH, _row, SYS_VALUE, _hashValue);
 }
@@ -347,8 +349,9 @@ bool StorageSetter::setHashToTx(const bcos::storage::TableFactoryInterface::Ptr&
     return syncTableSetter(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE, _encodeTx);
 }
 
-bool StorageSetter::setHashToReceipt(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _txHash, const std::string& _encodeReceipt)
+bool StorageSetter::setHashToReceipt(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    const std::string& _txHash, const std::string& _encodeReceipt)
 {
     return syncTableSetter(_tableFactory, SYS_HASH_2_RECEIPT, _txHash, SYS_VALUE, _encodeReceipt);
 }
-} // namespace bcos::ledger
+}  // namespace bcos::ledger
