@@ -18,15 +18,15 @@
  * @date 2021-05-06
  */
 
-#include "unittests/ledger/common/FakeTable.h"
-#include "unittests/ledger/common/FakeBlock.h"
-#include "mock/MockKeyFactor.h"
 #include "bcos-ledger/ledger/storage/StorageGetter.h"
 #include "bcos-ledger/ledger/storage/StorageSetter.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include "mock/MockKeyFactor.h"
+#include "unittests/ledger/common/FakeBlock.h"
+#include "unittests/ledger/common/FakeTable.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
-#include <boost/test/unit_test.hpp>
+#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <boost/lexical_cast.hpp>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -34,16 +34,18 @@ using namespace bcos::protocol;
 
 namespace bcos::test
 {
-class TableFactoryFixture : public TestPromptFixture{
+class TableFactoryFixture : public TestPromptFixture
+{
 public:
-    TableFactoryFixture() :TestPromptFixture(){
+    TableFactoryFixture() : TestPromptFixture()
+    {
         tableFactory = fakeTableFactory(0);
-        BOOST_TEST(tableFactory!=nullptr);
-        storageGetter =  StorageGetter::storageGetterFactory();
+        BOOST_TEST(tableFactory != nullptr);
+        storageGetter = StorageGetter::storageGetterFactory();
         storageSetter = StorageSetter::storageSetterFactory();
         storageSetter->createTables(tableFactory);
     }
-    ~TableFactoryFixture(){}
+    ~TableFactoryFixture() {}
 
     TableFactoryInterface::Ptr tableFactory = nullptr;
     StorageSetter::Ptr storageSetter = nullptr;
@@ -56,16 +58,24 @@ BOOST_AUTO_TEST_CASE(testCreateTable)
 {
     auto table = tableFactory->openTable(FS_ROOT);
     BOOST_CHECK_EQUAL(table->getRow(FS_KEY_TYPE)->getField(SYS_VALUE), "directory");
-    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_SUB)->getField(SYS_VALUE),
-        "{\"subdirectories\":[{\"fileName\":\"usr\",\"type\":\"directory\"},{\"fileName\":\"bin\",\"type\":\"directory\"},{\"fileName\":\"data\",\"type\":\"directory\"}]}\n");
+    DirInfo d1;
+    DirInfo::fromString(d1, table->getRow(FS_KEY_SUB)->getField(SYS_VALUE));
+    BOOST_CHECK_EQUAL(d1.getSubDir().at(0).getName(), "usr");
+    BOOST_CHECK_EQUAL(d1.getSubDir().at(1).getName(), "bin");
+    BOOST_CHECK_EQUAL(d1.getSubDir().at(2).getName(), "data");
 
     table = tableFactory->openTable("/usr");
     BOOST_CHECK_EQUAL(table->getRow(FS_KEY_TYPE)->getField(SYS_VALUE), "directory");
-    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_SUB)->getField(SYS_VALUE), "{\"subdirectories\":[{\"fileName\":\"bin\",\"type\":\"directory\"},{\"fileName\":\"local\",\"type\":\"directory\"}]}\n");
+    DirInfo d2;
+    DirInfo::fromString(d2, table->getRow(FS_KEY_SUB)->getField(SYS_VALUE));
+    BOOST_CHECK_EQUAL(d2.getSubDir().at(0).getName(), "bin");
+    BOOST_CHECK_EQUAL(d2.getSubDir().at(1).getName(), "local");
 
     table = tableFactory->openTable("/bin");
     BOOST_CHECK_EQUAL(table->getRow(FS_KEY_TYPE)->getField(SYS_VALUE), "directory");
-    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_SUB)->getField(SYS_VALUE), "{\"subdirectories\":[{\"fileName\":\"extensions\",\"type\":\"directory\"}]}\n");
+    DirInfo d3;
+    DirInfo::fromString(d3, table->getRow(FS_KEY_SUB)->getField(SYS_VALUE));
+    BOOST_CHECK_EQUAL(d3.getSubDir().at(0).getName(), "extensions");
 }
 BOOST_AUTO_TEST_CASE(testTableSetterGetterByRowAndField)
 {
@@ -86,9 +96,9 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
     BOOST_CHECK_THROW(storageSetter->createTables(tableFactory), CreateSysTableFailed);
     BOOST_CHECK_THROW(
         storageSetter->syncTableSetter(tableFactory, "errorTable", "error", "error", ""),
-                      OpenSysTableFailed);
-    BOOST_CHECK_THROW(
-        storageSetter->setConsensusConfig(tableFactory, CONSENSUS_SEALER, consensus::ConsensusNodeList(), "error"),
+        OpenSysTableFailed);
+    BOOST_CHECK_THROW(storageSetter->setConsensusConfig(
+                          tableFactory, CONSENSUS_SEALER, consensus::ConsensusNodeList(), "error"),
         OpenSysTableFailed);
     BOOST_CHECK_THROW(storageSetter->setSysConfig(tableFactory, "", "", ""), OpenSysTableFailed);
 
@@ -127,9 +137,9 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
 
     storageGetter->getSysConfig(
         "", tableFactory, [&](Error::Ptr _error, std::string _value, std::string _number) {
-          BOOST_CHECK(_error->errorCode() == -1);
-          BOOST_CHECK_EQUAL(_value, "");
-          BOOST_CHECK_EQUAL(_number, "");
+            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK_EQUAL(_value, "");
+            BOOST_CHECK_EQUAL(_number, "");
         });
 }
 BOOST_AUTO_TEST_CASE(testGetterSetter)
@@ -231,12 +241,38 @@ BOOST_AUTO_TEST_CASE(testGetterSetter)
     auto setConsensusConfigRet =
         storageSetter->setConsensusConfig(tableFactory, CONSENSUS_SEALER, consensusNodeList, "0");
     BOOST_CHECK(setConsensusConfigRet);
-    storageGetter->getConsensusConfig(
-        CONSENSUS_SEALER, 0, tableFactory, keyFactory, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
-          BOOST_CHECK_EQUAL(_error, nullptr);
-          BOOST_CHECK(!_nodeList->empty());
+    storageGetter->getConsensusConfig(CONSENSUS_SEALER, 0, tableFactory, keyFactory,
+        [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK(!_nodeList->empty());
         });
 }
 
-BOOST_AUTO_TEST_SUITE_END()
+BOOST_AUTO_TEST_CASE(testDirInfo)
+{
+    auto f1 = std::make_shared<FileInfo>("test1", "dir", 0);
+    auto f2 = std::make_shared<FileInfo>("test2", "dir", 0);
+    auto f3 = std::make_shared<FileInfo>("test3", "dir", 0);
+    std::vector<FileInfo> v;
+    v.emplace_back(*f1);
+    v.emplace_back(*f2);
+    v.emplace_back(*f3);
+    auto d = std::make_shared<DirInfo>(v);
+
+    auto ret = d->toString();
+    std::cout << ret << std::endl;
+    DirInfo d2;
+    BOOST_CHECK_EQUAL(DirInfo::fromString(d2, ret), true);
+    BOOST_CHECK_EQUAL(DirInfo::fromString(d2, ret), true);
+    BOOST_CHECK_EQUAL(d->getSubDir().at(1).getName(), d2.getSubDir().at(1).getName());
+    BOOST_CHECK_EQUAL(DirInfo::fromString(d2, "123"), false);
+
+    auto d_e = std::make_shared<DirInfo>();
+    auto ret_e = d_e->toString();
+    std::cout << ret_e << std::endl;
+    DirInfo d2_e;
+    BOOST_CHECK_EQUAL(DirInfo::fromString(d2_e, ret_e), true);
 }
+
+BOOST_AUTO_TEST_SUITE_END()
+}  // namespace bcos::test
