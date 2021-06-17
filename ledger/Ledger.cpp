@@ -43,6 +43,9 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
         _onCommitBlock(error, nullptr);
         return;
     }
+
+#if 0
+    // TODO: implement with the local cache
     // default parent block hash located in parentInfo[0]
     if (!isBlockShouldCommit(_header->number(), _header->parentInfo().at(0).blockHash.hex()))
     {
@@ -52,6 +55,8 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
         _onCommitBlock(error, nullptr);
         return;
     }
+#endif
+
     auto blockNumber = _header->number();
     auto tableFactory = getMemoryTableFactory(blockNumber);
 
@@ -111,61 +116,56 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
         _onTxStored(error);
         return;
     }
-    auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
-    getLatestBlockNumber([self, _txHashList, _txToStore, _onTxStored](
-                             protocol::BlockNumber _number) {
-        auto ledger = self.lock();
-        auto tableFactory = ledger->getMemoryTableFactory(_number + 1);
-        if (!tableFactory)
+    auto tableFactory = getMemoryTableFactory(0);
+    if (!tableFactory)
+    {
+        LEDGER_LOG(ERROR) << LOG_BADGE("asyncStoreTransactions")
+                          << LOG_DESC("get a null tableFactory in state cache");
+        // TODO: add error code
+        auto error = std::make_shared<Error>(
+            -1, "[#asyncStoreTransactions] get a null tableFactory in state cache");
+        _onTxStored(error);
+        return;
+    }
+    try
+    {
+        for (size_t i = 0; i < _txHashList->size(); ++i)
         {
-            LEDGER_LOG(ERROR) << LOG_BADGE("asyncStoreTransactions")
-                              << LOG_DESC("get a null tableFactory in state cache");
-            // TODO: add error code
-            auto error = std::make_shared<Error>(
-                -1, "[#asyncStoreTransactions] get a null tableFactory in state cache");
-            _onTxStored(error);
-            return;
+            // TODO: remove the copy overhead
+            auto txHashHex = _txHashList->at(i).hex();
+            getStorageSetter()->setHashToTx(
+                tableFactory, txHashHex, asString(*(_txToStore->at(i))));
+            LEDGER_LOG(TRACE) << LOG_BADGE("setHashToTx") << LOG_DESC("write HASH_2_TX success")
+                              << LOG_KV("txHashHex", txHashHex);
         }
-        try
-        {
-            for (size_t i = 0; i < _txHashList->size(); ++i)
+        tableFactory->asyncCommit([_onTxStored](Error::Ptr _error, size_t _commitSize) {
+            if (!_error || _error->errorCode() == CommonError::SUCCESS)
             {
-                // TODO: remove the copy overhead
-                auto txHashHex = _txHashList->at(i).hex();
-                ledger->getStorageSetter()->setHashToTx(
-                    tableFactory, txHashHex, asString(*(_txToStore->at(i))));
-                LEDGER_LOG(TRACE) << LOG_BADGE("setHashToTx") << LOG_DESC("write HASH_2_TX success")
-                                  << LOG_KV("txHashHex", txHashHex);
+                LEDGER_LOG(TRACE) << LOG_BADGE("asyncStoreTransactions")
+                                  << LOG_DESC("write db success")
+                                  << LOG_KV("commitSize", _commitSize);
+                _onTxStored(nullptr);
             }
-            tableFactory->asyncCommit([_onTxStored](Error::Ptr _error, size_t _commitSize) {
-                if (!_error || _error->errorCode() == CommonError::SUCCESS)
-                {
-                    LEDGER_LOG(TRACE)
-                        << LOG_BADGE("asyncStoreTransactions") << LOG_DESC("write db success")
-                        << LOG_KV("commitSize", _commitSize);
-                    _onTxStored(nullptr);
-                }
-                else
-                {
-                    LEDGER_LOG(ERROR)
-                        << LOG_BADGE("asyncStoreTransactions") << LOG_DESC("table commit failed");
-                    // TODO: add error code and msg
-                    auto error = std::make_shared<Error>(_error->errorCode(),
-                        "[#asyncStoreTransactions] table commit failed" + _error->errorMessage());
-                    _onTxStored(error);
-                }
-            });
-        }
-        catch (OpenSysTableFailed const& e)
-        {
-            LEDGER_LOG(FATAL) << LOG_BADGE("asyncStoreTransactions")
-                              << LOG_DESC("System meets error when try to write tx to storage")
-                              << LOG_KV("EINFO", boost::diagnostic_information(e));
-            raise(SIGTERM);
-            BOOST_THROW_EXCEPTION(
-                OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
-        }
-    });
+            else
+            {
+                LEDGER_LOG(ERROR) << LOG_BADGE("asyncStoreTransactions")
+                                  << LOG_DESC("table commit failed");
+                // TODO: add error code and msg
+                auto error = std::make_shared<Error>(_error->errorCode(),
+                    "[#asyncStoreTransactions] table commit failed" + _error->errorMessage());
+                _onTxStored(error);
+            }
+        });
+    }
+    catch (OpenSysTableFailed const& e)
+    {
+        LEDGER_LOG(FATAL) << LOG_BADGE("asyncStoreTransactions")
+                          << LOG_DESC("System meets error when try to write tx to storage")
+                          << LOG_KV("EINFO", boost::diagnostic_information(e));
+        raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(
+            OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
+    }
 }
 
 void Ledger::asyncStoreReceipts(storage::TableFactoryInterface::Ptr _tableFactory,
@@ -227,48 +227,36 @@ void Ledger::asyncStoreReceipts(storage::TableFactoryInterface::Ptr _tableFactor
 void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
     std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock)
 {
-    getLatestBlockNumber(
-        [this, _blockNumber, _blockFlag, _onGetBlock](protocol::BlockNumber _number) {
-            if (_blockNumber < 0 || _blockNumber > _number)
+    getBlock(_blockNumber, _blockFlag,
+        [_blockNumber, _onGetBlock](Error::Ptr _error, protocol::Block::Ptr _block) {
+            if (!_error || _error->errorCode() == CommonError::SUCCESS)
             {
-                LEDGER_LOG(FATAL) << LOG_BADGE("asyncGetBlockDataByNumber")
-                                  << LOG_DESC("Error parameters");
-                // TODO: to add errorCode
-                auto error = std::make_shared<Error>(-1, "error block number");
-                _onGetBlock(error, nullptr);
-                return;
+                if (_block)
+                {
+                    _onGetBlock(nullptr, _block);
+                }
+                else
+                {
+                    LEDGER_LOG(ERROR)
+                        << LOG_BADGE("asyncGetBlockDataByNumber") << LOG_DESC("Get a null block")
+                        << LOG_KV("blockNumber", _blockNumber);
+                    // TODO: to add errorCode and message
+                    auto error = std::make_shared<Error>(-1, "get block return null");
+                    _onGetBlock(error, nullptr);
+                }
             }
-            getBlock(_blockNumber, _blockFlag,
-                [_blockNumber, _onGetBlock](Error::Ptr _error, protocol::Block::Ptr _block) {
-                    if (!_error || _error->errorCode() == CommonError::SUCCESS)
-                    {
-                        if (_block)
-                        {
-                            _onGetBlock(nullptr, _block);
-                        }
-                        else
-                        {
-                            LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBlockDataByNumber")
-                                              << LOG_DESC("Get a null block")
-                                              << LOG_KV("blockNumber", _blockNumber);
-                            // TODO: to add errorCode and message
-                            auto error = std::make_shared<Error>(-1, "get block return null");
-                            _onGetBlock(error, nullptr);
-                        }
-                    }
-                    else
-                    {
-                        LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBlockDataByNumber")
-                                          << LOG_DESC("callback error when get block")
-                                          << LOG_KV("errorCode", _error->errorCode())
-                                          << LOG_KV("errorMsg", _error->errorMessage())
-                                          << LOG_KV("blockNumber", _blockNumber);
-                        // TODO: to add errorCode and message
-                        auto error = std::make_shared<Error>(_error->errorCode(),
-                            "callback error in getBlock" + _error->errorMessage());
-                        _onGetBlock(error, nullptr);
-                    }
-                });
+            else
+            {
+                LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBlockDataByNumber")
+                                  << LOG_DESC("callback error when get block")
+                                  << LOG_KV("errorCode", _error->errorCode())
+                                  << LOG_KV("errorMsg", _error->errorMessage())
+                                  << LOG_KV("blockNumber", _blockNumber);
+                // TODO: to add errorCode and message
+                auto error = std::make_shared<Error>(
+                    _error->errorCode(), "callback error in getBlock" + _error->errorMessage());
+                _onGetBlock(error, nullptr);
+            }
         });
 }
 
@@ -411,61 +399,45 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
         [this, _txHashList, _withProof, _onGetTx](Error::Ptr _error, TransactionsPtr _txList) {
             if (!_error || _error->errorCode() == CommonError::SUCCESS)
             {
-                if (_txList && _txHashList->size() == _txList->size())
+                if (_withProof)
                 {
-                    if (_withProof)
-                    {
-                        getBatchTxProof(_txHashList,
-                            [_txHashList, _onGetTx, _txList](Error::Ptr _error,
-                                std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
-                                if (_error && _error->errorCode() != CommonError::SUCCESS)
-                                {
-                                    LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBatchTxsByHashList")
-                                                      << LOG_DESC("fetch tx proof error")
-                                                      << LOG_KV("errorCode", _error->errorCode())
-                                                      << LOG_KV("errorMsg", _error->errorMessage());
-                                    // TODO: add error code
-                                    auto error = std::make_shared<Error>(_error->errorCode(),
-                                        "getBatchTxProof callback error" + _error->errorMessage());
-                                    _onGetTx(error, _txList, nullptr);
-                                    return;
-                                }
-                                if (!_proof)
-                                {
-                                    LEDGER_LOG(ERROR)
-                                        << LOG_BADGE("asyncGetBatchTxsByHashList")
-                                        << LOG_DESC("fetch proof is null")
-                                        << LOG_KV("txHashListSize", _txHashList->size());
-                                    auto error = std::make_shared<Error>(-1, "empty txs");
-                                    _onGetTx(error, _txList, nullptr);
-                                    return;
-                                }
-                                LEDGER_LOG(INFO) << LOG_BADGE("asyncGetBatchTxsByHashList")
-                                                 << LOG_DESC("get tx list and proofMap complete")
-                                                 << LOG_KV("txHashListSize", _txHashList->size());
-                                _onGetTx(nullptr, _txList, _proof);
-                            });
-                    }
-                    else
-                    {
-                        LEDGER_LOG(INFO) << LOG_BADGE("asyncGetBatchTxsByHashList")
-                                         << LOG_DESC("get tx list compelete")
-                                         << LOG_KV("txHashListSize", _txHashList->size())
-                                         << LOG_KV("withProof", _withProof);
-                        _onGetTx(nullptr, _txList, nullptr);
-                    }
+                    getBatchTxProof(_txHashList,
+                        [_txHashList, _onGetTx, _txList](Error::Ptr _error,
+                            std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
+                            if (_error && _error->errorCode() != CommonError::SUCCESS)
+                            {
+                                LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBatchTxsByHashList")
+                                                  << LOG_DESC("fetch tx proof error")
+                                                  << LOG_KV("errorCode", _error->errorCode())
+                                                  << LOG_KV("errorMsg", _error->errorMessage());
+                                // TODO: add error code
+                                auto error = std::make_shared<Error>(_error->errorCode(),
+                                    "getBatchTxProof callback error" + _error->errorMessage());
+                                _onGetTx(error, _txList, nullptr);
+                                return;
+                            }
+                            if (!_proof)
+                            {
+                                LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBatchTxsByHashList")
+                                                  << LOG_DESC("fetch proof is null")
+                                                  << LOG_KV("txHashListSize", _txHashList->size());
+                                auto error = std::make_shared<Error>(-1, "empty txs");
+                                _onGetTx(error, _txList, nullptr);
+                                return;
+                            }
+                            LEDGER_LOG(INFO) << LOG_BADGE("asyncGetBatchTxsByHashList")
+                                             << LOG_DESC("get tx list and proofMap complete")
+                                             << LOG_KV("txHashListSize", _txHashList->size());
+                            _onGetTx(nullptr, _txList, _proof);
+                        });
                 }
                 else
                 {
-                    // TODO: add error code
-                    LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBatchTxsByHashList")
-                                      << LOG_DESC("getBatchTxByHashList callback tx list is wrong")
-                                      << LOG_KV("txHashListSize", _txHashList->size())
-                                      << LOG_KV("withProof", _withProof);
-                    auto error =
-                        std::make_shared<Error>(-1, "getBatchTxByHashList callback error txList");
-                    _onGetTx(error, nullptr, nullptr);
-                    return;
+                    LEDGER_LOG(INFO) << LOG_BADGE("asyncGetBatchTxsByHashList")
+                                     << LOG_DESC("get tx list compelete")
+                                     << LOG_KV("txHashListSize", _txHashList->size())
+                                     << LOG_KV("withProof", _withProof);
+                    _onGetTx(nullptr, _txList, nullptr);
                 }
             }
             else
