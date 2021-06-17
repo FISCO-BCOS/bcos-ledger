@@ -121,11 +121,10 @@ public:
     /**
      * @brief get consensus node list in table SYS_CONSENSUS
      * @param _nodeType
-     * @param _blockNumber latest block number
      * @param _tableFactory
      * @param _keyFactory key factory to generate nodeID
      */
-    void getConsensusConfig(const std::string& _nodeType, protocol::BlockNumber _blockNumber,
+    void getConsensusConfig(const std::string& _nodeType,
         const storage::TableFactoryInterface::Ptr& _tableFactory,
         crypto::KeyFactory::Ptr _keyFactory,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig);

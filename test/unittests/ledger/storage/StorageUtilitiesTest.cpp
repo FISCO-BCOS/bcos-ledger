@@ -83,11 +83,15 @@ BOOST_AUTO_TEST_CASE(testTableSetterGetterByRowAndField)
         storageSetter->syncTableSetter(tableFactory, SYS_HASH_2_NUMBER, "test", SYS_VALUE, "world");
     BOOST_CHECK(setterRet);
 
+    std::promise<bool> p1;
+    auto f1 = p1.get_future();
     storageGetter->asyncTableGetter(tableFactory, SYS_HASH_2_NUMBER, "test", SYS_VALUE,
         [&](Error::Ptr _error, std::shared_ptr<std::string> _ret) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK_EQUAL(*_ret, "world");
+            p1.set_value(true);
         });
+    BOOST_CHECK(f1.get());
 }
 BOOST_AUTO_TEST_CASE(testErrorOpenTable)
 {
@@ -102,45 +106,69 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
         OpenSysTableFailed);
     BOOST_CHECK_THROW(storageSetter->setSysConfig(tableFactory, "", "", ""), OpenSysTableFailed);
 
+    std::promise<bool> p1;
+    auto f1 = p1.get_future();
     auto storageGetter = StorageGetter::storageGetterFactory();
     storageGetter->asyncTableGetter(tableFactory, "errorTable", "row", "filed",
         [&](Error::Ptr _error, std::shared_ptr<std::string> _value) {
             BOOST_CHECK(_error->errorCode() == -1);
             BOOST_CHECK_EQUAL(_value, nullptr);
+            p1.set_value(true);
         });
+    BOOST_CHECK(f1.get());
 
+    std::promise<bool> p2;
+    auto f2 = p2.get_future();
     auto fakeHashList = std::make_shared<std::vector<std::string>>();
     storageGetter->getBatchTxByHashList(
         fakeHashList, tableFactory, nullptr, [&](Error::Ptr _error, TransactionsPtr _txs) {
             BOOST_CHECK(_error->errorCode() == -1);
             BOOST_CHECK_EQUAL(_txs, nullptr);
+            p2.set_value(true);
         });
+    BOOST_CHECK(f2.get());
 
+    std::promise<bool> p3;
+    auto f3 = p3.get_future();
     storageGetter->getBatchReceiptsByHashList(
         fakeHashList, tableFactory, nullptr, [&](Error::Ptr _error, ReceiptsPtr _receipts) {
             BOOST_CHECK(_error->errorCode() == -1);
             BOOST_CHECK_EQUAL(_receipts, nullptr);
+            p3.set_value(true);
         });
+    BOOST_CHECK(f3.get());
 
+    std::promise<bool> p4;
+    auto f4 = p4.get_future();
     storageGetter->getNoncesBatchFromStorage(0, 1, tableFactory, nullptr,
         [&](Error::Ptr _error,
             std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> _nonce) {
             BOOST_CHECK(_error->errorCode() == -1);
             BOOST_CHECK_EQUAL(_nonce, nullptr);
+            p4.set_value(true);
         });
+    BOOST_CHECK(f4.get());
 
-    storageGetter->getConsensusConfig("", 0, tableFactory, nullptr,
-        [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodes) {
+    std::promise<bool> p5;
+    auto f5 = p5.get_future();
+    storageGetter->getConsensusConfig(
+        "", tableFactory, nullptr, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodes) {
             BOOST_CHECK(_error->errorCode() == -1);
             BOOST_CHECK_EQUAL(_nodes, nullptr);
+            p5.set_value(true);
         });
+    BOOST_CHECK(f5.get());
 
+    std::promise<bool> p6;
+    auto f6 = p6.get_future();
     storageGetter->getSysConfig(
         "", tableFactory, [&](Error::Ptr _error, std::string _value, std::string _number) {
             BOOST_CHECK(_error->errorCode() == -1);
             BOOST_CHECK_EQUAL(_value, "");
             BOOST_CHECK_EQUAL(_number, "");
+            p6.set_value(true);
         });
+    BOOST_CHECK(f6.get());
 }
 BOOST_AUTO_TEST_CASE(testGetterSetter)
 {
@@ -241,7 +269,7 @@ BOOST_AUTO_TEST_CASE(testGetterSetter)
     auto setConsensusConfigRet =
         storageSetter->setConsensusConfig(tableFactory, CONSENSUS_SEALER, consensusNodeList, "0");
     BOOST_CHECK(setConsensusConfigRet);
-    storageGetter->getConsensusConfig(CONSENSUS_SEALER, 0, tableFactory, keyFactory,
+    storageGetter->getConsensusConfig(CONSENSUS_SEALER, tableFactory, keyFactory,
         [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(!_nodeList->empty());
