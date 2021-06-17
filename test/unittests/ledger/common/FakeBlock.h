@@ -74,12 +74,6 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
     {
         block->appendTransactionHash(block->transaction(i)->hash());
     }
-    // fake receiptsHash
-    for (size_t i = 0; i < _receiptsNum; i++)
-    {
-        block->appendReceiptHash(block->receipt(i)->hash());
-    }
-
     NonceList nonceList;
     for (size_t i = 0; i < _txsNum; i++)
     {
