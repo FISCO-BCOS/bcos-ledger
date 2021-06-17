@@ -19,25 +19,84 @@
  */
 
 #pragma once
+
+#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-framework/interfaces/protocol/BlockFactory.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
-#include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
 #include "bcos-framework/interfaces/storage/TableInterface.h"
-#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
+#include <boost/serialization/string.hpp>
+#include <boost/serialization/vector.hpp>
 
 namespace bcos::ledger
 {
 DERIVE_BCOS_EXCEPTION(OpenSysTableFailed);
 DERIVE_BCOS_EXCEPTION(CreateSysTableFailed);
-using stringsPair = std::pair<std::string, std::string>;
-class StorageSetter final {
+class FileInfo
+{
+public:
+    FileInfo() = default;
+    FileInfo(const std::string& name, const std::string& type, protocol::BlockNumber number)
+      : name(name), type(type), number(number)
+    {}
+    const std::string& getName() const { return name; }
+    const std::string& getType() const { return type; }
+    protocol::BlockNumber getNumber() const { return number; }
+
+    std::string toString();
+    static bool fromString(FileInfo& _f, std::string _str);
+
+private:
+    friend class boost::serialization::access;
+    template <typename Archive>
+    void serialize(Archive& ar, const unsigned int)
+    {
+        ar& name;
+        ar& type;
+        ar& number;
+    }
+    std::string name;
+    std::string type;
+    protocol::BlockNumber number;
+};
+class DirInfo
+{
+public:
+    DirInfo() = default;
+    explicit DirInfo(const std::vector<FileInfo>& subDir) : subDir(subDir) {}
+    const std::vector<FileInfo>& getSubDir() const { return subDir; }
+    std::vector<FileInfo>& getMutableSubDir() { return subDir; }
+    std::string toString();
+    static bool fromString(DirInfo& _dir, std::string _str);
+    static std::string emptyDirString()
+    {
+        DirInfo emptyDir;
+        return emptyDir.toString();
+    }
+
+private:
+    friend class boost::serialization::access;
+    template <typename Archive>
+    void serialize(Archive& ar, const unsigned int)
+    {
+        ar& subDir;
+    }
+    std::vector<FileInfo> subDir;
+};
+
+class StorageSetter final
+{
 public:
     using Ptr = std::shared_ptr<StorageSetter>;
-    inline static StorageSetter::Ptr storageSetterFactory(){
+
+    inline static StorageSetter::Ptr storageSetterFactory()
+    {
         return std::make_shared<StorageSetter>();
     }
 
@@ -70,32 +129,32 @@ public:
         const std::string& _row, const std::string& _stateValue);
 
     /**
-    * @brief update SYS_NUMBER_2_BLOCK_HEADER set SYS_VALUE=_headerValue where row=_row
-    * @param _tableFactory
-    * @param _row
-    * @param _headerValue encoded block header string value
-    * @return return update result
-    */
+     * @brief update SYS_NUMBER_2_BLOCK_HEADER set SYS_VALUE=_headerValue where row=_row
+     * @param _tableFactory
+     * @param _row
+     * @param _headerValue encoded block header string value
+     * @return return update result
+     */
     bool setNumber2Header(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _row, const std::string& _headerValue);
 
     /**
-    * @brief update SYS_NUMBER_2_TXS set SYS_VALUE=_txsValue where row=_row
-    * @param _tableFactory
-    * @param _row
-    * @param _txsValue encoded block string value, which txs contain in
-    * @return return update result
-    */
+     * @brief update SYS_NUMBER_2_TXS set SYS_VALUE=_txsValue where row=_row
+     * @param _tableFactory
+     * @param _row
+     * @param _txsValue encoded block string value, which txs contain in
+     * @return return update result
+     */
     bool setNumber2Txs(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _row, const std::string& _txsValue);
 
     /**
-    * @brief update SYS_HASH_2_NUMBER set SYS_VALUE=_numberValue where row=_row
-    * @param _tableFactory
-    * @param _row
-    * @param _numberValue block number string value
-    * @return return update result
-    */
+     * @brief update SYS_HASH_2_NUMBER set SYS_VALUE=_numberValue where row=_row
+     * @param _tableFactory
+     * @param _row
+     * @param _numberValue block number string value
+     * @return return update result
+     */
     bool setHash2Number(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _row, const std::string& _numberValue);
 
@@ -103,17 +162,18 @@ public:
         const std::string& _row, const std::string& _hashValue);
 
     /**
-    * @brief update SYS_BLOCK_NUMBER_2_NONCES set SYS_VALUE=_noncesValue where row=_row
-    * @param _tableFactory
-    * @param _row
-    * @param _noncesValue encoded nonces string value
-    * @return return update result
-    */
+     * @brief update SYS_BLOCK_NUMBER_2_NONCES set SYS_VALUE=_noncesValue where row=_row
+     * @param _tableFactory
+     * @param _row
+     * @param _noncesValue encoded nonces string value
+     * @return return update result
+     */
     bool setNumber2Nonces(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _row, const std::string& _noncesValue);
 
     /**
-     * @brief update SYS_CONFIG set SYS_VALUE=_value,SYSTEM_CONFIG_ENABLE_NUM=_enableBlock where row=_key
+     * @brief update SYS_CONFIG set SYS_VALUE=_value,SYSTEM_CONFIG_ENABLE_NUM=_enableBlock where
+     * row=_key
      * @param _tableFactory
      * @param _key
      * @param _value
@@ -124,7 +184,8 @@ public:
         const std::string& _key, const std::string& _value, const std::string& _enableBlock);
 
     /**
-     * @brief update SYS_CONSENSUS set NODE_TYPE=type,NODE_WEIGHT=weight,NODE_ENABLE_NUMBER=_enableBlock where row=nodeID
+     * @brief update SYS_CONSENSUS set
+     * NODE_TYPE=type,NODE_WEIGHT=weight,NODE_ENABLE_NUMBER=_enableBlock where row=nodeID
      * @param _tableFactory
      * @param _type node type, only support CONSENSUS_SEALER CONSENSUS_OBSERVER
      * @param _nodeList
@@ -141,4 +202,4 @@ public:
     bool setHashToReceipt(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _txHash, const std::string& _encodeReceipt);
 };
-}
+}  // namespace bcos::ledger

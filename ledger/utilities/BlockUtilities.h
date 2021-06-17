@@ -19,8 +19,8 @@
  */
 
 #pragma once
-#include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include "Common.h"
+#include <bcos-framework/interfaces/protocol/BlockFactory.h>
 
 namespace bcos::ledger
 {
@@ -47,4 +47,4 @@ bcos::protocol::Transaction::Ptr decodeTransaction(
 
 bcos::protocol::TransactionReceipt::Ptr decodeReceipt(
     const protocol::TransactionReceiptFactory::Ptr _receiptFactory, const std::string& _receiptStr);
-}
+}  // namespace bcos::ledger

@@ -86,8 +86,7 @@ void MerkleProofUtility::getMerkleProof(const crypto::HashType& _txHash,
 }
 
 void MerkleProofUtility::parseMerkleMap(
-    const std::shared_ptr<Parent2ChildListMap>& parent2ChildList,
-    Child2ParentMap& child2Parent)
+    const std::shared_ptr<Parent2ChildListMap>& parent2ChildList, Child2ParentMap& child2Parent)
 {
     // trans parent2ChildList into child2Parent concurrently
     tbb::parallel_for_each(parent2ChildList->begin(), parent2ChildList->end(),
@@ -146,7 +145,8 @@ std::shared_ptr<Child2ParentMap> MerkleProofUtility::getChild2ParentCache(Shared
 }
 
 std::shared_ptr<Parent2ChildListMap> MerkleProofUtility::getParent2ChildListByReceiptProofCache(
-    protocol::BlockNumber _blockNumber, protocol::ReceiptsPtr _receipts, crypto::CryptoSuite::Ptr _crypto)
+    protocol::BlockNumber _blockNumber, protocol::ReceiptsPtr _receipts,
+    crypto::CryptoSuite::Ptr _crypto)
 {
     UpgradableGuard l(m_receiptWithProofMutex);
     // cache for the block parent2ChildList
@@ -169,20 +169,19 @@ std::shared_ptr<Parent2ChildListMap> MerkleProofUtility::getParent2ChildListByRe
 }
 
 std::shared_ptr<Parent2ChildListMap> MerkleProofUtility::getParent2ChildListByTxsProofCache(
-    protocol::BlockNumber _blockNumber, protocol::TransactionsPtr _txs, crypto::CryptoSuite::Ptr _crypto)
+    protocol::BlockNumber _blockNumber, protocol::TransactionsPtr _txs,
+    crypto::CryptoSuite::Ptr _crypto)
 {
     UpgradableGuard l(m_transactionWithProofMutex);
     // cache for the block parent2ChildList
-    if (m_transactionWithProof.second &&
-        m_transactionWithProof.first == _blockNumber)
+    if (m_transactionWithProof.second && m_transactionWithProof.first == _blockNumber)
     {
         return m_transactionWithProof.second;
     }
     UpgradeGuard ul(l);
     // After preempting the write lock, judge again whether m_transactionWithProof has been
     // updated to prevent lock competition
-    if (m_transactionWithProof.second &&
-        m_transactionWithProof.first == _blockNumber)
+    if (m_transactionWithProof.second && m_transactionWithProof.first == _blockNumber)
     {
         return m_transactionWithProof.second;
     }
@@ -191,5 +190,5 @@ std::shared_ptr<Parent2ChildListMap> MerkleProofUtility::getParent2ChildListByTx
     return parent2ChildList;
 }
 
-}
-}
+}  // namespace ledger
+}  // namespace bcos

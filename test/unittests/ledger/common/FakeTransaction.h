@@ -68,7 +68,8 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite)
     std::string groupId = "groupId";
     return testTransaction(_cryptoSuite, keyPair, to, input, nonce, blockLimit, chainId, groupId);
 }
-inline TransactionsPtr fakeTransactions(int _size){
+inline TransactionsPtr fakeTransactions(int _size)
+{
     auto hashImpl = std::make_shared<Keccak256Hash>();
     auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
@@ -84,7 +85,8 @@ inline TransactionsPtr fakeTransactions(int _size){
         int64_t blockLimit = 1000 + i;
         std::string chainId = "chainId";
         std::string groupId = "groupId";
-        txs->emplace_back(testTransaction(cryptoSuite, keyPair, to, input, nonce, blockLimit, chainId, groupId));
+        txs->emplace_back(
+            testTransaction(cryptoSuite, keyPair, to, input, nonce, blockLimit, chainId, groupId));
     }
     return txs;
 }

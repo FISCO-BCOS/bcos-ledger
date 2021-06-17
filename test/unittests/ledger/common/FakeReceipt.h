@@ -49,7 +49,8 @@ inline LogEntriesPtr fakeLogEntries(Hash::Ptr _hashImpl, size_t _size)
     return logEntries;
 }
 
-inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _cryptoSuite, BlockNumber _blockNumber)
+inline TransactionReceipt::Ptr testPBTransactionReceipt(
+    CryptoSuite::Ptr _cryptoSuite, BlockNumber _blockNumber)
 {
     auto hashImpl = _cryptoSuite->hashImpl();
     u256 gasUsed = 12343242342;
@@ -62,8 +63,8 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(CryptoSuite::Ptr _crypto
         output += contractAddress.asBytes();
     }
     auto factory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
-    auto receipt = factory->createReceipt(gasUsed, contractAddress.asBytes(),
-        logEntries, (int32_t)status, output, _blockNumber);
+    auto receipt = factory->createReceipt(
+        gasUsed, contractAddress.asBytes(), logEntries, (int32_t)status, output, _blockNumber);
     return receipt;
 }
 
@@ -76,7 +77,7 @@ inline ReceiptsPtr fakeReceipts(int _size)
     ReceiptsPtr receipts = std::make_shared<Receipts>();
     for (int i = 0; i < _size; ++i)
     {
-        receipts->emplace_back(testPBTransactionReceipt(cryptoSuite, i+1));
+        receipts->emplace_back(testPBTransactionReceipt(cryptoSuite, i + 1));
     }
     return receipts;
 }

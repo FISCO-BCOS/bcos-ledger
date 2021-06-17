@@ -20,30 +20,32 @@
  */
 
 #pragma once
+#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-framework/interfaces/protocol/BlockFactory.h"
-#include "bcos-framework/interfaces/protocol/Transaction.h"
-#include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
 #include "bcos-framework/interfaces/storage/TableInterface.h"
-#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 
 namespace bcos::ledger
 {
 using stringsPair = std::pair<std::string, std::string>;
-class StorageGetter final{
+class StorageGetter final
+{
 public:
     using Ptr = std::shared_ptr<StorageGetter>;
     StorageGetter() = default;
 
-    inline static StorageGetter::Ptr storageGetterFactory(){
+    inline static StorageGetter::Ptr storageGetterFactory()
+    {
         return std::make_shared<StorageGetter>();
     }
 
-    bool checkTableExist(
-        const std::string& _tableName, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    bool checkTableExist(const std::string& _tableName,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
     /**
      * @brief get transactions in SYS_NUMBER_2_TXS table
      * @param _blockNumber the number of block
@@ -123,14 +125,12 @@ public:
      * @param _tableFactory
      * @param _keyFactory key factory to generate nodeID
      */
-    void getConsensusConfig(const std::string& _nodeType,
-        protocol::BlockNumber _blockNumber,
+    void getConsensusConfig(const std::string& _nodeType, protocol::BlockNumber _blockNumber,
         const storage::TableFactoryInterface::Ptr& _tableFactory,
         crypto::KeyFactory::Ptr _keyFactory,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig);
 
-    void getBatchTxByHashList(
-        std::shared_ptr<std::vector<std::string>> _hashList,
+    void getBatchTxByHashList(std::shared_ptr<std::vector<std::string>> _hashList,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const bcos::protocol::TransactionFactory::Ptr& _txFactory,
         std::function<void(Error::Ptr, protocol::TransactionsPtr)> _onGetTx);
@@ -152,9 +152,8 @@ public:
      * @param _field
      * @param _onGetString callback when get string data in db
      */
-    void asyncTableGetter(
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    void asyncTableGetter(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
         const std::string& _tableName, std::string _row, std::string _field,
         std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
 };
-}
+}  // namespace bcos::ledger

@@ -18,8 +18,8 @@
  * @date 2021-04-13
  */
 #pragma once
-#include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNodeInterface.h>
+#include <bcos-framework/interfaces/protocol/Block.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <map>
 
@@ -54,4 +54,4 @@ static const std::string FS_KEY_NUM = "enable_number";
 static const std::string FS_TYPE_DIR = "directory";
 static const std::string FS_TYPE_CONTRACT = "contract";
 static const std::string FS_TYPE_LINK = "link";
-} // namespace bcos
+}  // namespace bcos::ledger

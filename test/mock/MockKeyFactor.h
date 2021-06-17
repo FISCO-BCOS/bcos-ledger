@@ -21,8 +21,8 @@
 #pragma once
 
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
+#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -39,13 +39,13 @@ public:
     explicit MockKey(bytesConstRef _data) : m_keyData(std::make_shared<bytes>()) { decode(_data); }
     explicit MockKey(bytes const& _data) : MockKey(ref(_data)) {}
     explicit MockKey(size_t _keySize, std::shared_ptr<const bytes> _data)
-        : m_keyData(std::make_shared<bytes>())
+      : m_keyData(std::make_shared<bytes>())
     {
         if (_data->size() < _keySize)
         {
             BOOST_THROW_EXCEPTION(InvalidKey() << errinfo_comment(
-                "invalidKey, the key size: " + std::to_string(_data->size()) +
-                ", expected size:" + std::to_string(_keySize)));
+                                      "invalidKey, the key size: " + std::to_string(_data->size()) +
+                                      ", expected size:" + std::to_string(_keySize)));
         }
         *m_keyData = *_data;
     }
@@ -100,4 +100,4 @@ public:
 };
 
 }  // namespace test
-} // namespace bcos
+}  // namespace bcos

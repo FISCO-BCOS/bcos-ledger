@@ -20,8 +20,8 @@
 
 #pragma once
 #include "FakeBlockHeader.h"
-#include "FakeTransaction.h"
 #include "FakeReceipt.h"
+#include "FakeTransaction.h"
 #include "libprotocol/protobuf/PBBlock.h"
 #include "libprotocol/protobuf/PBBlockFactory.h"
 #include <bcos-framework/testutils/crypto/HashImpl.h>
@@ -50,7 +50,7 @@ inline BlockFactory::Ptr createBlockFactory(CryptoSuite::Ptr _cryptoSuite)
 }
 
 inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _blockFactory,
-                                    size_t _txsNum, size_t _receiptsNum, BlockNumber _blockNumber)
+    size_t _txsNum, size_t _receiptsNum, BlockNumber _blockNumber)
 {
     auto block = _blockFactory->createBlock();
 
@@ -100,7 +100,7 @@ inline BlocksPtr fakeBlocks(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
     {
         ParentInfoList parentInfos;
         auto block =
-            fakeBlock(_cryptoSuite, _blockFactory, _txsNumBegin + i, _receiptsNumBegin + i, i+1);
+            fakeBlock(_cryptoSuite, _blockFactory, _txsNumBegin + i, _receiptsNumBegin + i, i + 1);
         parentInfos.push_back(parentInfo);
         block->blockHeader()->setNumber(1 + i);
         block->blockHeader()->setParentInfo(parentInfos);

@@ -20,11 +20,11 @@
 
 #pragma once
 
-#include "bcos-ledger/ledger/utilities/Common.h"
-#include "bcos-framework/libutilities/ThreadPool.h"
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/libtable/Table.h"
+#include "bcos-framework/libutilities/ThreadPool.h"
+#include "bcos-ledger/ledger/utilities/Common.h"
 #define SLEEP_MILLI_SECONDS 10
 
 using namespace bcos::storage;
@@ -34,17 +34,14 @@ namespace bcos::test
 class MockStorage : public StorageInterface
 {
 public:
-    MockStorage(){
+    MockStorage()
+    {
         data[storage::SYS_TABLE] = std::map<std::string, Entry::Ptr>();
         m_threadPool = std::make_shared<bcos::ThreadPool>("mockStorage", 4);
     }
-    virtual ~MockStorage()
-    {
-        m_threadPool->stop();
-    }
+    virtual ~MockStorage() { m_threadPool->stop(); }
 
-    std::vector<std::string> getPrimaryKeys(
-        const std::shared_ptr<TableInfo>& _tableInfo,
+    std::vector<std::string> getPrimaryKeys(const std::shared_ptr<TableInfo>& _tableInfo,
         const Condition::Ptr& _condition) const override
     {
         std::vector<std::string> ret;
@@ -62,7 +59,7 @@ public:
         return ret;
     }
     std::shared_ptr<Entry> getRow(
-       const std::shared_ptr<TableInfo>& _tableInfo, const std::string_view& _key) override
+        const std::shared_ptr<TableInfo>& _tableInfo, const std::string_view& _key) override
     {
         std::shared_ptr<Entry> ret = nullptr;
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -178,7 +175,6 @@ public:
                 _callback(std::make_shared<Error>(-1, ""), {});
             }
         });
-
     }
 
     void asyncGetRow(const TableInfo::Ptr& _tableInfo, const std::string_view& _key,
@@ -227,7 +223,8 @@ public:
 
     void asyncCommitBlock(protocol::BlockNumber _number,
         const std::shared_ptr<std::vector<std::shared_ptr<TableInfo>>>& _tableInfo,
-        const std::shared_ptr<std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>& _tableMap,
+        const std::shared_ptr<std::vector<std::shared_ptr<std::map<std::string, Entry::Ptr>>>>&
+            _tableMap,
         std::function<void(const Error::Ptr&, size_t)> _callback) override
     {
         auto self =
@@ -249,7 +246,8 @@ public:
     }
 
     // cache TableFactory
-    void asyncAddStateCache(protocol::BlockNumber _number, const std::shared_ptr<TableFactoryInterface>& _table,
+    void asyncAddStateCache(protocol::BlockNumber _number,
+        const std::shared_ptr<TableFactoryInterface>& _table,
         std::function<void(const Error::Ptr&)> _callback) override
     {
         auto self =
@@ -268,10 +266,11 @@ public:
             }
         });
     }
-    void asyncDropStateCache(protocol::BlockNumber, std::function<void(const Error::Ptr&)>) override {}
+    void asyncDropStateCache(protocol::BlockNumber, std::function<void(const Error::Ptr&)>) override
+    {}
     void asyncGetStateCache(protocol::BlockNumber _blockNumber,
-        std::function<void(const Error::Ptr&, const std::shared_ptr<TableFactoryInterface>&)> _callback)
-        override
+        std::function<void(const Error::Ptr&, const std::shared_ptr<TableFactoryInterface>&)>
+            _callback) override
     {
         auto self =
             std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
@@ -291,7 +290,8 @@ public:
         });
     }
 
-    std::shared_ptr<TableFactoryInterface> getStateCache(protocol::BlockNumber _blockNumber) override
+    std::shared_ptr<TableFactoryInterface> getStateCache(
+        protocol::BlockNumber _blockNumber) override
     {
         if (m_number2TableFactory.count(_blockNumber))
         {
@@ -301,8 +301,8 @@ public:
     }
 
     void dropStateCache(protocol::BlockNumber) override {}
-    void addStateCache(
-        protocol::BlockNumber _blockNumber, const std::shared_ptr<TableFactoryInterface>& _tableFactory) override
+    void addStateCache(protocol::BlockNumber _blockNumber,
+        const std::shared_ptr<TableFactoryInterface>& _tableFactory) override
     {
         m_number2TableFactory[_blockNumber] = _tableFactory;
     }
@@ -342,9 +342,9 @@ private:
 class MockErrorStorage : public MockStorage
 {
 public:
-    MockErrorStorage() :MockStorage(){}
-    std::vector<std::string> getPrimaryKeys(
-        const std::shared_ptr<TableInfo>& _tableInfo, const Condition::Ptr& _condition) const override
+    MockErrorStorage() : MockStorage() {}
+    std::vector<std::string> getPrimaryKeys(const std::shared_ptr<TableInfo>& _tableInfo,
+        const Condition::Ptr& _condition) const override
     {
         return MockStorage::getPrimaryKeys(_tableInfo, _condition);
     }
@@ -354,7 +354,8 @@ public:
         return MockStorage::getRow(_tableInfo, _key);
     }
     std::map<std::string, std::shared_ptr<Entry>> getRows(
-        const std::shared_ptr<TableInfo>& _tableInfo, const std::vector<std::string>& _keys) override
+        const std::shared_ptr<TableInfo>& _tableInfo,
+        const std::vector<std::string>& _keys) override
     {
         return MockStorage::getRows(_tableInfo, _keys);
     }
@@ -364,7 +365,8 @@ public:
     {
         return MockStorage::commitBlock(number, _tableInfos, _tableDatas);
     }
-    std:: shared_ptr<TableFactoryInterface> getStateCache(protocol::BlockNumber _blockNumber) override
+    std::shared_ptr<TableFactoryInterface> getStateCache(
+        protocol::BlockNumber _blockNumber) override
     {
         return MockStorage::getStateCache(_blockNumber);
     }
@@ -373,7 +375,8 @@ public:
     {
         MockStorage::addStateCache(_blockNumber, _tableFactory);
     }
-    void asyncGetPrimaryKeys(const std::shared_ptr<TableInfo>& _tableInfo, const Condition::Ptr& _condition,
+    void asyncGetPrimaryKeys(const std::shared_ptr<TableInfo>& _tableInfo,
+        const Condition::Ptr& _condition,
         std::function<void(const Error::Ptr&, const std::vector<std::string>&)> _callback) override
     {
         MockStorage::asyncGetPrimaryKeys(_tableInfo, _condition, _callback);
@@ -397,8 +400,7 @@ public:
     {
         _callback(std::make_shared<Error>(-1, ""), 0);
     }
-    void asyncAddStateCache(protocol::BlockNumber,
-        const std::shared_ptr<TableFactoryInterface>&,
+    void asyncAddStateCache(protocol::BlockNumber, const std::shared_ptr<TableFactoryInterface>&,
         std::function<void(const Error::Ptr&)> _callback) override
     {
         _callback(std::make_shared<Error>(-1, ""));
@@ -409,9 +411,9 @@ public:
     {
         // random get success
         auto rand = random();
-        if(rand & 1)
+        if (rand & 1)
         {
-            if(rand & 3)
+            if (rand & 3)
             {
                 _callback(nullptr, nullptr);
             }
@@ -426,4 +428,4 @@ public:
         }
     }
 };
-}
+}  // namespace bcos::test
