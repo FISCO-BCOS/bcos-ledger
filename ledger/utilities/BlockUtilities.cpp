@@ -121,14 +121,12 @@ size_t blockReceiptListSetter(
 }
 
 bcos::protocol::Block::Ptr decodeBlock(
-    const protocol::BlockFactory::Ptr _blockFactory, std::shared_ptr<std::string> _blockStr)
+    const protocol::BlockFactory::Ptr _blockFactory, const std::string& _blockStr)
 {
     protocol::Block::Ptr block = nullptr;
-    if (!_blockStr)
-        return nullptr;
     try
     {
-        block = _blockFactory->createBlock(asBytes(*_blockStr), false, false);
+        block = _blockFactory->createBlock(asBytes(_blockStr), false, false);
     }
     catch (std::exception const& e)
     {
@@ -138,14 +136,12 @@ bcos::protocol::Block::Ptr decodeBlock(
 }
 
 bcos::protocol::BlockHeader::Ptr decodeBlockHeader(
-    const protocol::BlockHeaderFactory::Ptr _headerFactory, std::shared_ptr<std::string> _headerStr)
+    const protocol::BlockHeaderFactory::Ptr _headerFactory, const std::string& _headerStr)
 {
     protocol::BlockHeader::Ptr header = nullptr;
-    if (!_headerStr)
-        return nullptr;
     try
     {
-        header = _headerFactory->createBlockHeader(asBytes(*_headerStr));
+        header = _headerFactory->createBlockHeader(asBytes(_headerStr));
     }
     catch (std::exception const& e)
     {
@@ -156,14 +152,12 @@ bcos::protocol::BlockHeader::Ptr decodeBlockHeader(
 }
 
 bcos::protocol::Transaction::Ptr decodeTransaction(
-    const protocol::TransactionFactory::Ptr _txFactory, std::shared_ptr<std::string> _txStr)
+    const protocol::TransactionFactory::Ptr _txFactory, const std::string& _txStr)
 {
     protocol::Transaction::Ptr tx = nullptr;
-    if (!_txStr)
-        return nullptr;
     try
     {
-        tx = _txFactory->createTransaction(asBytes(*_txStr), false);
+        tx = _txFactory->createTransaction(asBytes(_txStr), false);
     }
     catch (std::exception const& e)
     {
@@ -174,15 +168,12 @@ bcos::protocol::Transaction::Ptr decodeTransaction(
 }
 
 bcos::protocol::TransactionReceipt::Ptr decodeReceipt(
-    const protocol::TransactionReceiptFactory::Ptr _receiptFactory,
-    std::shared_ptr<std::string> _receiptStr)
+    const protocol::TransactionReceiptFactory::Ptr _receiptFactory, const std::string& _receiptStr)
 {
     protocol::TransactionReceipt::Ptr receipt = nullptr;
-    if (!_receiptStr)
-        return nullptr;
     try
     {
-        receipt = _receiptFactory->createReceipt(asBytes(*_receiptStr));
+        receipt = _receiptFactory->createReceipt(asBytes(_receiptStr));
     }
     catch (std::exception const& e)
     {

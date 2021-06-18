@@ -85,10 +85,10 @@ BOOST_AUTO_TEST_CASE(testTableSetterGetterByRowAndField)
 
     std::promise<bool> p1;
     auto f1 = p1.get_future();
-    storageGetter->asyncTableGetter(tableFactory, SYS_HASH_2_NUMBER, "test", SYS_VALUE,
-        [&](Error::Ptr _error, std::shared_ptr<std::string> _ret) {
+    storageGetter->asyncTableGetter(tableFactory, SYS_HASH_2_NUMBER, "test",
+        [&](Error::Ptr _error, bcos::storage::Entry::Ptr _ret) {
             BOOST_CHECK_EQUAL(_error, nullptr);
-            BOOST_CHECK_EQUAL(*_ret, "world");
+            BOOST_CHECK_EQUAL(_ret->getField(SYS_VALUE), "world");
             p1.set_value(true);
         });
     BOOST_CHECK(f1.get());
@@ -109,8 +109,8 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     auto storageGetter = StorageGetter::storageGetterFactory();
-    storageGetter->asyncTableGetter(tableFactory, "errorTable", "row", "filed",
-        [&](Error::Ptr _error, std::shared_ptr<std::string> _value) {
+    storageGetter->asyncTableGetter(tableFactory, "errorTable", "row",
+        [&](Error::Ptr _error, bcos::storage::Entry::Ptr _value) {
             BOOST_CHECK(_error->errorCode() == -1);
             BOOST_CHECK_EQUAL(_value, nullptr);
             p1.set_value(true);
@@ -162,10 +162,9 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
     std::promise<bool> p6;
     auto f6 = p6.get_future();
     storageGetter->getSysConfig(
-        "", tableFactory, [&](Error::Ptr _error, std::string _value, std::string _number) {
+        "", tableFactory, [&](Error::Ptr _error, bcos::storage::Entry::Ptr _configEntry) {
             BOOST_CHECK(_error->errorCode() == -1);
-            BOOST_CHECK_EQUAL(_value, "");
-            BOOST_CHECK_EQUAL(_number, "");
+            BOOST_CHECK_EQUAL(_configEntry, nullptr);
             p6.set_value(true);
         });
     BOOST_CHECK(f6.get());
@@ -184,55 +183,55 @@ BOOST_AUTO_TEST_CASE(testGetterSetter)
     // SYS_CURRENT_STATE
     auto setCurrentStateRet = storageSetter->setCurrentState(tableFactory, "test", "test2");
     BOOST_CHECK(setCurrentStateRet);
-    storageGetter->getCurrentState("test", tableFactory,
-        [&](Error::Ptr _error, std::shared_ptr<std::string> getCurrentStateRet) {
+    storageGetter->getCurrentState(
+        "test", tableFactory, [&](Error::Ptr _error, bcos::storage::Entry::Ptr getCurrentStateRet) {
             BOOST_CHECK_EQUAL(_error, nullptr);
-            BOOST_CHECK_EQUAL(*getCurrentStateRet, "test2");
+            BOOST_CHECK_EQUAL(getCurrentStateRet->getField(SYS_VALUE), "test2");
         });
 
     // SYS_NUMBER_2_HEADER
     auto setNumber2HeaderRet = storageSetter->setNumber2Header(tableFactory, numberStr, "");
     BOOST_CHECK(setNumber2HeaderRet);
     storageGetter->getBlockHeaderFromStorage(number, tableFactory,
-        [&](Error::Ptr _error, std::shared_ptr<std::string> getBlockHeaderFromStorageRet) {
+        [&](Error::Ptr _error, bcos::storage::Entry::Ptr getBlockHeaderFromStorageRet) {
             BOOST_CHECK_EQUAL(_error, nullptr);
-            BOOST_CHECK_EQUAL(*getBlockHeaderFromStorageRet, "");
+            BOOST_CHECK_EQUAL(getBlockHeaderFromStorageRet->getField(SYS_VALUE), "");
         });
 
     // SYS_NUMBER_2_TXS
     auto setNumber2TxsRet = storageSetter->setNumber2Txs(tableFactory, numberStr, "");
     BOOST_CHECK(setNumber2TxsRet);
     storageGetter->getTxsFromStorage(number, tableFactory,
-        [&](Error::Ptr _error, std::shared_ptr<std::string> getTxsFromStorageRet) {
+        [&](Error::Ptr _error, bcos::storage::Entry::Ptr getTxsFromStorageRet) {
             BOOST_CHECK_EQUAL(_error, nullptr);
-            BOOST_CHECK_EQUAL(*getTxsFromStorageRet, "");
+            BOOST_CHECK_EQUAL(getTxsFromStorageRet->getField(SYS_VALUE), "");
         });
 
     // SYS_NUMBER_2_RECEIPTS
     auto setNumber2ReceiptsRet = storageSetter->setHashToReceipt(tableFactory, "txHash", "");
     BOOST_CHECK(setNumber2ReceiptsRet);
     storageGetter->getReceiptByTxHash("txHash", tableFactory,
-        [&](Error::Ptr _error, std::shared_ptr<std::string> getReceiptsFromStorageRet) {
+        [&](Error::Ptr _error, bcos::storage::Entry::Ptr getReceiptsFromStorageRet) {
             BOOST_CHECK_EQUAL(_error, nullptr);
-            BOOST_CHECK_EQUAL(*getReceiptsFromStorageRet, "");
+            BOOST_CHECK_EQUAL(getReceiptsFromStorageRet->getField(SYS_VALUE), "");
         });
 
     // SYS_HASH_2_NUMBER
     auto setHash2NumberRet = storageSetter->setHash2Number(tableFactory, hashStr, "");
     BOOST_CHECK(setHash2NumberRet);
     storageGetter->getBlockNumberByHash(hashStr, tableFactory,
-        [&](Error::Ptr _error, std::shared_ptr<std::string> getBlockNumberByHashRet) {
+        [&](Error::Ptr _error, bcos::storage::Entry::Ptr getBlockNumberByHashRet) {
             BOOST_CHECK_EQUAL(_error, nullptr);
-            BOOST_CHECK_EQUAL(*getBlockNumberByHashRet, "");
+            BOOST_CHECK_EQUAL(getBlockNumberByHashRet->getField(SYS_VALUE), "");
         });
 
     // SYS_NUMBER_2_HASH
     auto setNumber2HashRet = storageSetter->setNumber2Hash(tableFactory, numberStr, "");
     BOOST_CHECK(setNumber2HashRet);
     storageGetter->getBlockHashByNumber(number, tableFactory,
-        [&](Error::Ptr _error, std::shared_ptr<std::string> getBlockHashByNumberRet) {
+        [&](Error::Ptr _error, bcos::storage::Entry::Ptr getBlockHashByNumberRet) {
             BOOST_CHECK_EQUAL(_error, nullptr);
-            BOOST_CHECK_EQUAL(*getBlockHashByNumberRet, "");
+            BOOST_CHECK_EQUAL(getBlockHashByNumberRet->getField(SYS_VALUE), "");
         });
 
     // SYS_NUMBER_NONCES
@@ -240,19 +239,19 @@ BOOST_AUTO_TEST_CASE(testGetterSetter)
     BOOST_CHECK(setNumber2NoncesRet);
 
     storageGetter->getNoncesFromStorage(number, tableFactory,
-        [&](Error::Ptr _error, std::shared_ptr<std::string> getNoncesFromStorageRet) {
+        [&](Error::Ptr _error, bcos::storage::Entry::Ptr getNoncesFromStorageRet) {
             BOOST_CHECK_EQUAL(_error, nullptr);
-            BOOST_CHECK_EQUAL(*getNoncesFromStorageRet, "");
+            BOOST_CHECK_EQUAL(getNoncesFromStorageRet->getField(SYS_VALUE), "");
         });
 
     // SYS_CONFIG
     auto setSysConfigRet = storageSetter->setSysConfig(tableFactory, "test", "test4", "0");
     BOOST_CHECK(setSysConfigRet);
     storageGetter->getSysConfig(
-        "test", tableFactory, [&](Error::Ptr _error, std::string _value, std::string _number) {
+        "test", tableFactory, [&](Error::Ptr _error, bcos::storage::Entry::Ptr _configEntry) {
             BOOST_CHECK_EQUAL(_error, nullptr);
-            BOOST_CHECK_EQUAL(_value, "test4");
-            BOOST_CHECK_EQUAL(_number, "0");
+            BOOST_CHECK_EQUAL(_configEntry->getField(SYS_VALUE), "test4");
+            BOOST_CHECK_EQUAL(_configEntry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER), "0");
         });
 
     // SYS_CONSENSUS

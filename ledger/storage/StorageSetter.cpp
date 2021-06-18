@@ -231,7 +231,7 @@ bool StorageSetter::syncTableSetter(const bcos::storage::TableFactoryInterface::
         auto ret = table->setRow(_row, entry);
         auto insertTable_time_cost = utcTime() - record_time;
 
-        LEDGER_LOG(DEBUG) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", _tableName)
+        LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", _tableName)
                           << LOG_KV("openTableTimeCost", openTable_time_cost)
                           << LOG_KV("insertTableTimeCost", insertTable_time_cost)
                           << LOG_KV("totalTimeCost", utcTime() - start_time);
@@ -295,7 +295,7 @@ bool StorageSetter::setSysConfig(const TableFactoryInterface::Ptr& _tableFactory
         auto ret = table->setRow(_key, entry);
         auto insertTable_time_cost = utcTime() - record_time;
 
-        LEDGER_LOG(DEBUG) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", SYS_CONFIG)
+        LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", SYS_CONFIG)
                           << LOG_KV("openTableTimeCost", openTable_time_cost)
                           << LOG_KV("insertTableTimeCost", insertTable_time_cost)
                           << LOG_KV("totalTimeCost", utcTime() - start_time);
@@ -331,7 +331,7 @@ bool StorageSetter::setConsensusConfig(
         }
         auto insertTable_time_cost = utcTime() - record_time;
 
-        LEDGER_LOG(DEBUG) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", SYS_CONSENSUS)
+        LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", SYS_CONSENSUS)
                           << LOG_KV("openTableTimeCost", openTable_time_cost)
                           << LOG_KV("insertTableTimeCost", insertTable_time_cost)
                           << LOG_KV("totalTimeCost", utcTime() - start_time);

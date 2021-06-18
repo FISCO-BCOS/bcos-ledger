@@ -39,26 +39,26 @@ bool StorageGetter::checkTableExist(
 
 void StorageGetter::getTxsFromStorage(BlockNumber _blockNumber,
     const TableFactoryInterface::Ptr& _tableFactory,
-    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+    std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry)
 {
     asyncTableGetter(_tableFactory, SYS_NUMBER_2_TXS,
-        boost::lexical_cast<std::string>(_blockNumber), SYS_VALUE, _onGetString);
+        boost::lexical_cast<std::string>(_blockNumber), _onGetEntry);
 }
 
 void StorageGetter::getBlockHeaderFromStorage(bcos::protocol::BlockNumber _blockNumber,
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+    std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry)
 {
     asyncTableGetter(_tableFactory, SYS_NUMBER_2_BLOCK_HEADER,
-        boost::lexical_cast<std::string>(_blockNumber), SYS_VALUE, _onGetString);
+        boost::lexical_cast<std::string>(_blockNumber), _onGetEntry);
 }
 
 void StorageGetter::getNoncesFromStorage(BlockNumber _blockNumber,
     const TableFactoryInterface::Ptr& _tableFactory,
-    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+    std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry)
 {
     asyncTableGetter(_tableFactory, SYS_BLOCK_NUMBER_2_NONCES,
-        boost::lexical_cast<std::string>(_blockNumber), SYS_VALUE, _onGetString);
+        boost::lexical_cast<std::string>(_blockNumber), _onGetEntry);
 }
 
 void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _startNumber,
@@ -110,8 +110,7 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
             try
             {
                 const auto& entry = numberEntryMap.at(number);
-                block = decodeBlock(
-                    _blockFactory, std::make_shared<std::string>(entry->getField(SYS_VALUE)));
+                block = decodeBlock(_blockFactory, entry->getField(SYS_VALUE));
             }
             catch (std::out_of_range const& e)
             {
@@ -130,65 +129,30 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
 
 void StorageGetter::getBlockNumberByHash(std::string _hash,
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+    std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry)
 {
-    asyncTableGetter(_tableFactory, SYS_HASH_2_NUMBER, _hash, SYS_VALUE, _onGetString);
+    asyncTableGetter(_tableFactory, SYS_HASH_2_NUMBER, _hash, _onGetEntry);
 }
 
 void StorageGetter::getBlockHashByNumber(BlockNumber _num,
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+    std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry)
 {
-    asyncTableGetter(_tableFactory, SYS_NUMBER_2_HASH, boost::lexical_cast<std::string>(_num),
-        SYS_VALUE, _onGetString);
+    asyncTableGetter(
+        _tableFactory, SYS_NUMBER_2_HASH, boost::lexical_cast<std::string>(_num), _onGetEntry);
 }
 
 void StorageGetter::getCurrentState(std::string _row,
     const storage::TableFactoryInterface::Ptr& _tableFactory,
-    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+    std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry)
 {
-    return asyncTableGetter(_tableFactory, SYS_CURRENT_STATE, _row, SYS_VALUE, _onGetString);
+    return asyncTableGetter(_tableFactory, SYS_CURRENT_STATE, _row, _onGetEntry);
 }
 
 void StorageGetter::getSysConfig(std::string _key, const TableFactoryInterface::Ptr& _tableFactory,
-    std::function<void(Error::Ptr, std::string, std::string)> _onGetConfig)
+    std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetConfig)
 {
-    auto table = _tableFactory->openTable(SYS_CONFIG);
-    if (table)
-    {
-        table->asyncGetRow(
-            _key, [_onGetConfig](const Error::Ptr& _error, std::shared_ptr<Entry> _entry) {
-                if (_error && _error->errorCode() != CommonError::SUCCESS)
-                {
-                    // TODO: add error msg
-                    auto error =
-                        std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
-                    _onGetConfig(error, "", "");
-                    return;
-                }
-                if (!_entry)
-                {
-                    // TODO: add error msg
-                    auto error = std::make_shared<Error>(-1, "");
-                    _onGetConfig(error, "", "");
-                    return;
-                }
-                auto value = _entry->getField(SYS_VALUE);
-                auto number = _entry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER);
-
-                LEDGER_LOG(DEBUG) << LOG_BADGE("getSysConfig") << LOG_DESC("Get config from db")
-                                  << LOG_KV("openTable", SYS_CONFIG) << LOG_KV("value", value)
-                                  << LOG_KV("number", number);
-                _onGetConfig(nullptr, value, number);
-            });
-    }
-    else
-    {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_CONFIG table error from db");
-        // TODO: add error msg
-        auto error = std::make_shared<Error>(-1, "");
-        _onGetConfig(error, "", "");
-    }
+    asyncTableGetter(_tableFactory, SYS_CONFIG, _key, _onGetConfig);
 }
 
 void StorageGetter::getConsensusConfig(const std::string& _nodeType,
@@ -243,8 +207,8 @@ void StorageGetter::getConsensusConfig(const std::string& _nodeType,
 }
 
 void StorageGetter::asyncTableGetter(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _tableName, std::string _row, std::string _field,
-    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+    const std::string& _tableName, std::string _row,
+    std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry)
 {
     auto table = _tableFactory->openTable(_tableName);
     if (!table)
@@ -253,31 +217,29 @@ void StorageGetter::asyncTableGetter(const bcos::storage::TableFactoryInterface:
                           << LOG_KV("openTable", _tableName);
         // TODO: add error code and msg
         auto error = std::make_shared<Error>(-1, "");
-        _onGetString(error, nullptr);
+        _onGetEntry(error, nullptr);
         return;
     }
 
     LEDGER_LOG(TRACE) << LOG_BADGE("asyncTableGetter") << LOG_DESC("Get string from db")
-                      << LOG_KV("openTable", _tableName) << LOG_KV("row", _row)
-                      << LOG_KV("field", _field);
-    table->asyncGetRow(_row, [_onGetString, _field](const Error::Ptr& _error, Entry::Ptr _entry) {
+                      << LOG_KV("openTable", _tableName) << LOG_KV("row", _row);
+    table->asyncGetRow(_row, [_onGetEntry](const Error::Ptr& _error, Entry::Ptr _entry) {
         if (_error && _error->errorCode() != CommonError::SUCCESS)
         {
             auto error = std::make_shared<Error>(
                 _error->errorCode(), "asyncGetRow callback error" + _error->errorMessage());
-            _onGetString(error, nullptr);
+            _onGetEntry(error, nullptr);
             return;
         }
         if (_entry)
         {
-            auto ret = std::make_shared<std::string>(_entry->getField(_field));
-            _onGetString(nullptr, ret);
+            _onGetEntry(nullptr, _entry);
         }
         else
         {
             // TODO: add error code
             auto error = std::make_shared<Error>(-1, "asyncGetRow callback null entry");
-            _onGetString(error, nullptr);
+            _onGetEntry(error, nullptr);
         }
     });
 }
@@ -316,8 +278,7 @@ void StorageGetter::getBatchTxByHashList(std::shared_ptr<std::vector<std::string
             try
             {
                 const auto& entry = _hashEntryMap.at(hash);
-                auto tx = decodeTransaction(
-                    _txFactory, std::make_shared<std::string>(entry->getField(SYS_VALUE)));
+                auto tx = decodeTransaction(_txFactory, entry->getField(SYS_VALUE));
                 if (tx)
                     txList->emplace_back(tx);
             }
@@ -332,9 +293,9 @@ void StorageGetter::getBatchTxByHashList(std::shared_ptr<std::vector<std::string
 
 void StorageGetter::getReceiptByTxHash(std::string _txHash,
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-    std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString)
+    std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry)
 {
-    asyncTableGetter(_tableFactory, SYS_HASH_2_RECEIPT, _txHash, SYS_VALUE, _onGetString);
+    asyncTableGetter(_tableFactory, SYS_HASH_2_RECEIPT, _txHash, _onGetEntry);
 }
 
 void StorageGetter::getBatchReceiptsByHashList(std::shared_ptr<std::vector<std::string>> _hashList,
@@ -367,8 +328,7 @@ void StorageGetter::getBatchReceiptsByHashList(std::shared_ptr<std::vector<std::
             try
             {
                 const auto& entry = _hashEntryMap.at(hash);
-                auto receipt = decodeReceipt(
-                    _receiptFactory, std::make_shared<std::string>(entry->getField(SYS_VALUE)));
+                auto receipt = decodeReceipt(_receiptFactory, entry->getField(SYS_VALUE));
                 if (receipt)
                     receiptList->emplace_back(receipt);
             }

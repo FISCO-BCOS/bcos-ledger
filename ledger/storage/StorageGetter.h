@@ -29,6 +29,7 @@
 #include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
 #include "bcos-framework/interfaces/storage/TableInterface.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include <bcos-framework/interfaces/storage/Common.h>
 
 namespace bcos::ledger
 {
@@ -53,7 +54,7 @@ public:
      */
     void getTxsFromStorage(bcos::protocol::BlockNumber _blockNumber,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
+        std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
      * @brief get block header in SYS_NUMBER_2_BLOCK_HEADER table
@@ -62,7 +63,7 @@ public:
      */
     void getBlockHeaderFromStorage(bcos::protocol::BlockNumber _blockNumber,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
+        std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
      * @brief get nonce list in SYS_BLOCK_NUMBER_2_NONCES table
@@ -71,7 +72,7 @@ public:
      */
     void getNoncesFromStorage(bcos::protocol::BlockNumber _blockNumber,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
+        std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     void getNoncesBatchFromStorage(bcos::protocol::BlockNumber _startNumber,
         protocol::BlockNumber _endNumber,
@@ -90,7 +91,7 @@ public:
      */
     void getBlockNumberByHash(std::string _hash,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
+        std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
      * @brief get block hash by number
@@ -99,7 +100,7 @@ public:
      */
     void getBlockHashByNumber(protocol::BlockNumber _num,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
+        std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
      * @brief get current state in row
@@ -107,16 +108,15 @@ public:
      * @param _row
      */
     void getCurrentState(std::string _row, const storage::TableFactoryInterface::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
+        std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
      * @brief get sys config in table SYS_CONFIG
      * @param _tableFactory
      * @param _key row key in table
-     * @return return a string pair <value, enableBlockNumber>
      */
     void getSysConfig(std::string _key, const storage::TableFactoryInterface::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, std::string, std::string)> _onGetConfig);
+        std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetConfig);
 
     /**
      * @brief get consensus node list in table SYS_CONSENSUS
@@ -136,7 +136,7 @@ public:
 
     void getReceiptByTxHash(std::string _txHash,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
+        std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     void getBatchReceiptsByHashList(std::shared_ptr<std::vector<std::string>> _hashList,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
@@ -149,10 +149,10 @@ public:
      * @param _tableName
      * @param _row
      * @param _field
-     * @param _onGetString callback when get string data in db
+     * @param _onGetEntry callback when get entry in db
      */
     void asyncTableGetter(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-        const std::string& _tableName, std::string _row, std::string _field,
-        std::function<void(Error::Ptr, std::shared_ptr<std::string>)> _onGetString);
+        const std::string& _tableName, std::string _row,
+        std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry);
 };
 }  // namespace bcos::ledger
