@@ -63,8 +63,6 @@ public:
     {
         std::shared_ptr<Entry> ret = nullptr;
         std::lock_guard<std::mutex> lock(m_mutex);
-        LEDGER_LOG(TRACE) << LOG_BADGE("getRow") << LOG_KV("tableName", _tableInfo->name)
-                          << LOG_KV("key", _key);
         if (data.find(_tableInfo->name) != data.end())
         {
             if (data[_tableInfo->name].find(std::string(_key)) != data[_tableInfo->name].end())
@@ -85,8 +83,6 @@ public:
     {
         std::map<std::string, std::shared_ptr<Entry>> ret;
         std::lock_guard<std::mutex> lock(m_mutex);
-        LEDGER_LOG(TRACE) << LOG_BADGE("getRow") << LOG_KV("tableName", _tableInfo->name)
-                          << LOG_KV("keySize", _keys.size());
         if (data.count(_tableInfo->name))
         {
             for (auto& key : _keys)
@@ -165,10 +161,20 @@ public:
             auto storage = self.lock();
             if (storage)
             {
+                time_t t = time(0);
                 auto keyList = storage->getPrimaryKeys(_tableInfo, _condition);
                 boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
                 auto success = std::make_shared<Error>(0, "");
+                LEDGER_LOG(TRACE) << LOG_BADGE("asyncGetPrimaryKeys")
+                                  << LOG_DESC("storage getKeys finish")
+                                  << LOG_KV("tableName", _tableInfo->name)
+                                  << LOG_KV("exec_time", time(0) - t);
+                t = time(0);
                 _callback(success, keyList);
+                LEDGER_LOG(TRACE) << LOG_BADGE("asyncGetPrimaryKeys")
+                                  << LOG_DESC("storage callback")
+                                  << LOG_KV("tableName", _tableInfo->name)
+                                  << LOG_KV("callback_time", time(0) - t);
             }
             else
             {
@@ -187,10 +193,19 @@ public:
             auto storage = self.lock();
             if (storage)
             {
+                time_t t = time(0);
                 auto entry = storage->getRow(_tableInfo, key);
                 boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-                auto error = std::make_shared<Error>(0, "");
-                _callback(error, entry);
+                LEDGER_LOG(TRACE) << LOG_BADGE("asyncGetRow") << LOG_DESC("storage getRow finish")
+                                  << LOG_KV("tableName", _tableInfo->name)
+                                  << LOG_KV("key", std::string(key))
+                                  << LOG_KV("exec_time", time(0) - t);
+                t = time(0);
+                _callback(nullptr, entry);
+                LEDGER_LOG(TRACE) << LOG_BADGE("asyncGetRow") << LOG_DESC("storage callback")
+                                  << LOG_KV("tableName", _tableInfo->name)
+                                  << LOG_KV("key", std::string(key))
+                                  << LOG_KV("callback_time", time(0) - t);
             }
             else
             {
@@ -209,10 +224,17 @@ public:
             auto storage = self.lock();
             if (storage)
             {
+                time_t t = time(0);
                 auto rowMap = storage->getRows(_tableInfo, *_keyList);
                 boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
-                auto error = std::make_shared<Error>(0, "");
-                _callback(error, rowMap);
+                LEDGER_LOG(TRACE) << LOG_BADGE("asyncGetRows") << LOG_DESC("storage getRows finish")
+                                  << LOG_KV("tableName", _tableInfo->name)
+                                  << LOG_KV("exec_time", time(0) - t);
+                t = time(0);
+                _callback(nullptr, rowMap);
+                LEDGER_LOG(TRACE) << LOG_BADGE("asyncGetRows") << LOG_DESC("storage callback")
+                                  << LOG_KV("tableName", _tableInfo->name)
+                                  << LOG_KV("callback_time", time(0) - t);
             }
             else
             {
@@ -233,10 +255,17 @@ public:
             auto storage = self.lock();
             if (storage)
             {
+                time_t t = time(0);
                 auto retPair = storage->commitBlock(_number, *_tableInfo, *_tableMap);
                 boost::this_thread::sleep_for(boost::chrono::milliseconds(SLEEP_MILLI_SECONDS));
                 auto error = std::make_shared<Error>(0, "");
+                LEDGER_LOG(TRACE) << LOG_BADGE("asyncCommitBlock")
+                                  << LOG_DESC("storage commit finish") << LOG_KV("number", _number)
+                                  << LOG_KV("exec_time", time(0) - t);
+                t = time(0);
                 _callback(error, retPair.first);
+                LEDGER_LOG(TRACE) << LOG_BADGE("asyncCommitBlock") << LOG_DESC("storage callback")
+                                  << LOG_KV("callback_time", time(0) - t);
             }
             else
             {

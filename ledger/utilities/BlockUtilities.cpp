@@ -124,7 +124,14 @@ bcos::protocol::Block::Ptr decodeBlock(
     const protocol::BlockFactory::Ptr _blockFactory, const std::string& _blockStr)
 {
     protocol::Block::Ptr block = nullptr;
-    block = _blockFactory->createBlock(asBytes(_blockStr), false, false);
+    try
+    {
+        block = _blockFactory->createBlock(asBytes(_blockStr), false, false);
+    }
+    catch (std::exception const& e)
+    {
+        LEDGER_LOG(ERROR) << LOG_BADGE("decodeBlock") << LOG_DESC("decode error, return nullptr");
+    }
     return block;
 }
 
@@ -132,7 +139,15 @@ bcos::protocol::BlockHeader::Ptr decodeBlockHeader(
     const protocol::BlockHeaderFactory::Ptr _headerFactory, const std::string& _headerStr)
 {
     protocol::BlockHeader::Ptr header = nullptr;
-    header = _headerFactory->createBlockHeader(asBytes(_headerStr));
+    try
+    {
+        header = _headerFactory->createBlockHeader(asBytes(_headerStr));
+    }
+    catch (std::exception const& e)
+    {
+        LEDGER_LOG(ERROR) << LOG_BADGE("decodeBlockHeader")
+                          << LOG_DESC("decode error, return nullptr");
+    }
     return header;
 }
 
@@ -140,7 +155,15 @@ bcos::protocol::Transaction::Ptr decodeTransaction(
     const protocol::TransactionFactory::Ptr _txFactory, const std::string& _txStr)
 {
     protocol::Transaction::Ptr tx = nullptr;
-    tx = _txFactory->createTransaction(asBytes(_txStr), false);
+    try
+    {
+        tx = _txFactory->createTransaction(asBytes(_txStr), false);
+    }
+    catch (std::exception const& e)
+    {
+        LEDGER_LOG(ERROR) << LOG_BADGE("decodeTransaction")
+                          << LOG_DESC("decode error, return nullptr");
+    }
     return tx;
 }
 
@@ -148,7 +171,14 @@ bcos::protocol::TransactionReceipt::Ptr decodeReceipt(
     const protocol::TransactionReceiptFactory::Ptr _receiptFactory, const std::string& _receiptStr)
 {
     protocol::TransactionReceipt::Ptr receipt = nullptr;
-    receipt = _receiptFactory->createReceipt(asBytes(_receiptStr));
+    try
+    {
+        receipt = _receiptFactory->createReceipt(asBytes(_receiptStr));
+    }
+    catch (std::exception const& e)
+    {
+        LEDGER_LOG(ERROR) << LOG_BADGE("decodeReceipt") << LOG_DESC("decode error, return nullptr");
+    }
     return receipt;
 }
 }  // namespace bcos::ledger

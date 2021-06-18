@@ -199,8 +199,8 @@ private:
     FIFOCache<protocol::TransactionsPtr, protocol::Transactions> m_transactionsCache;
     FIFOCache<protocol::ReceiptsPtr, protocol::Receipts> m_receiptCache;
 
-    boost::condition_variable m_signalled;
-    boost::mutex x_signalled;
+    mutable SharedMutex m_blockNumberMutex;
+    protocol::BlockNumber m_blockNumber = -1;
 
     size_t m_timeout = 10000;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
