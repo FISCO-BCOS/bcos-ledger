@@ -109,7 +109,11 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
             Block::Ptr block;
             try
             {
-                const auto& entry = numberEntryMap.at(number);
+                auto entry = numberEntryMap.at(number);
+                if (!entry)
+                {
+                    continue;
+                }
                 block = decodeBlock(_blockFactory, entry->getField(SYS_VALUE));
             }
             catch (std::out_of_range const& e)
@@ -277,7 +281,11 @@ void StorageGetter::getBatchTxByHashList(std::shared_ptr<std::vector<std::string
         {
             try
             {
-                const auto& entry = _hashEntryMap.at(hash);
+                auto entry = _hashEntryMap.at(hash);
+                if (!entry)
+                {
+                    continue;
+                }
                 auto tx = decodeTransaction(_txFactory, entry->getField(SYS_VALUE));
                 if (tx)
                     txList->emplace_back(tx);
@@ -327,7 +335,11 @@ void StorageGetter::getBatchReceiptsByHashList(std::shared_ptr<std::vector<std::
         {
             try
             {
-                const auto& entry = _hashEntryMap.at(hash);
+                auto entry = _hashEntryMap.at(hash);
+                if (!entry)
+                {
+                    continue;
+                }
                 auto receipt = decodeReceipt(_receiptFactory, entry->getField(SYS_VALUE));
                 if (receipt)
                     receiptList->emplace_back(receipt);
