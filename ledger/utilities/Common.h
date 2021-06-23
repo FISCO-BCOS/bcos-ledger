@@ -34,11 +34,11 @@ using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 
 static const std::string SYS_VALUE = "value";
 static const std::string SYS_KEY = "key";
-static const std::string SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_block_number";
+static const std::string SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_number";
 
 static const std::string NODE_TYPE = "type";
 static const std::string NODE_WEIGHT = "weight";
-static const std::string NODE_ENABLE_NUMBER = "enable_block_number";
+static const std::string NODE_ENABLE_NUMBER = "enable_number";
 
 // FileSystem paths
 static const std::string FS_ROOT = "/";
