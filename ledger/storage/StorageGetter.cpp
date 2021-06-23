@@ -235,6 +235,7 @@ void StorageGetter::asyncTableGetter(const bcos::storage::TableFactoryInterface:
             _onGetEntry(error, nullptr);
             return;
         }
+        // FIXME: get an empty entry should callback without errorCode handle
         if (_entry)
         {
             _onGetEntry(nullptr, _entry);

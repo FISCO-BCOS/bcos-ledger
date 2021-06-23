@@ -719,8 +719,8 @@ void Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag,
                     auto insertSize = blockReceiptListSetter(block, _receipts);
                     LEDGER_LOG(TRACE)
                         << LOG_BADGE("getBlock") << LOG_DESC("insert block receipts")
-                        << LOG_KV("txsSize", _receipts->size()) << LOG_KV("insertSize", insertSize)
-                        << LOG_KV("blockNumber", _blockNumber);
+                        << LOG_KV("receiptsSize", _receipts->size())
+                        << LOG_KV("insertSize", insertSize) << LOG_KV("blockNumber", _blockNumber);
                     if (singlePartFlag)
                     {
                         _onGetBlock(nullptr, block);
@@ -953,9 +953,9 @@ void Ledger::getTxs(const bcos::protocol::BlockNumber& _blockNumber,
                         }
                         LEDGER_LOG(TRACE) << LOG_BADGE("getTxs") << LOG_DESC("Get txs from storage")
                                           << LOG_KV("txsSize", _txs->size());
-                        LEDGER_LOG(TRACE) << LOG_BADGE("getTxs") << LOG_DESC("Write to cache");
                         if (_txs->size() > 0)
                         {
+                            LEDGER_LOG(TRACE) << LOG_BADGE("getTxs") << LOG_DESC("Write to cache");
                             m_transactionsCache.add(_blockNumber, _txs);
                         }
                         _onGetTxs(nullptr, _txs);
@@ -1247,14 +1247,18 @@ LedgerConfig::Ptr Ledger::getLedgerConfig(
     std::atomic_bool asyncRet = {true};
     ledgerConfig->setBlockNumber(_number);
     ledgerConfig->setHash(_hash);
+
     auto timeoutPromise = std::make_shared<std::promise<std::string>>();
     auto countLimitPromise = std::make_shared<std::promise<std::string>>();
     auto sealerPromise = std::make_shared<std::promise<consensus::ConsensusNodeListPtr>>();
     auto observerPromise = std::make_shared<std::promise<consensus::ConsensusNodeListPtr>>();
+    auto switchPeriodPromise = std::make_shared<std::promise<std::string>>();
+
     auto timeoutFuture = timeoutPromise->get_future();
     auto countLimitFuture = countLimitPromise->get_future();
     auto sealerFuture = sealerPromise->get_future();
     auto observerFuture = observerPromise->get_future();
+    auto switchPeriodFuture = switchPeriodPromise->get_future();
 
     asyncGetSystemConfigByKey(SYSTEM_KEY_CONSENSUS_TIMEOUT,
         [timeoutPromise](Error::Ptr _error, std::string _value, BlockNumber) {
@@ -1312,13 +1316,29 @@ LedgerConfig::Ptr Ledger::getLedgerConfig(
             }
             observerPromise->set_value(_nodeList);
         });
+    asyncGetSystemConfigByKey(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
+        [switchPeriodPromise](Error::Ptr _error, std::string _value, BlockNumber) {
+            if (_error && _error->errorCode() != CommonError::SUCCESS)
+            {
+                LEDGER_LOG(ERROR) << LOG_BADGE("getLedgerConfig")
+                                  << LOG_DESC("asyncGetSystemConfigByKey callback error")
+                                  << LOG_KV("getKey", SYSTEM_KEY_CONSENSUS_LEADER_PERIOD)
+                                  << LOG_KV("errorCode", _error->errorCode())
+                                  << LOG_KV("errorMsg", _error->errorMessage());
+                switchPeriodPromise->set_value("");
+                return;
+            }
+            switchPeriodPromise->set_value(_value);
+        });
 
     auto consensusTimeout = timeoutFuture.get();
     auto txLimit = countLimitFuture.get();
     auto sealerList = sealerFuture.get();
     auto observerList = observerFuture.get();
+    auto switchPeriod = switchPeriodFuture.get();
 
-    if (consensusTimeout.empty() || txLimit.empty() || !sealerList || !observerList)
+    if (consensusTimeout.empty() || txLimit.empty() || switchPeriod.empty() || !sealerList ||
+        !observerList)
     {
         LEDGER_LOG(ERROR) << LOG_BADGE("getLedgerConfig")
                           << LOG_DESC("Get ledgerConfig from db error");
@@ -1326,6 +1346,7 @@ LedgerConfig::Ptr Ledger::getLedgerConfig(
     }
     ledgerConfig->setConsensusTimeout(boost::lexical_cast<uint64_t>(consensusTimeout));
     ledgerConfig->setBlockTxCountLimit(boost::lexical_cast<uint64_t>(txLimit));
+    ledgerConfig->setLeaderSwitchPeriod(boost::lexical_cast<uint64_t>(switchPeriod));
     ledgerConfig->setConsensusNodeList(*sealerList);
     ledgerConfig->setObserverNodeList(*observerList);
     return ledgerConfig;

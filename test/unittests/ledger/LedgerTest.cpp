@@ -133,6 +133,19 @@ public:
         future.get();
     }
 
+    inline void initEmptyBlocks(int _number)
+    {
+        std::promise<bool> fakeBlockPromise;
+        auto future = fakeBlockPromise.get_future();
+        m_ledger->asyncGetBlockHashByNumber(
+            0, [=, &fakeBlockPromise](Error::Ptr, const HashType& _hash) {
+                m_fakeBlocks = fakeEmptyBlocks(
+                    m_blockFactory->cryptoSuite(), m_blockFactory, _number, _hash.hex());
+                fakeBlockPromise.set_value(true);
+            });
+        future.get();
+    }
+
     inline void initChain(int _number)
     {
         initBlocks(_number);
@@ -180,6 +193,37 @@ public:
             BOOST_CHECK_EQUAL(f3.get(), true);
         }
     }
+
+    inline void initEmptyChain(int _number)
+    {
+        initEmptyBlocks(_number);
+        for (int i = 0; i < _number; ++i)
+        {
+            auto table = getTableFactory(i + 1);
+
+            std::promise<bool> p2;
+            auto f2 = p2.get_future();
+            m_ledger->asyncStoreReceipts(table, m_fakeBlocks->at(i), [=, &p2](Error::Ptr _error) {
+                BOOST_CHECK_EQUAL(_error, nullptr);
+                p2.set_value(true);
+            });
+            BOOST_CHECK_EQUAL(f2.get(), true);
+
+            std::promise<bool> p3;
+            auto f3 = p3.get_future();
+            m_ledger->asyncCommitBlock(m_fakeBlocks->at(i)->blockHeader(),
+                [=, &p3](Error::Ptr _error, LedgerConfig::Ptr _config) {
+                    BOOST_CHECK_EQUAL(_error, nullptr);
+                    BOOST_CHECK_EQUAL(_config->blockNumber(), i + 1);
+                    BOOST_CHECK(!_config->consensusNodeList().empty());
+                    BOOST_CHECK(!_config->observerNodeList().empty());
+                    p3.set_value(true);
+                });
+
+            BOOST_CHECK_EQUAL(f3.get(), true);
+        }
+    }
+
     inline TableFactoryInterface::Ptr getStateTable(const BlockNumber& _number)
     {
         auto hashImpl = std::make_shared<Keccak256Hash>();
@@ -866,6 +910,31 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);
+}
+
+BOOST_AUTO_TEST_CASE(testDecode)
+{
+    auto block = decodeBlock(m_blockFactory, "");
+    auto tx = decodeTransaction(m_blockFactory->transactionFactory(), "");
+    auto header = decodeBlockHeader(m_blockFactory->blockHeaderFactory(), "");
+    auto receipt = decodeReceipt(m_blockFactory->receiptFactory(), "");
+}
+
+BOOST_AUTO_TEST_CASE(testEmptyBlock)
+{
+    initFixture();
+    initEmptyChain(20);
+
+    // FIXME: empty block should get tx/receipt error
+    std::promise<bool> p1;
+    auto f1 = p1.get_future();
+    m_ledger->asyncGetBlockDataByNumber(
+        4, FULL_BLOCK, [&](Error::Ptr _error, bcos::protocol::Block::Ptr _block) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK(_block != nullptr);
+            p1.set_value(true);
+        });
+    BOOST_CHECK(f1.get());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

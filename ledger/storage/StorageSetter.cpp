@@ -82,9 +82,8 @@ bool DirInfo::fromString(DirInfo& _dir, std::string _str)
 
 void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tableFactory)
 {
-    auto configFields = boost::join(std::vector{SYS_VALUE, SYS_CONFIG_ENABLE_BLOCK_NUMBER}, ",");
-    auto consensusFields =
-        boost::join(std::vector{NODE_TYPE, NODE_WEIGHT, NODE_ENABLE_NUMBER}, ",");
+    auto configFields = SYS_VALUE + "," + SYS_CONFIG_ENABLE_BLOCK_NUMBER;
+    auto consensusFields = NODE_TYPE + "," + NODE_WEIGHT + "," + NODE_ENABLE_NUMBER;
 
     _tableFactory->createTable(SYS_CONFIG, SYS_KEY, configFields);
     _tableFactory->createTable(SYS_CONSENSUS, "node_id", consensusFields);
