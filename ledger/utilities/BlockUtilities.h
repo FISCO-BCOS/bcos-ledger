@@ -28,12 +28,12 @@ protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr&
 
 std::shared_ptr<std::vector<std::string>> blockTxHashListGetter(const protocol::Block::Ptr& _block);
 
-size_t blockTransactionListSetter(
+int blockTransactionListSetter(
     const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs);
 
 protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block);
 
-size_t blockReceiptListSetter(
+int blockReceiptListSetter(
     const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts);
 
 bcos::protocol::Block::Ptr decodeBlock(

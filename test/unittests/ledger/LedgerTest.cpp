@@ -347,15 +347,15 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
     auto f1 = p1.get_future();
     m_ledger->asyncGetBlockHashByNumber(-1, [=, &p1](Error::Ptr _error, HashType _hash) {
         BOOST_CHECK_EQUAL(_error->errorCode(), -1);
-        BOOST_CHECK_EQUAL(_hash, HashType(""));
+        BOOST_CHECK_EQUAL(_hash, HashType());
         p1.set_value(true);
     });
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetBlockHashByNumber(1000, [=, &p2](Error::Ptr _error, HashType _hash) {
-        BOOST_CHECK_EQUAL(_error->errorCode(), -1);
-        BOOST_CHECK_EQUAL(_hash, HashType(""));
+        BOOST_CHECK_EQUAL(_error, nullptr);
+        BOOST_CHECK_EQUAL(_hash, HashType());
         p2.set_value(true);
     });
 
@@ -382,8 +382,8 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     // error hash
-    m_ledger->asyncGetBlockNumberByHash(HashType(""), [&](Error::Ptr _error, BlockNumber _number) {
-        BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+    m_ledger->asyncGetBlockNumberByHash(HashType(), [&](Error::Ptr _error, BlockNumber _number) {
+        BOOST_CHECK_EQUAL(_error, nullptr);
         BOOST_CHECK_EQUAL(_number, -1);
         p1.set_value(true);
     });
@@ -392,7 +392,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
     auto f2 = p2.get_future();
     m_ledger->asyncGetBlockNumberByHash(
         HashType("123"), [&](Error::Ptr _error, BlockNumber _number) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+            BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK_EQUAL(_number, -1);
             p2.set_value(true);
         });
@@ -482,7 +482,6 @@ BOOST_AUTO_TEST_CASE(commit)
     initFixture();
     initChain(5);
 
-    // TODO: recover this ut when implement isBlockShouldCommit with cache
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     // test isBlockShouldCommit
@@ -628,8 +627,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
     auto f6 = p6.get_future();
     m_ledger->asyncGetBlockDataByNumber(
         0, TRANSACTIONS, [=, &p6](Error::Ptr _error, Block::Ptr _block) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), -1);
-            BOOST_CHECK_EQUAL(_block, nullptr);
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(_block->transactionsSize(), 0);
             p6.set_value(true);
         });
 
@@ -637,8 +636,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
     auto f7 = p7.get_future();
     m_ledger->asyncGetBlockDataByNumber(
         0, RECEIPTS, [=, &p7](Error::Ptr _error, Block::Ptr _block) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), -1);
-            BOOST_CHECK_EQUAL(_block, nullptr);
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(_block->receiptsSize(), 0);
             p7.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
@@ -763,9 +762,9 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
     std::promise<bool> p3;
     auto f3 = p3.get_future();
     // error hash
-    m_ledger->asyncGetTransactionReceiptByHash(HashType(""), false,
+    m_ledger->asyncGetTransactionReceiptByHash(HashType(), false,
         [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+            BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK_EQUAL(_receipt, nullptr);
             BOOST_CHECK(_proof == nullptr);
             p3.set_value(true);
@@ -775,7 +774,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
     auto f4 = p4.get_future();
     m_ledger->asyncGetTransactionReceiptByHash(HashType("123"), true,
         [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+            BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK_EQUAL(_receipt, nullptr);
             BOOST_CHECK(_proof == nullptr);
             p4.set_value(true);
@@ -902,7 +901,7 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     // get error key
     m_ledger->asyncGetSystemConfigByKey(
         "test", [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
-            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK(_error == nullptr);
             BOOST_CHECK_EQUAL(_value, "");
             BOOST_CHECK_EQUAL(_number, -1);
             p3.set_value(true);
@@ -925,7 +924,6 @@ BOOST_AUTO_TEST_CASE(testEmptyBlock)
     initFixture();
     initEmptyChain(20);
 
-    // FIXME: empty block should get tx/receipt error
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetBlockDataByNumber(

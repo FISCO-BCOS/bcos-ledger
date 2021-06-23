@@ -106,7 +106,6 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
         }
         for (const auto& number : *numberList)
         {
-            Block::Ptr block;
             try
             {
                 auto entry = numberEntryMap.at(number);
@@ -114,16 +113,17 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
                 {
                     continue;
                 }
-                block = decodeBlock(_blockFactory, entry->getField(SYS_VALUE));
+                auto block = decodeBlock(_blockFactory, entry->getField(SYS_VALUE));
+                if (!block)
+                    continue;
+                auto nonceList = std::make_shared<protocol::NonceList>(block->nonceList());
+                retMap->emplace(
+                    std::make_pair(boost::lexical_cast<BlockNumber>(number), nonceList));
             }
             catch (std::out_of_range const& e)
             {
                 continue;
             }
-            if (!block)
-                continue;
-            auto nonceList = std::make_shared<protocol::NonceList>(block->nonceList());
-            retMap->emplace(std::make_pair(boost::lexical_cast<BlockNumber>(number), nonceList));
         }
         LEDGER_LOG(DEBUG) << LOG_DESC("Get Nonce list from db")
                           << LOG_KV("retMapSize", retMap->size());
@@ -235,17 +235,8 @@ void StorageGetter::asyncTableGetter(const bcos::storage::TableFactoryInterface:
             _onGetEntry(error, nullptr);
             return;
         }
-        // FIXME: get an empty entry should callback without errorCode handle
-        if (_entry)
-        {
-            _onGetEntry(nullptr, _entry);
-        }
-        else
-        {
-            // TODO: add error code
-            auto error = std::make_shared<Error>(-1, "asyncGetRow callback null entry");
-            _onGetEntry(error, nullptr);
-        }
+        // do not handle if entry is nullptr, just send it out
+        _onGetEntry(nullptr, _entry);
     });
 }
 
@@ -267,8 +258,8 @@ void StorageGetter::getBatchTxByHashList(std::shared_ptr<std::vector<std::string
                                        const std::map<std::string, Entry::Ptr>& _hashEntryMap) {
         if (_error && _error->errorCode() != CommonError::SUCCESS)
         {
-            auto error = std::make_shared<Error>(
-                _error->errorCode(), "asyncGetRows callback error" + _error->errorMessage());
+            LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_TX table error from db");
+            auto error = std::make_shared<Error>(_error->errorCode(), _error->errorMessage());
             _onGetTx(error, nullptr);
             return;
         }
@@ -278,6 +269,7 @@ void StorageGetter::getBatchTxByHashList(std::shared_ptr<std::vector<std::string
             _onGetTx(nullptr, txList);
             return;
         }
+        // get tx list in hashList sequence
         for (const auto& hash : *_hashList)
         {
             try
@@ -322,36 +314,41 @@ void StorageGetter::getBatchReceiptsByHashList(std::shared_ptr<std::vector<std::
         _onGetReceipt(error, nullptr);
         return;
     }
-    table->asyncGetRows(_hashList, [_onGetReceipt, _receiptFactory, _hashList](
-                                       const Error::Ptr& _error,
-                                       const std::map<std::string, Entry::Ptr>& _hashEntryMap) {
-        if (_error && _error->errorCode() != CommonError::SUCCESS)
-        {
-            auto error = std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
-            _onGetReceipt(error, nullptr);
-            return;
-        }
-        auto receiptList = std::make_shared<Receipts>();
-        for (const auto& hash : *_hashList)
-        {
-            try
+    table->asyncGetRows(
+        _hashList, [_onGetReceipt, _receiptFactory, _hashList](const Error::Ptr& _error,
+                       const std::map<std::string, Entry::Ptr>& _hashEntryMap) {
+            if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
-                auto entry = _hashEntryMap.at(hash);
-                if (!entry)
+                auto error = std::make_shared<Error>(_error->errorCode(), _error->errorMessage());
+                _onGetReceipt(error, nullptr);
+                return;
+            }
+            auto receiptList = std::make_shared<Receipts>();
+            if (_hashEntryMap.empty())
+            {
+                _onGetReceipt(nullptr, receiptList);
+                return;
+            }
+            for (const auto& hash : *_hashList)
+            {
+                try
+                {
+                    auto entry = _hashEntryMap.at(hash);
+                    if (!entry)
+                    {
+                        continue;
+                    }
+                    auto receipt = decodeReceipt(_receiptFactory, entry->getField(SYS_VALUE));
+                    if (receipt)
+                        receiptList->emplace_back(receipt);
+                }
+                catch (std::out_of_range const& e)
                 {
                     continue;
                 }
-                auto receipt = decodeReceipt(_receiptFactory, entry->getField(SYS_VALUE));
-                if (receipt)
-                    receiptList->emplace_back(receipt);
             }
-            catch (std::out_of_range const& e)
-            {
-                continue;
-            }
-        }
-        _onGetReceipt(nullptr, receiptList);
-    });
+            _onGetReceipt(nullptr, receiptList);
+        });
 }
 
 }  // namespace bcos::ledger

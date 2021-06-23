@@ -67,7 +67,7 @@ std::shared_ptr<std::vector<std::string>> blockTxHashListGetter(const protocol::
 }
 
 
-size_t blockTransactionListSetter(
+int blockTransactionListSetter(
     const protocol::Block::Ptr& _block, const protocol::TransactionsPtr& _txs)
 {
     if (_block == nullptr || _txs == nullptr)
@@ -105,7 +105,7 @@ protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block)
     return receipts;
 }
 
-size_t blockReceiptListSetter(
+int blockReceiptListSetter(
     const protocol::Block::Ptr& _block, const protocol::ReceiptsPtr& _receipts)
 {
     if (_block == nullptr || _receipts == nullptr)
