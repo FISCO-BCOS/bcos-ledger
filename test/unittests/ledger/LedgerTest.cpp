@@ -149,6 +149,8 @@ public:
     inline void initChain(int _number)
     {
         initBlocks(_number);
+        auto negativeTable = getTableFactory(-1);
+        m_storage->addStateCache(-1, negativeTable);
         for (int i = 0; i < _number; ++i)
         {
             auto table = getTableFactory(i + 1);

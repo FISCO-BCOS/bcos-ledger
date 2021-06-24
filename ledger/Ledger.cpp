@@ -117,7 +117,7 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
         _onTxStored(error);
         return;
     }
-    auto tableFactory = getMemoryTableFactory(0);
+    auto tableFactory = getMemoryTableFactory(-1);
     try
     {
         for (size_t i = 0; i < _txHashList->size(); ++i)
