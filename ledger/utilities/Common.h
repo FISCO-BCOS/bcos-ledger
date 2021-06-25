@@ -23,7 +23,7 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <map>
 
-#define LEDGER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
+#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 
 namespace bcos::ledger
 {

@@ -194,6 +194,10 @@ void StorageGetter::getConsensusConfig(const std::string& _nodeType,
             ConsensusNodeListPtr nodeList = std::make_shared<ConsensusNodeList>();
             for (const auto& nodePair : _entryMap)
             {
+                if (!nodePair.second)
+                {
+                    continue;
+                }
                 auto nodeType = nodePair.second->getField(NODE_TYPE);
                 if (nodeType == _nodeType)
                 {
