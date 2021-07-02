@@ -110,11 +110,12 @@ public:
     void asyncGetNodeListByType(const std::string& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override;
 
-    void setBlockFactory(const protocol::BlockFactory::Ptr& _blockFactory)
+    void registerCommittedBlockNotifier(
+        std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
+            _committedBlockNotifier)
     {
-        m_blockFactory = _blockFactory;
+        m_committedBlockNotifier = _committedBlockNotifier;
     }
-    void setStorage(const storage::StorageInterface::Ptr& _storage) { m_storage = _storage; }
 
     /****** init ledger ******/
     bool buildGenesisBlock(
@@ -174,7 +175,6 @@ private:
     bool isBlockShouldCommit(
         const protocol::BlockNumber& _blockNumber, const std::string& _parentHash);
 
-
     /****** data writer ******/
     void writeNumber(const protocol::BlockNumber& _blockNumber,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
@@ -193,11 +193,16 @@ private:
     void writeHash2Receipt(const bcos::protocol::Block::Ptr& _block,
         const storage::TableFactoryInterface::Ptr& _tableFactory);
 
+    // notify block commit
+    void notifyCommittedBlockNumber(protocol::BlockNumber _blockNumber);
+
     /****** runtime cache ******/
     FIFOCache<protocol::Block::Ptr, protocol::Block> m_blockCache;
     FIFOCache<protocol::BlockHeader::Ptr, protocol::BlockHeader> m_blockHeaderCache;
     FIFOCache<protocol::TransactionsPtr, protocol::Transactions> m_transactionsCache;
     FIFOCache<protocol::ReceiptsPtr, protocol::Receipts> m_receiptCache;
+    std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
+        m_committedBlockNotifier;
 
     mutable SharedMutex m_blockNumberMutex;
     protocol::BlockNumber m_blockNumber = -1;

@@ -93,6 +93,7 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
                 ledger->m_blockNumber = _header->number();
             }
             ledger->m_blockHeaderCache.add(blockNumber, _header);
+            ledger->notifyCommittedBlockNumber(blockNumber);
             _onCommitBlock(nullptr, ledgerConfig);
         });
     }
@@ -1595,6 +1596,21 @@ void Ledger::writeHash2Receipt(
                 }
             }
         });
+}
+
+void Ledger::notifyCommittedBlockNumber(protocol::BlockNumber _blockNumber)
+{
+    if (!m_committedBlockNotifier)
+        return;
+    m_committedBlockNotifier(_blockNumber, [_blockNumber](Error::Ptr _error) {
+        if (!_error || _error->errorCode() == CommonError::SUCCESS)
+        {
+            return;
+        }
+        LEDGER_LOG(WARNING) << LOG_BADGE("notifyCommittedBlockNumber")
+                            << LOG_DESC("notify the block number failed")
+                            << LOG_KV("blockNumber", _blockNumber);
+    });
 }
 
 bool Ledger::buildGenesisBlock(
