@@ -881,9 +881,9 @@ void Ledger::getBlockHeader(const bcos::protocol::BlockNumber& _blockNumber,
                 }
                 auto headerPtr =
                     decodeBlockHeader(getBlockHeaderFactory(), _headerEntry->getField(SYS_VALUE));
-                LEDGER_LOG(TRACE) << LOG_BADGE("getBlockHeader")
-                                  << LOG_DESC("Get header from storage")
-                                  << LOG_KV("blockNumber", _blockNumber);
+                LEDGER_LOG(INFO) << LOG_BADGE("getBlockHeader")
+                                 << LOG_DESC("Get header from storage")
+                                 << LOG_KV("blockNumber", _blockNumber);
                 if (!headerPtr)
                 {
                     LEDGER_LOG(TRACE) << LOG_BADGE("getBlockHeader") << LOG_DESC("Write to cache");
@@ -1619,11 +1619,11 @@ bool Ledger::buildGenesisBlock(
     }
     if (!getStorageGetter()->checkTableExist(SYS_NUMBER_2_BLOCK_HEADER, getMemoryTableFactory(0)))
     {
-        LEDGER_LOG(TRACE) << LOG_BADGE("buildGenesisBlock")
-                          << LOG_DESC(
-                                 std::string(SYS_NUMBER_2_BLOCK_HEADER) + " table does not exist");
+        LEDGER_LOG(INFO) << LOG_BADGE("buildGenesisBlock")
+                         << LOG_DESC(
+                                std::string(SYS_NUMBER_2_BLOCK_HEADER) + " table does not exist");
         getStorageSetter()->createTables(getMemoryTableFactory(0));
-    }
+    };
     Block::Ptr block = nullptr;
     std::promise<Block::Ptr> blockPromise;
     auto blockFuture = blockPromise.get_future();
@@ -1632,6 +1632,8 @@ bool Ledger::buildGenesisBlock(
         {
             // block is nullptr means need build a genesis block
             blockPromise.set_value(_block);
+            LEDGER_LOG(INFO) << LOG_BADGE("buildGenesisBlock, get the genesis block success")
+                             << LOG_KV("hash", _block->blockHeader()->hash().abridged());
             return;
         }
         blockPromise.set_value(nullptr);
@@ -1648,7 +1650,7 @@ bool Ledger::buildGenesisBlock(
     if (block == nullptr)
     {
         auto txLimit = _ledgerConfig->blockTxCountLimit();
-        LEDGER_LOG(TRACE) << LOG_DESC("test") << LOG_KV("txLimit", txLimit);
+        LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit);
         auto tableFactory = getMemoryTableFactory(0);
         // build a block
         block = m_blockFactory->createBlock();
@@ -1659,52 +1661,84 @@ bool Ledger::buildGenesisBlock(
         try
         {
             tbb::parallel_invoke(
-                [this, tableFactory, header]() { writeHash2Number(header, tableFactory); },
+                [this, tableFactory, header]() {
+                    writeHash2Number(header, tableFactory);
+                    LEDGER_LOG(INFO) << LOG_DESC("[buildGenesisBlock]writeHash2Number success")
+                                     << LOG_KV("hash", header->hash().abridged());
+                },
                 [this, tableFactory, _ledgerConfig]() {
                     getStorageSetter()->setSysConfig(tableFactory, SYSTEM_KEY_TX_COUNT_LIMIT,
                         boost::lexical_cast<std::string>(_ledgerConfig->blockTxCountLimit()), "0");
+                    LEDGER_LOG(INFO)
+                        << LOG_DESC("[buildGenesisBlock]set blockTxCountLimit success")
+                        << LOG_KV("blockTxCountLimit", _ledgerConfig->blockTxCountLimit());
                 },
                 [this, tableFactory, _gasLimit]() {
                     getStorageSetter()->setSysConfig(tableFactory, SYSTEM_KEY_TX_GAS_LIMIT,
                         boost::lexical_cast<std::string>(_gasLimit), "0");
+                    LEDGER_LOG(INFO) << LOG_DESC("[buildGenesisBlock]set gasLimit success")
+                                     << LOG_KV("gasLimit", _gasLimit);
                 },
                 [this, tableFactory, _ledgerConfig]() {
                     getStorageSetter()->setSysConfig(tableFactory,
                         SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
                         boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), "0");
+                    LEDGER_LOG(INFO)
+                        << LOG_DESC("[buildGenesisBlock]set leaderSwitchPeriod success")
+                        << LOG_KV("leaderSwitchPeriod", _ledgerConfig->leaderSwitchPeriod());
                 },
                 [this, tableFactory, _ledgerConfig]() {
                     getStorageSetter()->setSysConfig(tableFactory, SYSTEM_KEY_CONSENSUS_TIMEOUT,
                         boost::lexical_cast<std::string>(_ledgerConfig->consensusTimeout()), "0");
+                    LEDGER_LOG(INFO)
+                        << LOG_DESC("[buildGenesisBlock]set consensusTimeout success")
+                        << LOG_KV("consensusTimeout", _ledgerConfig->consensusTimeout());
                 });
             tbb::parallel_invoke(
                 [this, tableFactory, _ledgerConfig]() {
                     getStorageSetter()->setConsensusConfig(
                         tableFactory, CONSENSUS_SEALER, _ledgerConfig->consensusNodeList(), "0");
+                    LEDGER_LOG(INFO)
+                        << LOG_DESC("[buildGenesisBlock]setSealerList success")
+                        << LOG_KV("sealerNum", _ledgerConfig->consensusNodeList().size());
                 },
                 [this, tableFactory, _ledgerConfig]() {
                     getStorageSetter()->setConsensusConfig(
                         tableFactory, CONSENSUS_OBSERVER, _ledgerConfig->observerNodeList(), "0");
+                    LEDGER_LOG(INFO)
+                        << LOG_DESC("[buildGenesisBlock]setObserverList success")
+                        << LOG_KV("observers", _ledgerConfig->observerNodeList().size());
                 },
-                [this, tableFactory, header]() { writeNumber2BlockHeader(header, tableFactory); },
+                [this, tableFactory, header]() {
+                    writeNumber2BlockHeader(header, tableFactory);
+                    LEDGER_LOG(INFO)
+                        << LOG_DESC("[buildGenesisBlock]writeNumber2BlockHeader success");
+                },
                 [this, tableFactory]() {
                     getStorageSetter()->setCurrentState(tableFactory, SYS_KEY_CURRENT_NUMBER, "0");
+                    LEDGER_LOG(INFO)
+                        << LOG_DESC("[buildGenesisBlock]set current blockNumber success");
                 },
                 [this, tableFactory]() {
                     getStorageSetter()->setCurrentState(
                         tableFactory, SYS_KEY_TOTAL_TRANSACTION_COUNT, "0");
+                    LEDGER_LOG(INFO) << LOG_DESC(
+                        "[buildGenesisBlock]set current total transaction count success");
                 },
                 [this, tableFactory]() {
                     getStorageSetter()->setCurrentState(
                         tableFactory, SYS_KEY_TOTAL_FAILED_TRANSACTION, "0");
+                    LEDGER_LOG(INFO) << LOG_DESC(
+                        "[buildGenesisBlock]set current total failed transaction count success");
                 });
             // db sync commit
+            LEDGER_LOG(INFO) << LOG_DESC("[buildGenesisBlock]commit all the table data");
             auto retPair = tableFactory->commit();
             if ((!retPair.second || retPair.second->errorCode() == CommonError::SUCCESS) &&
                 retPair.first > 0)
             {
-                LEDGER_LOG(TRACE) << LOG_DESC("[#buildGenesisBlock]Storage commit success")
-                                  << LOG_KV("commitSize", retPair.first);
+                LEDGER_LOG(INFO) << LOG_DESC("[buildGenesisBlock]Storage commit success")
+                                 << LOG_KV("commitSize", retPair.first);
                 return true;
             }
             else
@@ -1726,8 +1760,9 @@ bool Ledger::buildGenesisBlock(
     }
     else
     {
-        LEDGER_LOG(INFO) << LOG_BADGE("buildGenesisBlock")
-                         << LOG_DESC("Already have the 0th block");
+        LEDGER_LOG(INFO) << LOG_BADGE("buildGenesisBlock") << LOG_DESC("Already have the 0th block")
+                         << LOG_KV("hash", block->blockHeader()->hash().abridged())
+                         << LOG_KV("number", block->blockHeader()->number());
         auto header = block->blockHeader();
         LEDGER_LOG(INFO) << LOG_BADGE("buildGenesisBlock")
                          << LOG_DESC("Load genesis config from extraData");
