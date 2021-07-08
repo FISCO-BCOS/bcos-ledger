@@ -17,8 +17,8 @@
  * @author: kyonRay
  * @date 2021-05-07
  */
-#include "bcos-ledger/ledger/Ledger.h"
-#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
+#include "bcos-ledger/libledger/Ledger.h"
+#include "bcos-ledger/libledger/utilities/BlockUtilities.h"
 #include "common/FakeBlock.h"
 #include "common/FakeTable.h"
 #include "mock/MockKeyFactor.h"

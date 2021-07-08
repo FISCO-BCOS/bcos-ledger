@@ -18,7 +18,7 @@
  * @date 2021-05-06
  */
 
-#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
+#include "bcos-ledger/libledger/utilities/BlockUtilities.h"
 #include "unittests/ledger/common/FakeBlock.h"
 #include "unittests/ledger/common/FakeReceipt.h"
 #include "unittests/ledger/common/FakeTransaction.h"

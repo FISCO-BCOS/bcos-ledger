@@ -24,7 +24,7 @@
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/libtable/Table.h"
 #include "bcos-framework/libutilities/ThreadPool.h"
-#include "bcos-ledger/ledger/utilities/Common.h"
+#include "bcos-ledger/libledger/utilities/Common.h"
 #define SLEEP_MILLI_SECONDS 10
 
 using namespace bcos::storage;
@@ -117,7 +117,7 @@ public:
                 return {0, std::make_shared<Error>(StorageErrorCode::StateCacheNotFound,
                                std::to_string(_number) + "state cache not found")};
             }
-            auto stateData = stateTableFactory->exportData();
+            auto stateData = stateTableFactory->exportData(_number);
             stateData.first.insert(stateData.first.end(), _tableInfos.begin(), _tableInfos.end());
             stateData.second.insert(stateData.second.end(), _tableDatas.begin(), _tableDatas.end());
             std::lock_guard<std::mutex> lock(m_mutex);

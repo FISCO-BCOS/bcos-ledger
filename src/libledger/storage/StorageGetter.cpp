@@ -19,8 +19,8 @@
  */
 
 #include "StorageGetter.h"
-#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
-#include "bcos-ledger/ledger/utilities/Common.h"
+#include "bcos-ledger/libledger/utilities/BlockUtilities.h"
+#include "bcos-ledger/libledger/utilities/Common.h"
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 
 using namespace bcos;
