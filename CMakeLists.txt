@@ -70,8 +70,8 @@ set(BCOS_LEDGER_TARGET "bcos-ledger")
 set(BCOS_EVENT_FILTER_TARGET "bcos-event-filter")
 
 # add subdirectories to build the libraries
-add_subdirectory(ledger)
-add_subdirectory(eventfilter)
+add_subdirectory(src/libledger)
+add_subdirectory(src/libeventfilter)
 
 # test related
 if (TESTS)

@@ -19,7 +19,7 @@
  */
 
 #include "StorageSetter.h"
-#include "bcos-ledger/ledger/utilities/Common.h"
+#include "bcos-ledger/libledger/utilities/Common.h"
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>

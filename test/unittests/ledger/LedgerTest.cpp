@@ -17,8 +17,8 @@
  * @author: kyonRay
  * @date 2021-05-07
  */
-#include "bcos-ledger/ledger/Ledger.h"
-#include "bcos-ledger/ledger/utilities/BlockUtilities.h"
+#include "bcos-ledger/libledger/Ledger.h"
+#include "bcos-ledger/libledger/utilities/BlockUtilities.h"
 #include "common/FakeBlock.h"
 #include "common/FakeTable.h"
 #include "mock/MockKeyFactor.h"
@@ -696,10 +696,11 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     m_ledger->asyncGetBatchTxsByHashList(errorHashList, true,
         [=, &p3](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
-            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK(_error == nullptr);
             BOOST_CHECK(_txList != nullptr);
             BOOST_CHECK(_txList->empty());
-            BOOST_CHECK(_proof == nullptr);
+            BOOST_CHECK(_proof != nullptr);
+            BOOST_CHECK(_proof->empty());
             p3.set_value(true);
         });
 

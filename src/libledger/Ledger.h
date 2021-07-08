@@ -134,9 +134,6 @@ private:
         std::function<void(Error::Ptr, bcos::protocol::ReceiptsPtr)> _onGetReceipts);
     void getTxProof(const crypto::HashType& _txHash,
         std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
-    void getBatchTxProof(crypto::HashListPtr _txHashList,
-        std::function<void(Error::Ptr, std::shared_ptr<std::map<std::string, MerkleProofPtr>>)>
-            _onGetProof);
     void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
     LedgerConfig::Ptr getLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash);

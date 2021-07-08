@@ -18,8 +18,8 @@
  * @date 2021-05-06
  */
 
-#include "bcos-ledger/ledger/storage/StorageGetter.h"
-#include "bcos-ledger/ledger/storage/StorageSetter.h"
+#include "bcos-ledger/libledger/storage/StorageGetter.h"
+#include "bcos-ledger/libledger/storage/StorageSetter.h"
 #include "mock/MockKeyFactor.h"
 #include "unittests/ledger/common/FakeBlock.h"
 #include "unittests/ledger/common/FakeTable.h"

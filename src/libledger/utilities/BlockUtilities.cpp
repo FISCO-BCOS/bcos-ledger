@@ -121,7 +121,7 @@ int blockReceiptListSetter(
 }
 
 bcos::protocol::Block::Ptr decodeBlock(
-    const protocol::BlockFactory::Ptr _blockFactory, const std::string& _blockStr)
+    const protocol::BlockFactory::Ptr& _blockFactory, const std::string& _blockStr)
 {
     protocol::Block::Ptr block = nullptr;
     try
@@ -136,7 +136,7 @@ bcos::protocol::Block::Ptr decodeBlock(
 }
 
 bcos::protocol::BlockHeader::Ptr decodeBlockHeader(
-    const protocol::BlockHeaderFactory::Ptr _headerFactory, const std::string& _headerStr)
+    const protocol::BlockHeaderFactory::Ptr& _headerFactory, const std::string& _headerStr)
 {
     protocol::BlockHeader::Ptr header = nullptr;
     try
@@ -152,7 +152,7 @@ bcos::protocol::BlockHeader::Ptr decodeBlockHeader(
 }
 
 bcos::protocol::Transaction::Ptr decodeTransaction(
-    const protocol::TransactionFactory::Ptr _txFactory, const std::string& _txStr)
+    const protocol::TransactionFactory::Ptr& _txFactory, const std::string& _txStr)
 {
     protocol::Transaction::Ptr tx = nullptr;
     try
@@ -168,7 +168,7 @@ bcos::protocol::Transaction::Ptr decodeTransaction(
 }
 
 bcos::protocol::TransactionReceipt::Ptr decodeReceipt(
-    const protocol::TransactionReceiptFactory::Ptr _receiptFactory, const std::string& _receiptStr)
+    const protocol::TransactionReceiptFactory::Ptr& _receiptFactory, const std::string& _receiptStr)
 {
     protocol::TransactionReceipt::Ptr receipt = nullptr;
     try

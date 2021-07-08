@@ -22,7 +22,7 @@
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/libtable/Table.h"
 #include "bcos-framework/libtable/TableFactory.h"
-#include "bcos-ledger/ledger/utilities/Common.h"
+#include "bcos-ledger/libledger/utilities/Common.h"
 #include <tbb/concurrent_unordered_map.h>
 
 using namespace bcos::storage;
