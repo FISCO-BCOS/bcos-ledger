@@ -106,7 +106,9 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     }
     else
     {
-        LEDGER_LOG(ERROR) << LOG_BADGE("createTables") << LOG_DESC("Storage commit error");
+        LEDGER_LOG(ERROR) << LOG_BADGE("createTables") << LOG_DESC("Storage commit error")
+                          << LOG_KV("code", retPair.second->errorCode())
+                          << LOG_KV("msg", retPair.second->errorMessage());
         BOOST_THROW_EXCEPTION(CreateSysTableFailed() << errinfo_comment(""));
     }
 }
