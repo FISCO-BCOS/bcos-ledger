@@ -29,6 +29,7 @@ class FIFOCache
 {
 public:
     FIFOCache() = default;
+    virtual ~FIFOCache() { stop(); }
     T add(const bcos::protocol::BlockNumber& _number, const T& _item)
     {
         {
@@ -73,6 +74,14 @@ public:
     void setDestructorThread(ThreadPool::Ptr _destructorThread)
     {
         m_destructorThread = std::move(_destructorThread);
+    }
+
+    virtual void stop()
+    {
+        if (m_destructorThread)
+        {
+            m_destructorThread->stop();
+        }
     }
 
 private:

@@ -63,6 +63,17 @@ public:
         m_transactionsCache.setDestructorThread(txsDestructorThread);
         m_receiptCache.setDestructorThread(rcptDestructorThread);
     };
+
+    virtual void stop()
+    {
+        m_blockCache.stop();
+
+        m_blockHeaderCache.stop();
+
+        m_transactionsCache.stop();
+
+        m_receiptCache.stop();
+    }
     void asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
         std::function<void(Error::Ptr, LedgerConfig::Ptr)> _onCommitBlock) override;
 
