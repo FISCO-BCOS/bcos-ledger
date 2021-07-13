@@ -18,6 +18,9 @@
  * @date 2021-05-07
  */
 #include "bcos-ledger/libledger/Ledger.h"
+#include "bcos-ledger/libledger/storage/BlockStorage.h"
+#include "bcos-ledger/libledger/storage/ConfigStorage.h"
+#include "bcos-ledger/libledger/storage/TransactionStorage.h"
 #include "bcos-ledger/libledger/utilities/BlockUtilities.h"
 #include "common/FakeBlock.h"
 #include "common/FakeTable.h"
@@ -40,12 +43,15 @@ class LedgerFixture : public TestPromptFixture
 public:
     LedgerFixture() : TestPromptFixture()
     {
-        m_storageGetter = StorageGetter::storageGetterFactory();
-        m_storageSetter = StorageSetter::storageSetterFactory();
         m_blockFactory = createBlockFactory(createCryptoSuite());
         auto keyFactor = std::make_shared<MockKeyFactory>();
         m_blockFactory->cryptoSuite()->setKeyFactory(keyFactor);
 
+        m_blockStorage = std::make_shared<BlockStorage>(m_blockFactory);
+        m_txStorage = std::make_shared<TransactionStorage>(m_blockFactory);
+        m_configStorage =
+            std::make_shared<ConfigStorage>(m_blockFactory->cryptoSuite()->keyFactory());
+        m_storageUtilities = std::make_shared<StorageUtilities>();
         BOOST_CHECK(m_blockFactory != nullptr);
         BOOST_CHECK(m_blockFactory->blockHeaderFactory() != nullptr);
         BOOST_CHECK(m_blockFactory->transactionFactory() != nullptr);
@@ -65,6 +71,15 @@ public:
         BOOST_TEST(m_storage != nullptr);
         m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage);
         BOOST_CHECK(m_ledger != nullptr);
+        m_ledger->registerCommittedBlockNotifier(
+            [](BlockNumber _number, std::function<void(Error::Ptr)> _onCommit) {
+                if (_number & 1)
+                {
+                    auto error = std::make_shared<Error>(-1, "");
+                    _onCommit(error);
+                }
+                _onCommit(nullptr);
+            });
     }
 
     inline void initErrorStorage()
@@ -100,11 +115,12 @@ public:
         m_param->setObserverNodeList(observerNodeList);
 
         auto tableFactory = getTableFactory(0);
-        m_storage->addStateCache(0, tableFactory);
+
         auto result = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
         BOOST_CHECK(result);
         auto result2 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
         BOOST_CHECK(result2);
+        m_storage->addStateCache(0, tableFactory);
     }
 
     inline void initEmptyFixture()
@@ -197,7 +213,6 @@ public:
                     BOOST_CHECK(!_config->observerNodeList().empty());
                     p3.set_value(true);
                 });
-
             BOOST_CHECK_EQUAL(f3.get(), true);
         }
     }
@@ -248,8 +263,10 @@ public:
     }
 
     storage::StorageInterface::Ptr m_storage = nullptr;
-    StorageSetter::Ptr m_storageSetter = nullptr;
-    StorageGetter::Ptr m_storageGetter = nullptr;
+    BlockStorage::Ptr m_blockStorage = nullptr;
+    TransactionStorage::Ptr m_txStorage = nullptr;
+    ConfigStorage::Ptr m_configStorage = nullptr;
+    StorageUtilities::Ptr m_storageUtilities;
     BlockFactory::Ptr m_blockFactory = nullptr;
     std::shared_ptr<Ledger> m_ledger = nullptr;
     LedgerConfig::Ptr m_param;
@@ -332,9 +349,9 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
 BOOST_AUTO_TEST_CASE(getBlockNumber)
 {
     auto tableFactory = getTableFactory(0);
-    m_storageSetter->createTables(tableFactory);
+    StorageUtilities::createTables(tableFactory);
     m_storage->addStateCache(0, tableFactory);
-    m_storageSetter->setCurrentState(getStateTable(0), SYS_KEY_CURRENT_NUMBER, "-1");
+    m_configStorage->setCurrentState(SYS_KEY_CURRENT_NUMBER, "-1", getStateTable(0));
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, BlockNumber _number) {
@@ -366,7 +383,7 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
     });
 
     auto table = getStateTable(0);
-    m_storageSetter->setNumber2Hash(getStateTable(0), "0", "");
+    m_blockStorage->setNumberToHash(0, HashType(), getStateTable(0));
     table->commit();
 
     std::promise<bool> p3;
@@ -393,6 +410,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
         BOOST_CHECK_EQUAL(_number, -1);
         p1.set_value(true);
     });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
@@ -402,34 +420,34 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
             BOOST_CHECK_EQUAL(_number, -1);
             p2.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f2.get(), true);
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
-    m_storageGetter->getBlockHashByNumber(
+    m_blockStorage->getBlockHashByNumber(
         0, getStateTable(0), [&](Error::Ptr _error, bcos::storage::Entry::Ptr _hashEntry) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             auto table = getStateTable(0);
-            m_storageSetter->setHash2Number(getStateTable(0), _hashEntry->getField(SYS_VALUE), "");
+            auto hash = _hashEntry->getField(SYS_VALUE);
+            m_blockStorage->setHashToNumber(HashType(hash), -1, getStateTable(0));
             table->commit();
-            m_ledger->asyncGetBlockNumberByHash(HashType(_hashEntry->getField(SYS_VALUE)),
-                [&](Error::Ptr _error, BlockNumber _number) {
-                    BOOST_CHECK(_error != nullptr);
+            m_ledger->asyncGetBlockNumberByHash(
+                HashType(hash), [&](Error::Ptr _error, BlockNumber _number) {
+                    BOOST_CHECK(_error == nullptr);
                     BOOST_CHECK_EQUAL(_number, -1);
                     p3.set_value(true);
                 });
         });
-    BOOST_CHECK_EQUAL(f1.get(), true);
-    BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);
 }
 
 BOOST_AUTO_TEST_CASE(getTotalTransactionCount)
 {
     auto tableFactory = getTableFactory(0);
-    m_storageSetter->createTables(tableFactory);
+    StorageUtilities::createTables(tableFactory);
     m_storage->addStateCache(0, tableFactory);
-    m_storageSetter->setCurrentState(getStateTable(0), SYS_KEY_TOTAL_TRANSACTION_COUNT, "");
-    m_storageSetter->setCurrentState(getStateTable(0), SYS_KEY_TOTAL_FAILED_TRANSACTION, "");
+    m_configStorage->setCurrentState(SYS_KEY_TOTAL_TRANSACTION_COUNT, "", getStateTable(0));
+    m_configStorage->setCurrentState(SYS_KEY_TOTAL_FAILED_TRANSACTION, "", getStateTable(0));
     tableFactory->commit();
 
     std::promise<bool> p1;
@@ -645,6 +663,17 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block->receiptsSize(), 0);
             p7.set_value(true);
         });
+
+    std::promise<bool> p8;
+    auto f8 = p8.get_future();
+    m_ledger->asyncGetBlockDataByNumber(
+        10, HEADER | RECEIPTS, [=, &p8](Error::Ptr _error, Block::Ptr _block) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK(_block->blockHeader() != nullptr);
+            BOOST_CHECK_EQUAL(_block->receiptsSize(), 10);
+            p8.set_value(true);
+        });
+
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);
@@ -652,6 +681,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
     BOOST_CHECK_EQUAL(f5.get(), true);
     BOOST_CHECK_EQUAL(f6.get(), true);
     BOOST_CHECK_EQUAL(f7.get(), true);
+    BOOST_CHECK_EQUAL(f8.get(), true);
 }
 
 BOOST_AUTO_TEST_CASE(getTransactionByHash)
@@ -915,14 +945,6 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);
-}
-
-BOOST_AUTO_TEST_CASE(testDecode)
-{
-    auto block = decodeBlock(m_blockFactory, "");
-    auto tx = decodeTransaction(m_blockFactory->transactionFactory(), "");
-    auto header = decodeBlockHeader(m_blockFactory->blockHeaderFactory(), "");
-    auto receipt = decodeReceipt(m_blockFactory->receiptFactory(), "");
 }
 
 BOOST_AUTO_TEST_CASE(testEmptyBlock)

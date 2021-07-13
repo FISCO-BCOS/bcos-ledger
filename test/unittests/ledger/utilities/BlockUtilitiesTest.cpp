@@ -106,6 +106,15 @@ BOOST_AUTO_TEST_CASE(testBlockReceiptListSetterGetter)
     BOOST_CHECK_EQUAL(receipts_get->at(5)->hash().hex(), receipts->at(5)->hash().hex());
 }
 
+BOOST_AUTO_TEST_CASE(testDecode)
+{
+    auto blockFactory = createBlockFactory(createCryptoSuite());
+    auto block = decodeBlock(blockFactory, "");
+    auto tx = decodeTransaction(blockFactory->transactionFactory(), "");
+    auto header = decodeBlockHeader(blockFactory->blockHeaderFactory(), "");
+    auto receipt = decodeReceipt(blockFactory->receiptFactory(), "");
+}
+
 BOOST_AUTO_TEST_CASE(testNullReceiptSetter)
 {
     auto receipts = fakeReceipts(10);

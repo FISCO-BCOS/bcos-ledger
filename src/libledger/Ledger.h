@@ -28,11 +28,13 @@
 #include "bcos-framework/libutilities/Common.h"
 #include "bcos-framework/libutilities/Exceptions.h"
 #include "bcos-framework/libutilities/ThreadPool.h"
-#include "storage/StorageGetter.h"
-#include "storage/StorageSetter.h"
-#include "utilities/Common.h"
-#include "utilities/FIFOCache.h"
-#include "utilities/MerkleProofUtility.h"
+#include "bcos-ledger/libledger/storage/BlockStorage.h"
+#include "bcos-ledger/libledger/storage/ConfigStorage.h"
+#include "bcos-ledger/libledger/storage/StorageUtilities.h"
+#include "bcos-ledger/libledger/storage/TransactionStorage.h"
+#include "bcos-ledger/libledger/utilities/Common.h"
+#include "bcos-ledger/libledger/utilities/FIFOCache.h"
+#include "bcos-ledger/libledger/utilities/MerkleProofUtility.h"
 
 #include <utility>
 
@@ -69,32 +71,22 @@ public:
         bcos::storage::StorageInterface::Ptr _storage)
       : m_blockFactory(_blockFactory),
         m_storage(_storage),
-        m_storageGetter(StorageGetter::storageGetterFactory()),
-        m_storageSetter(StorageSetter::storageSetterFactory()),
-        m_merkleProofUtility(std::make_shared<MerkleProofUtility>())
+        m_blockStorage(std::make_shared<BlockStorage>(_blockFactory)),
+        m_txStorage(std::make_shared<TransactionStorage>(_blockFactory)),
+        m_configStorage(std::make_shared<ConfigStorage>(_blockFactory->cryptoSuite()->keyFactory()))
     {
         assert(m_blockFactory);
         assert(m_storage);
 
         auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
-        auto headerDestructorThread = std::make_shared<ThreadPool>("headerCache", 1);
-        auto txsDestructorThread = std::make_shared<ThreadPool>("txsCache", 1);
-        auto rcptDestructorThread = std::make_shared<ThreadPool>("receiptsCache", 1);
         m_blockCache.setDestructorThread(blockDestructorThread);
-        m_blockHeaderCache.setDestructorThread(headerDestructorThread);
-        m_transactionsCache.setDestructorThread(txsDestructorThread);
-        m_receiptCache.setDestructorThread(rcptDestructorThread);
     };
 
     virtual void stop()
     {
         m_blockCache.stop();
-
-        m_blockHeaderCache.stop();
-
-        m_transactionsCache.stop();
-
-        m_receiptCache.stop();
+        m_txStorage->stop();
+        m_blockStorage->stop();
     }
     void asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
         std::function<void(Error::Ptr, LedgerConfig::Ptr)> _onCommitBlock) override;
@@ -159,16 +151,6 @@ private:
     void getBlock(const protocol::BlockNumber& _blockNumber, int32_t _blockFlag,
         std::function<void(Error::Ptr, protocol::Block::Ptr)>);
     void getLatestBlockNumber(std::function<void(protocol::BlockNumber)> _onGetNumber);
-    void getBlockHeader(const bcos::protocol::BlockNumber& _blockNumber,
-        std::function<void(Error::Ptr, protocol::BlockHeader::Ptr)> _onGetHeader);
-    void getTxs(const bcos::protocol::BlockNumber& _blockNumber,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onGetTxs);
-    void getReceipts(const bcos::protocol::BlockNumber& _blockNumber,
-        std::function<void(Error::Ptr, bcos::protocol::ReceiptsPtr)> _onGetReceipts);
-    void getTxProof(const crypto::HashType& _txHash,
-        std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
-    void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
-        std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
     void asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash,
         std::function<void(Error::Ptr, WrapperLedgerConfig::Ptr)> _onGetLedgerConfig);
 
@@ -184,11 +166,6 @@ private:
             m_storage, m_blockFactory->cryptoSuite()->hashImpl(), _number);
     }
 
-    inline protocol::TransactionFactory::Ptr getTransactionFactory()
-    {
-        return m_blockFactory->transactionFactory();
-    }
-
     inline protocol::BlockHeaderFactory::Ptr getBlockHeaderFactory()
     {
         return m_blockFactory->blockHeaderFactory();
@@ -198,40 +175,16 @@ private:
     {
         return m_blockFactory->receiptFactory();
     }
-
-    inline StorageGetter::Ptr getStorageGetter() { return m_storageGetter; }
-    inline StorageSetter::Ptr getStorageSetter() { return m_storageSetter; }
     inline bcos::storage::StorageInterface::Ptr getStorage() { return m_storage; }
 
     bool isBlockShouldCommit(
         const protocol::BlockNumber& _blockNumber, const std::string& _parentHash);
-
-    /****** data writer ******/
-    void writeNumber(const protocol::BlockNumber& _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
-    void writeTotalTransactionCount(const bcos::protocol::Block::Ptr& block,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
-    void writeNumber2Nonces(const bcos::protocol::Block::Ptr& block,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
-    void writeHash2Number(const bcos::protocol::BlockHeader::Ptr& header,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
-    void writeNumber2BlockHeader(const bcos::protocol::BlockHeader::Ptr& _header,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
-    // transaction encoded in block
-    void writeNumber2Transactions(const bcos::protocol::Block::Ptr& _block,
-        const storage::TableFactoryInterface::Ptr& _tableFactory);
-    // receipts encoded in block
-    void writeHash2Receipt(const bcos::protocol::Block::Ptr& _block,
-        const storage::TableFactoryInterface::Ptr& _tableFactory);
 
     // notify block commit
     void notifyCommittedBlockNumber(protocol::BlockNumber _blockNumber);
 
     /****** runtime cache ******/
     FIFOCache<protocol::Block::Ptr, protocol::Block> m_blockCache;
-    FIFOCache<protocol::BlockHeader::Ptr, protocol::BlockHeader> m_blockHeaderCache;
-    FIFOCache<protocol::TransactionsPtr, protocol::Transactions> m_transactionsCache;
-    FIFOCache<protocol::ReceiptsPtr, protocol::Receipts> m_receiptCache;
     std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
         m_committedBlockNotifier;
 
@@ -241,8 +194,8 @@ private:
     size_t m_timeout = 10000;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;
-    StorageGetter::Ptr m_storageGetter;
-    StorageSetter::Ptr m_storageSetter;
-    ledger::MerkleProofUtility::Ptr m_merkleProofUtility;
+    BlockStorage::Ptr m_blockStorage;
+    TransactionStorage::Ptr m_txStorage;
+    ConfigStorage::Ptr m_configStorage;
 };
 }  // namespace bcos::ledger

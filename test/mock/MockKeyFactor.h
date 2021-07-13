@@ -64,16 +64,7 @@ public:
 
     void decode(bytes&& _data) override { *m_keyData = std::move(_data); }
 
-    std::string shortHex() override
-    {
-        auto startIt = m_keyData->begin();
-        auto endIt = m_keyData->end();
-        if (m_keyData->size() > 4)
-        {
-            endIt = startIt + 4 * sizeof(byte);
-        }
-        return *toHexString(startIt, endIt) + "...";
-    }
+    std::string shortHex() override { return ""; }
 
     std::string hex() override { return *toHexString(*m_keyData); }
 
