@@ -13,12 +13,12 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file StorageSetter.cpp
+ * @file StorageUtilities.cpp
  * @author: kyonRay
- * @date 2021-04-23
+ * @date 2021-07-14
  */
 
-#include "StorageSetter.h"
+#include "StorageUtilities.h"
 #include "bcos-ledger/libledger/utilities/Common.h"
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <boost/algorithm/string.hpp>
@@ -30,31 +30,6 @@ using namespace bcos::storage;
 
 namespace bcos::ledger
 {
-std::string FileInfo::toString()
-{
-    std::stringstream ss;
-    boost::archive::text_oarchive oa(ss);
-    oa << *this;
-    return ss.str();
-}
-
-bool FileInfo::fromString(FileInfo& _f, std::string _str)
-{
-    std::stringstream ss(_str);
-    try
-    {
-        boost::archive::text_iarchive ia(ss);
-        ia >> _f;
-    }
-    catch (boost::archive::archive_exception const& e)
-    {
-        LEDGER_LOG(ERROR) << LOG_BADGE("FileInfo::fromString") << LOG_DESC("deserialization error")
-                          << LOG_KV("e.what", e.what()) << LOG_KV("str", _str);
-        return false;
-    }
-    return true;
-}
-
 std::string DirInfo::toString()
 {
     std::stringstream ss;
@@ -80,7 +55,7 @@ bool DirInfo::fromString(DirInfo& _dir, std::string _str)
     return true;
 }
 
-void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tableFactory)
+void StorageUtilities::createTables(const storage::TableFactoryInterface::Ptr& _tableFactory)
 {
     auto configFields = SYS_VALUE + "," + SYS_CONFIG_ENABLE_BLOCK_NUMBER;
     auto consensusFields = NODE_TYPE + "," + NODE_WEIGHT + "," + NODE_ENABLE_NUMBER;
@@ -113,7 +88,8 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     }
 }
 
-void StorageSetter::createFileSystemTables(const storage::TableFactoryInterface::Ptr& _tableFactory)
+void StorageUtilities::createFileSystemTables(
+    const storage::TableFactoryInterface::Ptr& _tableFactory)
 {
     _tableFactory->createTable(FS_ROOT, SYS_KEY, SYS_VALUE);
     auto table = _tableFactory->openTable(FS_ROOT);
@@ -130,7 +106,7 @@ void StorageSetter::createFileSystemTables(const storage::TableFactoryInterface:
     recursiveBuildDir(_tableFactory, FS_SYS_BIN);
     recursiveBuildDir(_tableFactory, FS_USER_DATA);
 }
-void StorageSetter::recursiveBuildDir(
+void StorageUtilities::recursiveBuildDir(
     const TableFactoryInterface::Ptr& _tableFactory, const std::string& _absoluteDir)
 {
     if (_absoluteDir.empty())
@@ -214,9 +190,9 @@ void StorageSetter::recursiveBuildDir(
     }
 }
 
-bool StorageSetter::syncTableSetter(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _tableName, const std::string& _row, const std::string& _fieldName,
-    const std::string& _fieldValue)
+bool StorageUtilities::syncTableSetter(
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName,
+    const std::string& _row, const std::string& _fieldName, const std::string& _fieldValue)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -244,115 +220,40 @@ bool StorageSetter::syncTableSetter(const bcos::storage::TableFactoryInterface::
     }
 }
 
-bool StorageSetter::setCurrentState(const TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _row, const std::string& _stateValue)
+bool StorageUtilities::checkTableExist(
+    const std::string& _tableName, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
-    return syncTableSetter(_tableFactory, SYS_CURRENT_STATE, _row, SYS_VALUE, _stateValue);
-}
-bool StorageSetter::setNumber2Header(const TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _row, const std::string& _headerValue)
-{
-    return syncTableSetter(_tableFactory, SYS_NUMBER_2_BLOCK_HEADER, _row, SYS_VALUE, _headerValue);
-}
-bool StorageSetter::setNumber2Txs(const TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _row, const std::string& _txsValue)
-{
-    return syncTableSetter(_tableFactory, SYS_NUMBER_2_TXS, _row, SYS_VALUE, _txsValue);
+    auto table = _tableFactory->openTable(_tableName);
+    return table != nullptr;
 }
 
-bool StorageSetter::setHash2Number(const TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _row, const std::string& _numberValue)
+void StorageUtilities::asyncTableGetter(
+    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _tableName,
+    std::string _row, std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry)
 {
-    return syncTableSetter(_tableFactory, SYS_HASH_2_NUMBER, _row, SYS_VALUE, _numberValue);
-}
-
-bool StorageSetter::setNumber2Hash(const TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _row, const std::string& _hashValue)
-{
-    return syncTableSetter(_tableFactory, SYS_NUMBER_2_HASH, _row, SYS_VALUE, _hashValue);
-}
-
-bool StorageSetter::setNumber2Nonces(const TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _row, const std::string& _noncesValue)
-{
-    return syncTableSetter(_tableFactory, SYS_BLOCK_NUMBER_2_NONCES, _row, SYS_VALUE, _noncesValue);
-}
-
-bool StorageSetter::setSysConfig(const TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _key, const std::string& _value, const std::string& _enableBlock)
-{
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-
-    auto table = _tableFactory->openTable(SYS_CONFIG);
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
-    if (table)
+    auto table = _tableFactory->openTable(_tableName);
+    if (!table)
     {
-        auto entry = table->newEntry();
-        entry->setField(SYS_VALUE, _value);
-        entry->setField(SYS_CONFIG_ENABLE_BLOCK_NUMBER, _enableBlock);
-        auto ret = table->setRow(_key, entry);
-        auto insertTable_time_cost = utcTime() - record_time;
-
-        LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", SYS_CONFIG)
-                          << LOG_KV("openTableTimeCost", openTable_time_cost)
-                          << LOG_KV("insertTableTimeCost", insertTable_time_cost)
-                          << LOG_KV("totalTimeCost", utcTime() - start_time);
-        return ret;
+        LEDGER_LOG(DEBUG) << LOG_DESC("Open table error from db")
+                          << LOG_KV("openTable", _tableName);
+        // TODO: add error code and msg
+        auto error = std::make_shared<Error>(-1, "");
+        _onGetEntry(error, nullptr);
+        return;
     }
-    else
-    {
-        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_CONFIG));
-    }
-}
 
-bool StorageSetter::setConsensusConfig(
-    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _type,
-    const consensus::ConsensusNodeList& _nodeList, const std::string& _enableBlock)
-{
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-
-    auto table = _tableFactory->openTable(SYS_CONSENSUS);
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
-    if (table)
-    {
-        bool ret = (!_nodeList.empty());
-        for (const auto& node : _nodeList)
+    LEDGER_LOG(TRACE) << LOG_BADGE("asyncTableGetter") << LOG_DESC("Get string from db")
+                      << LOG_KV("openTable", _tableName) << LOG_KV("row", _row);
+    table->asyncGetRow(_row, [_onGetEntry](const Error::Ptr& _error, Entry::Ptr _entry) {
+        if (_error && _error->errorCode() != CommonError::SUCCESS)
         {
-            auto entry = table->newEntry();
-            entry->setField(NODE_TYPE, _type);
-            entry->setField(NODE_WEIGHT, boost::lexical_cast<std::string>(node->weight()));
-            entry->setField(NODE_ENABLE_NUMBER, _enableBlock);
-            ret = ret && table->setRow(node->nodeID()->hex(), entry);
+            auto error = std::make_shared<Error>(
+                _error->errorCode(), "asyncGetRow callback error" + _error->errorMessage());
+            _onGetEntry(error, nullptr);
+            return;
         }
-        auto insertTable_time_cost = utcTime() - record_time;
-
-        LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", SYS_CONSENSUS)
-                          << LOG_KV("openTableTimeCost", openTable_time_cost)
-                          << LOG_KV("insertTableTimeCost", insertTable_time_cost)
-                          << LOG_KV("totalTimeCost", utcTime() - start_time);
-        return ret;
-    }
-    else
-    {
-        BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_CONSENSUS));
-    }
-}
-
-bool StorageSetter::setHashToTx(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _txHash, const std::string& _encodeTx)
-{
-    return syncTableSetter(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE, _encodeTx);
-}
-
-bool StorageSetter::setHashToReceipt(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
-    const std::string& _txHash, const std::string& _encodeReceipt)
-{
-    return syncTableSetter(_tableFactory, SYS_HASH_2_RECEIPT, _txHash, SYS_VALUE, _encodeReceipt);
+        // do not handle if entry is nullptr, just send it out
+        _onGetEntry(nullptr, _entry);
+    });
 }
 }  // namespace bcos::ledger

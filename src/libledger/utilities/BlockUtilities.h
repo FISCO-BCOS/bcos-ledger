@@ -46,5 +46,6 @@ bcos::protocol::Transaction::Ptr decodeTransaction(
     const protocol::TransactionFactory::Ptr& _txFactory, const std::string& _txStr);
 
 bcos::protocol::TransactionReceipt::Ptr decodeReceipt(
-    const protocol::TransactionReceiptFactory::Ptr& _receiptFactory, const std::string& _receiptStr);
+    const protocol::TransactionReceiptFactory::Ptr& _receiptFactory,
+    const std::string& _receiptStr);
 }  // namespace bcos::ledger
