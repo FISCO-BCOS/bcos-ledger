@@ -113,6 +113,11 @@ BOOST_AUTO_TEST_CASE(testDecode)
     auto tx = decodeTransaction(blockFactory->transactionFactory(), "");
     auto header = decodeBlockHeader(blockFactory->blockHeaderFactory(), "");
     auto receipt = decodeReceipt(blockFactory->receiptFactory(), "");
+    // FIXME: why blockFactory and txFactory create with empty string wont throw exception
+    BOOST_CHECK(block != nullptr);
+    BOOST_CHECK(tx != nullptr);
+    BOOST_CHECK(header == nullptr);
+    BOOST_CHECK(receipt == nullptr);
 }
 
 BOOST_AUTO_TEST_CASE(testNullReceiptSetter)
