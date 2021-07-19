@@ -38,7 +38,7 @@ class ConfigStorage
 {
 public:
     using Ptr = std::shared_ptr<ConfigStorage>;
-    ConfigStorage(crypto::KeyFactory::Ptr _keyFactory) : m_keyFactory(_keyFactory){};
+    explicit ConfigStorage(crypto::KeyFactory::Ptr _keyFactory) : m_keyFactory(_keyFactory){};
     /**
      * @brief get current state in row
      * @param _tableFactory
