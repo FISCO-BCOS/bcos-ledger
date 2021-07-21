@@ -151,7 +151,7 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
 
     std::promise<bool> p5;
     auto f5 = p5.get_future();
-    storageGetter->getConsensusConfig(
+    storageGetter->asyncGetConsensusConfig(
         "", tableFactory, nullptr, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodes) {
             BOOST_CHECK(_error->errorCode() == -1);
             BOOST_CHECK_EQUAL(_nodes, nullptr);
@@ -268,7 +268,7 @@ BOOST_AUTO_TEST_CASE(testGetterSetter)
     auto setConsensusConfigRet =
         storageSetter->setConsensusConfig(tableFactory, CONSENSUS_SEALER, consensusNodeList, "0");
     BOOST_CHECK(setConsensusConfigRet);
-    storageGetter->getConsensusConfig(CONSENSUS_SEALER, tableFactory, keyFactory,
+    storageGetter->asyncGetConsensusConfig(CONSENSUS_SEALER, tableFactory, keyFactory,
         [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(!_nodeList->empty());
