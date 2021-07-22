@@ -53,11 +53,7 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
         _onCommitBlock(error, nullptr);
         return;
     }
-
-    auto blockNumber = _header->number();
-    auto tableFactory = getMemoryTableFactory(blockNumber);
-
-    auto ledgerConfig = getLedgerConfig(blockNumber, _header->hash());
+    auto tableFactory = getMemoryTableFactory(_header->number());
     try
     {
         tbb::parallel_invoke(
@@ -66,12 +62,12 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
             [this, _header, tableFactory]() { writeNumber2BlockHeader(_header, tableFactory); });
 
         auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
-        tableFactory->asyncCommit([blockNumber, _header, _onCommitBlock, ledgerConfig, self](
+        tableFactory->asyncCommit([_header, _onCommitBlock, self](
                                       Error::Ptr _error, size_t _commitSize) {
             if ((_error && _error->errorCode() != CommonError::SUCCESS) || _commitSize < 1)
             {
                 LEDGER_LOG(ERROR) << LOG_DESC("Commit Block failed in storage")
-                                  << LOG_KV("number", blockNumber);
+                                  << LOG_KV("number", _header->number());
                 // TODO: add error code
                 auto error = std::make_shared<Error>(_error->errorCode(),
                     "[#asyncCommitBlock] Commit block error in storage" + _error->errorMessage());
@@ -86,15 +82,36 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
                 _onCommitBlock(error, nullptr);
                 return;
             }
+            auto blockNumber = _header->number();
             LEDGER_LOG(INFO) << LOG_BADGE("asyncCommitBlock") << LOG_DESC("commit block success")
                              << LOG_KV("blockNumber", blockNumber);
             {
                 WriteGuard ll(ledger->m_blockNumberMutex);
-                ledger->m_blockNumber = _header->number();
+                ledger->m_blockNumber = blockNumber;
             }
             ledger->m_blockHeaderCache.add(blockNumber, _header);
             ledger->notifyCommittedBlockNumber(blockNumber);
-            _onCommitBlock(nullptr, ledgerConfig);
+            ledger->asyncGetLedgerConfig(blockNumber, _header->hash(),
+                [_header, _onCommitBlock](
+                    Error::Ptr _error, WrapperLedgerConfig::Ptr _wrapperLedgerConfig) {
+                    if (_error)
+                    {
+                        LEDGER_LOG(WARNING)
+                            << LOG_DESC("asyncCommitBlock failed for asyncGetLedgerConfig failed")
+                            << LOG_KV("number", _header->number())
+                            << LOG_KV("hash", _header->hash().abridged());
+                        _onCommitBlock(_error, nullptr);
+                        return;
+                    }
+                    if (_wrapperLedgerConfig->sysConfigFetched() &&
+                        _wrapperLedgerConfig->consensusConfigFetched())
+                    {
+                        LEDGER_LOG(INFO) << LOG_DESC("asyncCommitBlock: getLedgerConfig success")
+                                         << LOG_KV("number", _header->number())
+                                         << LOG_KV("hash", _header->hash().abridged());
+                        _onCommitBlock(nullptr, _wrapperLedgerConfig->ledgerConfig());
+                    }
+                });
         });
     }
     catch (OpenSysTableFailed const& e)
@@ -609,7 +626,7 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
         _onGetConfig(error, nullptr);
         return;
     }
-    getStorageGetter()->getConsensusConfig(_type, getMemoryTableFactory(0),
+    getStorageGetter()->asyncGetConsensusConfig(_type, getMemoryTableFactory(0),
         m_blockFactory->cryptoSuite()->keyFactory(),
         [_onGetConfig](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
             if (!_error || _error->errorCode() == CommonError::SUCCESS)
@@ -623,7 +640,7 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage());
                 auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getConsensusConfig callback error" + _error->errorMessage());
+                    "asyncGetConsensusConfig callback error" + _error->errorMessage());
                 _onGetConfig(error, nullptr);
             }
         });
@@ -834,7 +851,8 @@ void Ledger::getLatestBlockNumber(std::function<void(protocol::BlockNumber)> _on
                 {
                     // number entry must exist
                     auto numberStr = _numberEntry->getField(SYS_VALUE);
-                    BlockNumber number = numberStr.empty() ? -1 : boost::lexical_cast<BlockNumber>(numberStr);
+                    BlockNumber number =
+                        numberStr.empty() ? -1 : boost::lexical_cast<BlockNumber>(numberStr);
                     _onGetNumber(number);
                     return;
                 }
@@ -1203,117 +1221,98 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         });
 }
 
-LedgerConfig::Ptr Ledger::getLedgerConfig(
-    protocol::BlockNumber _number, const crypto::HashType& _hash)
+void Ledger::asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash,
+    std::function<void(Error::Ptr, WrapperLedgerConfig::Ptr)> _onGetLedgerConfig)
 {
     auto ledgerConfig = std::make_shared<LedgerConfig>();
     std::atomic_bool asyncRet = {true};
     ledgerConfig->setBlockNumber(_number);
     ledgerConfig->setHash(_hash);
 
-    auto timeoutPromise = std::make_shared<std::promise<std::string>>();
-    auto countLimitPromise = std::make_shared<std::promise<std::string>>();
-    auto sealerPromise = std::make_shared<std::promise<consensus::ConsensusNodeListPtr>>();
-    auto observerPromise = std::make_shared<std::promise<consensus::ConsensusNodeListPtr>>();
-    auto switchPeriodPromise = std::make_shared<std::promise<std::string>>();
+    auto wrapperLedgerConfig = std::make_shared<WrapperLedgerConfig>(ledgerConfig);
 
-    auto timeoutFuture = timeoutPromise->get_future();
-    auto countLimitFuture = countLimitPromise->get_future();
-    auto sealerFuture = sealerPromise->get_future();
-    auto observerFuture = observerPromise->get_future();
-    auto switchPeriodFuture = switchPeriodPromise->get_future();
+    auto storageGetter = getStorageGetter();
+    auto tableFactory = getMemoryTableFactory(0);
+    auto keys = std::make_shared<std::vector<std::string>>();
+    *keys = {SYSTEM_KEY_CONSENSUS_TIMEOUT, SYSTEM_KEY_TX_COUNT_LIMIT,
+        SYSTEM_KEY_CONSENSUS_LEADER_PERIOD};
+    storageGetter->asyncGetSystemConfigList(keys, tableFactory, false,
+        [keys, wrapperLedgerConfig, _onGetLedgerConfig](
+            const Error::Ptr& _error, std::map<std::string, Entry::Ptr> const& _entries) {
+            if (_error)
+            {
+                LEDGER_LOG(WARNING)
+                    << LOG_DESC("asyncGetLedgerConfig failed")
+                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+                _onGetLedgerConfig(_error, nullptr);
+                return;
+            }
+            try
+            {
+                // parse the configurations
+                auto consensusTimeout =
+                    (_entries.at(SYSTEM_KEY_CONSENSUS_TIMEOUT))->getField(SYS_VALUE);
+                auto ledgerConfig = wrapperLedgerConfig->ledgerConfig();
+                ledgerConfig->setConsensusTimeout(boost::lexical_cast<uint64_t>(consensusTimeout));
 
-    asyncGetSystemConfigByKey(SYSTEM_KEY_CONSENSUS_TIMEOUT,
-        [timeoutPromise](Error::Ptr _error, std::string _value, BlockNumber) {
-            if (_error && _error->errorCode() != CommonError::SUCCESS)
-            {
-                LEDGER_LOG(ERROR) << LOG_BADGE("getLedgerConfig")
-                                  << LOG_DESC("asyncGetSystemConfigByKey callback error")
-                                  << LOG_KV("getKey", SYSTEM_KEY_CONSENSUS_TIMEOUT)
-                                  << LOG_KV("errorCode", _error->errorCode())
-                                  << LOG_KV("errorMsg", _error->errorMessage());
-                timeoutPromise->set_value("");
-                return;
+                auto txCountLimit = (_entries.at(SYSTEM_KEY_TX_COUNT_LIMIT))->getField(SYS_VALUE);
+                ledgerConfig->setBlockTxCountLimit(boost::lexical_cast<uint64_t>(txCountLimit));
+
+                auto consensusLeaderPeriod =
+                    (_entries.at(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD))->getField(SYS_VALUE);
+                ledgerConfig->setLeaderSwitchPeriod(
+                    boost::lexical_cast<uint64_t>(consensusLeaderPeriod));
+                LEDGER_LOG(INFO) << LOG_DESC(
+                                        "asyncGetLedgerConfig: asyncGetSystemConfigList success")
+                                 << LOG_KV("consensusTimeout", consensusTimeout)
+                                 << LOG_KV("txCountLimit", txCountLimit)
+                                 << LOG_KV("consensusLeaderPeriod", consensusLeaderPeriod);
+                wrapperLedgerConfig->setSysConfigFetched(true);
+                _onGetLedgerConfig(nullptr, wrapperLedgerConfig);
             }
-            timeoutPromise->set_value(_value);
-        });
-    asyncGetSystemConfigByKey(SYSTEM_KEY_TX_COUNT_LIMIT,
-        [countLimitPromise](Error::Ptr _error, std::string _value, BlockNumber) {
-            if (_error && _error->errorCode() != CommonError::SUCCESS)
+            catch (std::exception const& e)
             {
-                LEDGER_LOG(ERROR) << LOG_BADGE("getLedgerConfig")
-                                  << LOG_DESC("asyncGetSystemConfigByKey callback error")
-                                  << LOG_KV("getKey", SYSTEM_KEY_TX_COUNT_LIMIT)
-                                  << LOG_KV("errorCode", _error->errorCode())
-                                  << LOG_KV("errorMsg", _error->errorMessage());
-                countLimitPromise->set_value("");
-                return;
+                auto errorMsg = "asyncGetLedgerConfig:  asyncGetSystemConfigList failed for " +
+                                boost::diagnostic_information(e);
+                LEDGER_LOG(ERROR) << LOG_DESC(errorMsg);
+                _onGetLedgerConfig(std::make_shared<Error>(-1, errorMsg), nullptr);
             }
-            countLimitPromise->set_value(_value);
-        });
-    asyncGetNodeListByType(CONSENSUS_SEALER,
-        [sealerPromise](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
-            if (_error && _error->errorCode() != CommonError::SUCCESS)
-            {
-                LEDGER_LOG(ERROR) << LOG_BADGE("getLedgerConfig")
-                                  << LOG_DESC("asyncGetNodeListByType callback error")
-                                  << LOG_KV("getKey", CONSENSUS_SEALER)
-                                  << LOG_KV("errorCode", _error->errorCode())
-                                  << LOG_KV("errorMsg", _error->errorMessage());
-                sealerPromise->set_value(nullptr);
-                return;
-            }
-            sealerPromise->set_value(_nodeList);
-        });
-    asyncGetNodeListByType(CONSENSUS_OBSERVER,
-        [observerPromise](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
-            if (_error && _error->errorCode() != CommonError::SUCCESS)
-            {
-                LEDGER_LOG(ERROR) << LOG_BADGE("getLedgerConfig")
-                                  << LOG_DESC("asyncGetNodeListByType callback error")
-                                  << LOG_KV("getKey", CONSENSUS_OBSERVER)
-                                  << LOG_KV("errorCode", _error->errorCode())
-                                  << LOG_KV("errorMsg", _error->errorMessage());
-                observerPromise->set_value(nullptr);
-                return;
-            }
-            observerPromise->set_value(_nodeList);
-        });
-    asyncGetSystemConfigByKey(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
-        [switchPeriodPromise](Error::Ptr _error, std::string _value, BlockNumber) {
-            if (_error && _error->errorCode() != CommonError::SUCCESS)
-            {
-                LEDGER_LOG(ERROR) << LOG_BADGE("getLedgerConfig")
-                                  << LOG_DESC("asyncGetSystemConfigByKey callback error")
-                                  << LOG_KV("getKey", SYSTEM_KEY_CONSENSUS_LEADER_PERIOD)
-                                  << LOG_KV("errorCode", _error->errorCode())
-                                  << LOG_KV("errorMsg", _error->errorMessage());
-                switchPeriodPromise->set_value("");
-                return;
-            }
-            switchPeriodPromise->set_value(_value);
         });
 
-    auto consensusTimeout = timeoutFuture.get();
-    auto txLimit = countLimitFuture.get();
-    auto sealerList = sealerFuture.get();
-    auto observerList = observerFuture.get();
-    auto switchPeriod = switchPeriodFuture.get();
-
-    if (consensusTimeout.empty() || txLimit.empty() || switchPeriod.empty() || !sealerList ||
-        !observerList)
-    {
-        LEDGER_LOG(ERROR) << LOG_BADGE("getLedgerConfig")
-                          << LOG_DESC("Get ledgerConfig from db error");
-        return nullptr;
-    }
-    ledgerConfig->setConsensusTimeout(boost::lexical_cast<uint64_t>(consensusTimeout));
-    ledgerConfig->setBlockTxCountLimit(boost::lexical_cast<uint64_t>(txLimit));
-    ledgerConfig->setLeaderSwitchPeriod(boost::lexical_cast<uint64_t>(switchPeriod));
-    ledgerConfig->setConsensusNodeList(*sealerList);
-    ledgerConfig->setObserverNodeList(*observerList);
-    return ledgerConfig;
+    // get the consensusNodeInfo and the observerNodeInfo
+    std::vector<std::string> nodeTypeList = {CONSENSUS_SEALER, CONSENSUS_OBSERVER};
+    storageGetter->asyncGetConsensusConfigList(nodeTypeList, tableFactory,
+        m_blockFactory->cryptoSuite()->keyFactory(),
+        [wrapperLedgerConfig, _onGetLedgerConfig](
+            Error::Ptr _error, std::map<std::string, consensus::ConsensusNodeListPtr> _nodeMap) {
+            if (_error)
+            {
+                LEDGER_LOG(WARNING)
+                    << LOG_DESC("asyncGetLedgerConfig: asyncGetConsensusConfig failed")
+                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+                _onGetLedgerConfig(_error, nullptr);
+                return;
+            }
+            auto ledgerConfig = wrapperLedgerConfig->ledgerConfig();
+            if (_nodeMap.count(CONSENSUS_SEALER) && _nodeMap[CONSENSUS_SEALER])
+            {
+                auto consensusNodeList = _nodeMap[CONSENSUS_SEALER];
+                ledgerConfig->setConsensusNodeList(*consensusNodeList);
+            }
+            if (_nodeMap.count(CONSENSUS_OBSERVER) && _nodeMap[CONSENSUS_OBSERVER])
+            {
+                auto observerNodeList = _nodeMap[CONSENSUS_OBSERVER];
+                ledgerConfig->setObserverNodeList(*observerNodeList);
+            }
+            LEDGER_LOG(INFO) << LOG_DESC("asyncGetLedgerConfig: asyncGetConsensusConfig success")
+                             << LOG_KV(
+                                    "consensusNodeSize", ledgerConfig->consensusNodeList().size())
+                             << LOG_KV("observerNodeSize", ledgerConfig->observerNodeList().size());
+            wrapperLedgerConfig->setConsensusConfigFetched(true);
+            _onGetLedgerConfig(nullptr, wrapperLedgerConfig);
+        });
 }
+
 bool Ledger::isBlockShouldCommit(const BlockNumber& _blockNumber, const std::string& _parentHash)
 {
     std::promise<std::string> hashPromise;
@@ -1380,8 +1379,7 @@ void Ledger::writeNumber2Nonces(
     emptyBlock->encode(*nonceData);
 
     auto nonceStr = asString(*nonceData);
-    bool ret =
-        getStorageSetter()->setNumber2Nonces(_tableFactory, blockNumberStr, nonceStr);
+    bool ret = getStorageSetter()->setNumber2Nonces(_tableFactory, blockNumberStr, nonceStr);
     if (!ret)
     {
         LEDGER_LOG(DEBUG) << LOG_BADGE("WriteNoncesToBlock")

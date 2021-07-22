@@ -118,16 +118,28 @@ public:
     void getSysConfig(std::string _key, const storage::TableFactoryInterface::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetConfig);
 
+    void asyncGetSystemConfigList(const std::shared_ptr<std::vector<std::string>>& _keys,
+        const storage::TableFactoryInterface::Ptr& _tableFactory, bool _allowEmpty,
+        std::function<void(
+            const Error::Ptr&, std::map<std::string, bcos::storage::Entry::Ptr> const&)>
+            _onGetConfig);
     /**
      * @brief get consensus node list in table SYS_CONSENSUS
      * @param _nodeType
      * @param _tableFactory
      * @param _keyFactory key factory to generate nodeID
      */
-    void getConsensusConfig(const std::string& _nodeType,
+    void asyncGetConsensusConfig(std::string const& _nodeType,
         const storage::TableFactoryInterface::Ptr& _tableFactory,
         crypto::KeyFactory::Ptr _keyFactory,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig);
+
+    void asyncGetConsensusConfigList(std::vector<std::string> const& _nodeTypeList,
+        const storage::TableFactoryInterface::Ptr& _tableFactory,
+        crypto::KeyFactory::Ptr _keyFactory,
+        std::function<void(Error::Ptr, std::map<std::string, consensus::ConsensusNodeListPtr>)>
+            _onGetConfig);
+
 
     void getBatchTxByHashList(std::shared_ptr<std::vector<std::string>> _hashList,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
