@@ -441,7 +441,8 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
         _onGetTx)
 {
     getStorageGetter()->getReceiptByTxHash(_txHash.hex(), getMemoryTableFactory(0),
-        [this, _withProof, _onGetTx](Error::Ptr _error, bcos::storage::Entry::Ptr _receiptEntry) {
+        [this, _withProof, _onGetTx, _txHash](
+            Error::Ptr _error, bcos::storage::Entry::Ptr _receiptEntry) {
             if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
                 LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetTransactionReceiptByHash")
@@ -462,6 +463,18 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
                 return;
             }
             auto receipt = decodeReceipt(getReceiptFactory(), _receiptEntry->getField(SYS_VALUE));
+            if (!receipt)
+            {
+                LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetTransactionReceiptByHash")
+                                  << LOG_DESC("receipt is null or empty")
+                                  << LOG_KV("txHash", _txHash.hex())
+                                  << LOG_KV("encodedReceiptValue", _receiptEntry->getField(SYS_VALUE));
+                // TODO: add error code
+                auto error =
+                    std::make_shared<Error>(-1, "getReceiptByTxHash callback empty receipt");
+                _onGetTx(error, nullptr, nullptr);
+                return;
+            }
             if (_withProof)
             {
                 getReceiptProof(
@@ -1091,8 +1104,9 @@ void Ledger::getTxProof(
             auto receipt = decodeReceipt(getReceiptFactory(), _receiptEntry->getField(SYS_VALUE));
             if (!receipt)
             {
-                LEDGER_LOG(TRACE) << LOG_BADGE("getTxProof") << LOG_DESC("receipt is null or empty")
-                                  << LOG_KV("txHash", _txHash.hex());
+                LEDGER_LOG(ERROR) << LOG_BADGE("getTxProof") << LOG_DESC("receipt is null or empty")
+                                  << LOG_KV("txHash", _txHash.hex())
+                                  << LOG_KV("encodedReceiptValue", _receiptEntry->getField(SYS_VALUE));
                 // TODO: add error code
                 auto error =
                     std::make_shared<Error>(-1, "getReceiptByTxHash callback empty receipt");
