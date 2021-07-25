@@ -40,7 +40,7 @@ public:
         _encodedList.resize(protocolDataSize);
         tbb::parallel_for(tbb::blocked_range<size_t>(0, protocolDataSize),
             [&](const tbb::blocked_range<size_t>& _r) {
-                for (auto i = _r.begin(); i < _r.end(); ++i)
+                for (uint32_t i = _r.begin(); i < _r.end(); ++i)
                 {
                     bcos::codec::scale::ScaleEncoderStream stream;
                     stream << i;

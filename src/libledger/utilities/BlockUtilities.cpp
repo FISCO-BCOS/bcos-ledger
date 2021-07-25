@@ -130,7 +130,8 @@ bcos::protocol::Block::Ptr decodeBlock(
     }
     catch (std::exception const& e)
     {
-        LEDGER_LOG(ERROR) << LOG_BADGE("decodeBlock") << LOG_DESC("decode error, return nullptr");
+        LEDGER_LOG(ERROR) << LOG_BADGE("decodeBlock") << LOG_DESC("decode error, return nullptr")
+                          << LOG_KV("error", boost::diagnostic_information(e));
     }
     return block;
 }
@@ -146,7 +147,8 @@ bcos::protocol::BlockHeader::Ptr decodeBlockHeader(
     catch (std::exception const& e)
     {
         LEDGER_LOG(ERROR) << LOG_BADGE("decodeBlockHeader")
-                          << LOG_DESC("decode error, return nullptr");
+                          << LOG_DESC("decode error, return nullptr")
+                          << LOG_KV("error", boost::diagnostic_information(e));
     }
     return header;
 }
@@ -162,7 +164,8 @@ bcos::protocol::Transaction::Ptr decodeTransaction(
     catch (std::exception const& e)
     {
         LEDGER_LOG(ERROR) << LOG_BADGE("decodeTransaction")
-                          << LOG_DESC("decode error, return nullptr");
+                          << LOG_DESC("decode error, return nullptr")
+                          << LOG_KV("error", boost::diagnostic_information(e));
     }
     return tx;
 }
