@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
     auto storageGetter = StorageGetter::storageGetterFactory();
     storageGetter->asyncTableGetter(tableFactory, "errorTable", "row",
         [&](Error::Ptr _error, bcos::storage::Entry::Ptr _value) {
-            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK(_error != nullptr);
             BOOST_CHECK_EQUAL(_value, nullptr);
             p1.set_value(true);
         });
@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
     auto fakeHashList = std::make_shared<std::vector<std::string>>();
     storageGetter->getBatchTxByHashList(
         fakeHashList, tableFactory, nullptr, [&](Error::Ptr _error, TransactionsPtr _txs) {
-            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK(_error != nullptr);
             BOOST_CHECK_EQUAL(_txs, nullptr);
             p2.set_value(true);
         });
@@ -132,7 +132,7 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
     auto f3 = p3.get_future();
     storageGetter->getBatchReceiptsByHashList(
         fakeHashList, tableFactory, nullptr, [&](Error::Ptr _error, ReceiptsPtr _receipts) {
-            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK(_error != nullptr);
             BOOST_CHECK_EQUAL(_receipts, nullptr);
             p3.set_value(true);
         });
@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
     storageGetter->getNoncesBatchFromStorage(0, 1, tableFactory, nullptr,
         [&](Error::Ptr _error,
             std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> _nonce) {
-            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK(_error != nullptr);
             BOOST_CHECK_EQUAL(_nonce, nullptr);
             p4.set_value(true);
         });
@@ -153,7 +153,7 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
     auto f5 = p5.get_future();
     storageGetter->asyncGetConsensusConfig(
         "", tableFactory, nullptr, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodes) {
-            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK(_error != nullptr);
             BOOST_CHECK_EQUAL(_nodes, nullptr);
             p5.set_value(true);
         });
@@ -163,7 +163,7 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
     auto f6 = p6.get_future();
     storageGetter->getSysConfig(
         "", tableFactory, [&](Error::Ptr _error, bcos::storage::Entry::Ptr _configEntry) {
-            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK(_error != nullptr);
             BOOST_CHECK_EQUAL(_configEntry, nullptr);
             p6.set_value(true);
         });

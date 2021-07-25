@@ -28,7 +28,6 @@ protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr&
     auto txs = std::make_shared<protocol::Transactions>();
     if (_block == nullptr)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Block is null, return nullptr");
         return nullptr;
     }
     auto txSize = _block->transactionsSize();
@@ -50,7 +49,6 @@ std::shared_ptr<std::vector<std::string>> blockTxHashListGetter(const protocol::
     auto txHashList = std::make_shared<std::vector<std::string>>();
     if (_block == nullptr)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Block is null, return nullptr");
         return nullptr;
     }
     auto txHashSize = _block->transactionsHashSize();
@@ -72,7 +70,7 @@ int blockTransactionListSetter(
 {
     if (_block == nullptr || _txs == nullptr)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("blockTransactionListSetter set error");
+        LEDGER_LOG(DEBUG) << LOG_DESC("blockTransactionListSetter nullptr args");
         return -1;
     }
     for (const auto& tx : *_txs)
@@ -88,7 +86,6 @@ protocol::ReceiptsPtr blockReceiptListGetter(const protocol::Block::Ptr& _block)
     auto receipts = std::make_shared<protocol::Receipts>();
     if (_block == nullptr)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Block is null, return nullptr");
         return nullptr;
     }
     auto receiptSize = _block->receiptsSize();
@@ -110,7 +107,7 @@ int blockReceiptListSetter(
 {
     if (_block == nullptr || _receipts == nullptr)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Block receipts set error");
+        LEDGER_LOG(DEBUG) << LOG_DESC("blockReceiptListSetter nullptr args");
         return -1;
     }
     for (const auto& rcpt : *_receipts)
@@ -131,6 +128,7 @@ bcos::protocol::Block::Ptr decodeBlock(
     catch (std::exception const& e)
     {
         LEDGER_LOG(ERROR) << LOG_BADGE("decodeBlock") << LOG_DESC("decode error, return nullptr")
+                          << LOG_KV("blockStr", _blockStr)
                           << LOG_KV("error", boost::diagnostic_information(e));
     }
     return block;
@@ -148,6 +146,7 @@ bcos::protocol::BlockHeader::Ptr decodeBlockHeader(
     {
         LEDGER_LOG(ERROR) << LOG_BADGE("decodeBlockHeader")
                           << LOG_DESC("decode error, return nullptr")
+                          << LOG_KV("headerStr", _headerStr)
                           << LOG_KV("error", boost::diagnostic_information(e));
     }
     return header;
@@ -164,7 +163,7 @@ bcos::protocol::Transaction::Ptr decodeTransaction(
     catch (std::exception const& e)
     {
         LEDGER_LOG(ERROR) << LOG_BADGE("decodeTransaction")
-                          << LOG_DESC("decode error, return nullptr")
+                          << LOG_DESC("decode error, return nullptr") << LOG_KV("txStr", _txStr)
                           << LOG_KV("error", boost::diagnostic_information(e));
     }
     return tx;
@@ -181,6 +180,7 @@ bcos::protocol::TransactionReceipt::Ptr decodeReceipt(
     catch (std::exception const& e)
     {
         LEDGER_LOG(ERROR) << LOG_BADGE("decodeReceipt") << LOG_DESC("decode error, return nullptr")
+                          << LOG_KV("receiptStr", _receiptStr)
                           << LOG_KV("error", boost::diagnostic_information(e));
     }
     return receipt;

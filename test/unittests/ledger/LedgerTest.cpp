@@ -335,7 +335,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumber)
     auto f1 = p1.get_future();
     m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, BlockNumber _number) {
         BOOST_CHECK(_error != nullptr);
-        BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::CallbackError);
         BOOST_CHECK_EQUAL(_number, -1);
         p1.set_value(true);
     });
@@ -348,7 +348,7 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetBlockHashByNumber(-1, [=, &p1](Error::Ptr _error, HashType _hash) {
-        BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::ErrorArgument);
         BOOST_CHECK_EQUAL(_hash, HashType());
         p1.set_value(true);
     });
@@ -448,10 +448,11 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
 
     std::promise<bool> p1;
     auto f1 = p1.get_future();
+    // error type get empty node list
     m_ledger->asyncGetNodeListByType(
         "test", [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
-            BOOST_CHECK(_error != nullptr);
-            BOOST_CHECK_EQUAL(_nodeList, nullptr);
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_nodeList->size(), 0);
             p1.set_value(true);
         });
 
@@ -489,7 +490,7 @@ BOOST_AUTO_TEST_CASE(commit)
     // test isBlockShouldCommit
     m_ledger->asyncCommitBlock(
         m_fakeBlocks->at(3)->blockHeader(), [&](Error::Ptr _error, LedgerConfig::Ptr _config) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+            BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::ErrorCommitBlock);
             BOOST_CHECK(_config == nullptr);
             p1.set_value(true);
         });
@@ -498,7 +499,7 @@ BOOST_AUTO_TEST_CASE(commit)
     auto f2 = p2.get_future();
     // null header in storage
     m_ledger->asyncCommitBlock(nullptr, [&](Error::Ptr _error, LedgerConfig::Ptr _config) {
-        BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::ErrorArgument);
         BOOST_CHECK(_config == nullptr);
         p2.set_value(true);
     });
@@ -523,22 +524,21 @@ BOOST_AUTO_TEST_CASE(errorStorage)
         newBlock->blockHeader()->setParentInfo(fakeParentInfoList);
         p1.set_value(true);
     });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
     auto table = std::make_shared<TableFactory>(m_storage, nullptr, 1);
     m_storage->addStateCache(1, table);
-    // force commit to trigger commit error
-    for (int i = 0; i < 10; ++i)
-    {
-        std::promise<bool> p;
-        auto f = p.get_future();
-        m_ledger->asyncCommitBlock(
-            newBlock->blockHeader(), [=, &p](Error::Ptr _error, LedgerConfig::Ptr _config) {
-                BOOST_CHECK_EQUAL(_error->errorCode(), -1);
-                BOOST_CHECK(_config == nullptr);
-                p.set_value(true);
-            });
-        BOOST_CHECK_EQUAL(f.get(), true);
-    }
+
+    std::promise<bool> p2;
+    auto f2 = p2.get_future();
+    m_ledger->asyncCommitBlock(
+        newBlock->blockHeader(), [=, &p2](Error::Ptr _error, LedgerConfig::Ptr _config) {
+            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK(_config == nullptr);
+            p2.set_value(true);
+        });
+    BOOST_CHECK_EQUAL(f2.get(), true);
+
     auto bytesPtr = std::make_shared<bytes>(asBytes(""));
     auto bytesList = std::make_shared<std::vector<bytesPointer>>();
     bytesList->emplace_back(bytesPtr);
@@ -551,7 +551,7 @@ BOOST_AUTO_TEST_CASE(errorStorage)
         std::promise<bool> p;
         auto f = p.get_future();
         m_ledger->asyncStoreTransactions(bytesList, hashList, [&](Error::Ptr _error) {
-            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK(_error != nullptr);
             p.set_value(true);
         });
         BOOST_CHECK_EQUAL(f.get(), true);
@@ -559,12 +559,11 @@ BOOST_AUTO_TEST_CASE(errorStorage)
         std::promise<bool> pp;
         auto ff = pp.get_future();
         m_ledger->asyncStoreReceipts(getStateTable(0), newBlock, [&](Error::Ptr _error) {
-            BOOST_CHECK(_error->errorCode() == -1);
+            BOOST_CHECK(_error != nullptr);
             pp.set_value(true);
         });
         BOOST_CHECK_EQUAL(ff.get(), true);
     }
-    BOOST_CHECK_EQUAL(f1.get(), true);
 }
 
 BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
@@ -722,7 +721,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     m_ledger->asyncGetBatchTxsByHashList(nullptr, false,
         [=, &p5](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
-            BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+            BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::ErrorArgument);
             BOOST_CHECK(_txList == nullptr);
             BOOST_CHECK(_proof == nullptr);
             p5.set_value(true);
@@ -844,14 +843,14 @@ BOOST_AUTO_TEST_CASE(preStoreTransaction)
     auto f2 = p2.get_future();
     // null pointer
     m_ledger->asyncStoreTransactions(txBytesList, nullptr, [&](Error::Ptr _error) {
-        BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::ErrorArgument);
         p2.set_value(true);
     });
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
     m_ledger->asyncStoreTransactions(nullptr, hashList, [&](Error::Ptr _error) {
-        BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::ErrorArgument);
         p3.set_value(true);
     });
     BOOST_CHECK_EQUAL(f1.get(), true);
@@ -867,7 +866,7 @@ BOOST_AUTO_TEST_CASE(preStoreReceipt)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncStoreReceipts(nullptr, m_fakeBlocks->at(1), [&](Error::Ptr _error) {
-        BOOST_CHECK_EQUAL(_error->errorCode(), -1);
+        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::ErrorArgument);
         p1.set_value(true);
     });
     BOOST_CHECK_EQUAL(f1.get(), true);
