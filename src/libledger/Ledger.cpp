@@ -468,7 +468,8 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
                 LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetTransactionReceiptByHash")
                                   << LOG_DESC("receipt is null or empty")
                                   << LOG_KV("txHash", _txHash.hex())
-                                  << LOG_KV("encodedReceiptValue", _receiptEntry->getField(SYS_VALUE));
+                                  << LOG_KV(
+                                         "encodedReceiptValue", _receiptEntry->getField(SYS_VALUE));
                 // TODO: add error code
                 auto error =
                     std::make_shared<Error>(-1, "getReceiptByTxHash callback empty receipt");
@@ -1106,7 +1107,8 @@ void Ledger::getTxProof(
             {
                 LEDGER_LOG(ERROR) << LOG_BADGE("getTxProof") << LOG_DESC("receipt is null or empty")
                                   << LOG_KV("txHash", _txHash.hex())
-                                  << LOG_KV("encodedReceiptValue", _receiptEntry->getField(SYS_VALUE));
+                                  << LOG_KV(
+                                         "encodedReceiptValue", _receiptEntry->getField(SYS_VALUE));
                 // TODO: add error code
                 auto error =
                     std::make_shared<Error>(-1, "getReceiptByTxHash callback empty receipt");
@@ -1516,7 +1518,9 @@ void Ledger::writeNumber2Transactions(
     auto number = _block->blockHeader()->number();
     for (size_t i = 0; i < _block->transactionsSize(); i++)
     {
-        emptyBlock->appendTransactionHash(_block->transactionHash(i));
+        // Note: in some cases(block sync), the transactionHash fields maybe empty
+        auto tx = _block->transaction(i);
+        emptyBlock->appendTransactionHash(tx->hash());
     }
 
     emptyBlock->encode(*encodeBlock);
@@ -1526,25 +1530,33 @@ void Ledger::writeNumber2Transactions(
     {
         LEDGER_LOG(DEBUG) << LOG_BADGE("WriteNumber2Txs")
                           << LOG_DESC("Write row in SYS_NUMBER_2_TXS error")
-                          << LOG_KV("blockNumber", number);
+                          << LOG_KV("blockNumber", _block->blockHeader()->number())
+                          << LOG_KV("hash", _block->blockHeader()->hash().abridged());
     }
 }
 void Ledger::writeHash2Receipt(
     const bcos::protocol::Block::Ptr& _block, const TableFactoryInterface::Ptr& _tableFactory)
 {
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, _block->transactionsHashSize()),
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, _block->transactionsSize()),
         [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
             {
-                auto encodeReceipt = _block->receipt(i)->encode();
+                auto tx = _block->transaction(i);
+                // Note: in the tars-service, call receipt(_index) will make a new object, must add
+                // the receipt here to maintain the lifetime, and in case of encodeReceipt be
+                // released
+                auto receipt = _block->receipt(i);
+                auto encodeReceipt = receipt->encode();
                 auto ret = getStorageSetter()->setHashToReceipt(
-                    _tableFactory, _block->transactionHash(i).hex(), asString(encodeReceipt));
+                    _tableFactory, tx->hash().hex(), asString(encodeReceipt));
                 if (!ret)
                 {
-                    LEDGER_LOG(DEBUG) << LOG_BADGE("writeHash2Receipt")
-                                      << LOG_DESC("Write row in SYS_HASH_2_RECEIPT error")
-                                      << LOG_KV("txHash", _block->transactionHash(i).hex())
-                                      << LOG_KV("blockNumber", _block->blockHeader()->number());
+                    LEDGER_LOG(DEBUG)
+                        << LOG_BADGE("writeHash2Receipt")
+                        << LOG_DESC("Write row in SYS_HASH_2_RECEIPT error")
+                        << LOG_KV("txHash", tx->hash().hex())
+                        << LOG_KV("blockNumber", _block->blockHeader()->number())
+                        << LOG_KV("blockHash", _block->blockHeader()->hash().abridged());
                 }
             }
         });
