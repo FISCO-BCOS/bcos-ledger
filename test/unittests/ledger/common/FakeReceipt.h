@@ -53,12 +53,12 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(
     CryptoSuite::Ptr _cryptoSuite, BlockNumber _blockNumber)
 {
     auto hashImpl = _cryptoSuite->hashImpl();
-    u256 gasUsed = 12343242342;
+    u256 gasUsed = 12343242342 + random();
     auto contractAddress = toAddress("5fe3c4c3e2079879a0dba1937aca95ac16e68f0f");
     auto logEntries = fakeLogEntries(hashImpl, 2);
     TransactionStatus status = TransactionStatus::BadJumpDestination;
     bytes output = contractAddress.asBytes();
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < (random() % 9); i++)
     {
         output += contractAddress.asBytes();
     }

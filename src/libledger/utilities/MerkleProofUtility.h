@@ -42,9 +42,7 @@ public:
             [&](const tbb::blocked_range<size_t>& _r) {
                 for (uint32_t i = _r.begin(); i < _r.end(); ++i)
                 {
-                    bcos::codec::scale::ScaleEncoderStream stream;
-                    stream << i;
-                    bytes encodedData = stream.data();
+                    bytes encodedData;
                     auto hash = ((*_protocolDataList)[i])->hash();
                     encodedData.insert(encodedData.end(), hash.begin(), hash.end());
                     _encodedList[i] = std::move(encodedData);
