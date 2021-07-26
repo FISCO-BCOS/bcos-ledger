@@ -73,9 +73,10 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
 
     if (!table)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_BLOCK_NUMBER_2_NONCES table error from db");
-        // TODO: add error code and msg
-        auto error = std::make_shared<Error>(-1, "");
+        LEDGER_LOG(DEBUG) << LOG_DESC("Open table error from db")
+                          << LOG_KV("tableName", SYS_BLOCK_NUMBER_2_NONCES);
+        auto error = std::make_shared<Error>(
+            LedgerError::OpenTableFailed, "Open" + SYS_BLOCK_NUMBER_2_NONCES + " table error");
         _onGetData(error, nullptr);
         return;
     }
@@ -89,9 +90,7 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
                                         const std::map<std::string, Entry::Ptr>& numberEntryMap) {
         if (_error && _error->errorCode() != CommonError::SUCCESS)
         {
-            // TODO: add error code and msg
-            auto error = std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
-            _onGetData(error, nullptr);
+            _onGetData(_error, nullptr);
             return;
         }
         auto retMap = std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
@@ -125,7 +124,8 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
                 continue;
             }
         }
-        LEDGER_LOG(DEBUG) << LOG_DESC("Get Nonce list from db")
+        LEDGER_LOG(DEBUG) << LOG_BADGE("getNoncesBatchFromStorage")
+                          << LOG_DESC("Get Nonce list from db")
                           << LOG_KV("retMapSize", retMap->size());
         _onGetData(nullptr, retMap);
     });
@@ -167,7 +167,8 @@ void StorageGetter::asyncGetSystemConfigList(const std::shared_ptr<std::vector<s
     auto table = _tableFactory->openTable(SYS_CONFIG);
     if (!table)
     {
-        auto error = std::make_shared<Error>(-1, "open table " + SYS_CONFIG + " failed.");
+        auto error = std::make_shared<Error>(
+            LedgerError::OpenTableFailed, "open table " + SYS_CONFIG + " failed.");
         std::map<std::string, bcos::storage::Entry::Ptr> emptyEntries;
         _onGetConfig(error, emptyEntries);
         return;
@@ -202,7 +203,8 @@ void StorageGetter::asyncGetSystemConfigList(const std::shared_ptr<std::vector<s
                 auto errorMsg =
                     "asyncGetSystemConfigList failed for get empty config for key: " + key;
                 LEDGER_LOG(ERROR) << LOG_DESC(errorMsg) << LOG_KV("key", key);
-                _onGetConfig(std::make_shared<Error>(-1, errorMsg), emptyEntryMap);
+                _onGetConfig(
+                    std::make_shared<Error>(LedgerError::CallbackError, errorMsg), emptyEntryMap);
                 return;
             }
         }
@@ -242,8 +244,11 @@ void StorageGetter::asyncGetConsensusConfigList(std::vector<std::string> const& 
     std::map<std::string, consensus::ConsensusNodeListPtr> emptyMap;
     if (!table)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_CONSENSUS table error from db");
-        auto error = std::make_shared<Error>(-1, "open SYS_CONSENSUS table error");
+        LEDGER_LOG(DEBUG) << LOG_BADGE("asyncGetConsensusConfigList")
+                          << LOG_DESC("Open table error from db")
+                          << LOG_KV("tableName", SYS_CONSENSUS);
+        auto error =
+            std::make_shared<Error>(LedgerError::OpenTableFailed, "open SYS_CONSENSUS table error");
         _onGetConfig(error, emptyMap);
         return;
     }
@@ -252,9 +257,7 @@ void StorageGetter::asyncGetConsensusConfigList(std::vector<std::string> const& 
                      const Error::Ptr& _error, std::vector<std::string> _keys) {
             if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "asyncGetPrimaryKeys callback error" + _error->errorMessage());
-                _onGetConfig(error, emptyMap);
+                _onGetConfig(_error, emptyMap);
                 return;
             }
             auto keys = std::make_shared<std::vector<std::string>>(_keys);
@@ -263,9 +266,7 @@ void StorageGetter::asyncGetConsensusConfigList(std::vector<std::string> const& 
                           const std::map<std::string, Entry::Ptr>& _entryMap) {
                     if (_error && _error->errorCode() != CommonError::SUCCESS)
                     {
-                        auto error = std::make_shared<Error>(_error->errorCode(),
-                            "asyncGetRows callback error" + _error->errorMessage());
-                        _onGetConfig(error, emptyMap);
+                        _onGetConfig(_error, emptyMap);
                         return;
                     }
                     std::map<std::string, consensus::ConsensusNodeListPtr> nodeMap;
@@ -303,10 +304,9 @@ void StorageGetter::asyncTableGetter(const bcos::storage::TableFactoryInterface:
     auto table = _tableFactory->openTable(_tableName);
     if (!table)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Open table error from db")
+        LEDGER_LOG(DEBUG) << LOG_BADGE("asyncTableGetter") << LOG_DESC("Open table error from db")
                           << LOG_KV("openTable", _tableName);
-        // TODO: add error code and msg
-        auto error = std::make_shared<Error>(-1, "");
+        auto error = std::make_shared<Error>(LedgerError::OpenTableFailed, "");
         _onGetEntry(error, nullptr);
         return;
     }
@@ -316,9 +316,7 @@ void StorageGetter::asyncTableGetter(const bcos::storage::TableFactoryInterface:
     table->asyncGetRow(_row, [_onGetEntry](const Error::Ptr& _error, Entry::Ptr _entry) {
         if (_error && _error->errorCode() != CommonError::SUCCESS)
         {
-            auto error = std::make_shared<Error>(
-                _error->errorCode(), "asyncGetRow callback error" + _error->errorMessage());
-            _onGetEntry(error, nullptr);
+            _onGetEntry(_error, nullptr);
             return;
         }
         // do not handle if entry is nullptr, just send it out
@@ -335,8 +333,10 @@ void StorageGetter::getBatchTxByHashList(std::shared_ptr<std::vector<std::string
 
     if (!table)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_TX table error from db");
-        auto error = std::make_shared<Error>(-1, "open table SYS_HASH_2_TX error");
+        LEDGER_LOG(DEBUG) << LOG_DESC("Open table error from db")
+                          << LOG_KV("tableName", SYS_HASH_2_TX);
+        auto error =
+            std::make_shared<Error>(LedgerError::OpenTableFailed, "open table SYS_HASH_2_TX error");
         _onGetTx(error, nullptr);
         return;
     }
@@ -344,9 +344,7 @@ void StorageGetter::getBatchTxByHashList(std::shared_ptr<std::vector<std::string
                                        const std::map<std::string, Entry::Ptr>& _hashEntryMap) {
         if (_error && _error->errorCode() != CommonError::SUCCESS)
         {
-            LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_TX table error from db");
-            auto error = std::make_shared<Error>(_error->errorCode(), _error->errorMessage());
-            _onGetTx(error, nullptr);
+            _onGetTx(_error, nullptr);
             return;
         }
         auto txList = std::make_shared<Transactions>();
@@ -394,9 +392,10 @@ void StorageGetter::getBatchReceiptsByHashList(std::shared_ptr<std::vector<std::
 
     if (!table)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_RECEIPT table error from db");
-        // TODO: add error code
-        auto error = std::make_shared<Error>(-1, "open table SYS_HASH_2_RECEIPT error");
+        LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_RECEIPT table error from db")
+                          << LOG_KV("tableName", SYS_HASH_2_RECEIPT);
+        auto error = std::make_shared<Error>(
+            LedgerError::OpenTableFailed, "open table SYS_HASH_2_RECEIPT error");
         _onGetReceipt(error, nullptr);
         return;
     }
@@ -405,8 +404,7 @@ void StorageGetter::getBatchReceiptsByHashList(std::shared_ptr<std::vector<std::
                        const std::map<std::string, Entry::Ptr>& _hashEntryMap) {
             if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
-                auto error = std::make_shared<Error>(_error->errorCode(), _error->errorMessage());
-                _onGetReceipt(error, nullptr);
+                _onGetReceipt(_error, nullptr);
                 return;
             }
             auto receiptList = std::make_shared<Receipts>();

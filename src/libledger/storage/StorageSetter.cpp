@@ -218,24 +218,15 @@ bool StorageSetter::syncTableSetter(const bcos::storage::TableFactoryInterface::
     const std::string& _tableName, const std::string& _row, const std::string& _fieldName,
     const std::string& _fieldValue)
 {
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-
     auto table = _tableFactory->openTable(_tableName);
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
     if (table)
     {
         auto entry = table->newEntry();
         entry->setField(_fieldName, _fieldValue);
         auto ret = table->setRow(_row, entry);
-        auto insertTable_time_cost = utcTime() - record_time;
 
         LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", _tableName)
-                          << LOG_KV("openTableTimeCost", openTable_time_cost)
-                          << LOG_KV("insertTableTimeCost", insertTable_time_cost)
-                          << LOG_KV("totalTimeCost", utcTime() - start_time);
+                          << LOG_KV("row", _row) << LOG_KV("value", _fieldValue);
         return ret;
     }
     else
@@ -281,25 +272,16 @@ bool StorageSetter::setNumber2Nonces(const TableFactoryInterface::Ptr& _tableFac
 bool StorageSetter::setSysConfig(const TableFactoryInterface::Ptr& _tableFactory,
     const std::string& _key, const std::string& _value, const std::string& _enableBlock)
 {
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-
     auto table = _tableFactory->openTable(SYS_CONFIG);
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
     if (table)
     {
         auto entry = table->newEntry();
         entry->setField(SYS_VALUE, _value);
         entry->setField(SYS_CONFIG_ENABLE_BLOCK_NUMBER, _enableBlock);
         auto ret = table->setRow(_key, entry);
-        auto insertTable_time_cost = utcTime() - record_time;
 
         LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", SYS_CONFIG)
-                          << LOG_KV("openTableTimeCost", openTable_time_cost)
-                          << LOG_KV("insertTableTimeCost", insertTable_time_cost)
-                          << LOG_KV("totalTimeCost", utcTime() - start_time);
+                          << LOG_KV("key", _key) << LOG_KV("SYS_VALUE", _value);
         return ret;
     }
     else
@@ -312,13 +294,7 @@ bool StorageSetter::setConsensusConfig(
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _type,
     const consensus::ConsensusNodeList& _nodeList, const std::string& _enableBlock)
 {
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-
     auto table = _tableFactory->openTable(SYS_CONSENSUS);
-    auto openTable_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
     if (table)
     {
         bool ret = (!_nodeList.empty());
@@ -329,13 +305,10 @@ bool StorageSetter::setConsensusConfig(
             entry->setField(NODE_WEIGHT, boost::lexical_cast<std::string>(node->weight()));
             entry->setField(NODE_ENABLE_NUMBER, _enableBlock);
             ret = ret && table->setRow(node->nodeID()->hex(), entry);
+            LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", SYS_CONSENSUS)
+                              << LOG_KV("NODE_TYPE", _type) << LOG_KV("NODE_WEIGHT", node->weight())
+                              << LOG_KV("nodeId", node->nodeID()->hex());
         }
-        auto insertTable_time_cost = utcTime() - record_time;
-
-        LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", SYS_CONSENSUS)
-                          << LOG_KV("openTableTimeCost", openTable_time_cost)
-                          << LOG_KV("insertTableTimeCost", insertTable_time_cost)
-                          << LOG_KV("totalTimeCost", utcTime() - start_time);
         return ret;
     }
     else

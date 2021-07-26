@@ -38,8 +38,8 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
     if (_header == nullptr)
     {
         LEDGER_LOG(FATAL) << LOG_BADGE("asyncCommitBlock") << LOG_DESC("Header is nullptr");
-        // TODO: add error code
-        auto error = std::make_shared<Error>(-1, "[#asyncCommitBlock] Header is nullptr.");
+        auto error = std::make_shared<Error>(
+            LedgerError::ErrorArgument, "[#asyncCommitBlock] Header is nullptr.");
         _onCommitBlock(error, nullptr);
         return;
     }
@@ -47,9 +47,8 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
     // default parent block hash located in parentInfo[0]
     if (!isBlockShouldCommit(_header->number(), _header->parentInfo().at(0).blockHash.hex()))
     {
-        // TODO: add error code
-        auto error = std::make_shared<Error>(
-            -1, "[#asyncCommitBlock] Wrong block number of wrong parent hash");
+        auto error = std::make_shared<Error>(LedgerError::ErrorCommitBlock,
+            "[#asyncCommitBlock] Wrong block number of wrong parent hash");
         _onCommitBlock(error, nullptr);
         return;
     }
@@ -64,21 +63,29 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
         auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
         tableFactory->asyncCommit([_header, _onCommitBlock, self](
                                       Error::Ptr _error, size_t _commitSize) {
-            if ((_error && _error->errorCode() != CommonError::SUCCESS) || _commitSize < 1)
+            if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
                 LEDGER_LOG(ERROR) << LOG_DESC("Commit Block failed in storage")
-                                  << LOG_KV("number", _header->number());
-                // TODO: add error code
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "[#asyncCommitBlock] Commit block error in storage" + _error->errorMessage());
-                _onCommitBlock(error, nullptr);
+                                  << LOG_KV("number", _header->number())
+                                  << LOG_KV("code", _error->errorCode())
+                                  << LOG_KV("msg", _error->errorMessage());
+                _onCommitBlock(_error, nullptr);
+                return;
+            }
+            if (_commitSize < 1)
+            {
+                LEDGER_LOG(ERROR) << LOG_DESC("Commit Block failed in storage")
+                                  << LOG_KV("commitSize", _commitSize);
+                auto error = std::make_shared<Error>(
+                    LedgerError::ErrorCommitBlock, "Commit error, commitSize < 1");
+                _onCommitBlock(_error, nullptr);
                 return;
             }
             auto ledger = self.lock();
             if (!ledger)
             {
-                // TODO: add error code
-                auto error = std::make_shared<Error>(-1, "");
+                auto error = std::make_shared<Error>(
+                    LedgerError::LedgerLockError, "can't not get ledger weak_ptr");
                 _onCommitBlock(error, nullptr);
                 return;
             }
@@ -130,11 +137,13 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
 {
     if (!_txToStore || !_txHashList || _txHashList->size() != _txToStore->size())
     {
-        // TODO: add error code
-        auto error = std::make_shared<Error>(-1, "[#asyncStoreTransactions] error parameters");
+        LEDGER_LOG(FATAL) << LOG_BADGE("asyncStoreTransactions") << LOG_DESC("Error parameters");
+        auto error = std::make_shared<Error>(
+            LedgerError::ErrorArgument, "asyncStoreTransactions error parameters");
         _onTxStored(error);
         return;
     }
+    // -1 is constrain in bcos-storage module
     auto tableFactory = getMemoryTableFactory(-1);
     try
     {
@@ -144,8 +153,6 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
             auto txHashHex = _txHashList->at(i).hex();
             getStorageSetter()->setHashToTx(
                 tableFactory, txHashHex, asString(*(_txToStore->at(i))));
-            LEDGER_LOG(TRACE) << LOG_BADGE("setHashToTx") << LOG_DESC("write HASH_2_TX success")
-                              << LOG_KV("txHashHex", txHashHex);
         }
         tableFactory->asyncCommit([_onTxStored](Error::Ptr _error, size_t _commitSize) {
             if (!_error || _error->errorCode() == CommonError::SUCCESS)
@@ -159,10 +166,7 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
             {
                 LEDGER_LOG(ERROR) << LOG_BADGE("asyncStoreTransactions")
                                   << LOG_DESC("table commit failed");
-                // TODO: add error code and msg
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "[#asyncStoreTransactions] table commit failed" + _error->errorMessage());
-                _onTxStored(error);
+                _onTxStored(_error);
             }
         });
     }
@@ -183,8 +187,8 @@ void Ledger::asyncStoreReceipts(storage::TableFactoryInterface::Ptr _tableFactor
     if (_block == nullptr || _tableFactory == nullptr)
     {
         LEDGER_LOG(FATAL) << LOG_BADGE("asyncStoreReceipts") << LOG_DESC("Error parameters");
-        // TODO: add error code
-        auto error = std::make_shared<Error>(-1, "block or tableFactory is null");
+        auto error =
+            std::make_shared<Error>(LedgerError::ErrorArgument, "block or tableFactory is null");
         _onReceiptStored(error);
         return;
     }
@@ -203,6 +207,9 @@ void Ledger::asyncStoreReceipts(storage::TableFactoryInterface::Ptr _tableFactor
                 auto ledger = self.lock();
                 if (!_error || _error->errorCode() == CommonError::SUCCESS)
                 {
+                    LEDGER_LOG(INFO)
+                        << LOG_BADGE("asyncStoreReceipts") << LOG_DESC("add state cache success")
+                        << LOG_KV("number", blockNumber);
                     ledger->m_transactionsCache.add(
                         blockNumber, blockTransactionListGetter(_block));
                     ledger->m_receiptCache.add(blockNumber, blockReceiptListGetter(_block));
@@ -215,10 +222,7 @@ void Ledger::asyncStoreReceipts(storage::TableFactoryInterface::Ptr _tableFactor
                         << LOG_KV("errorCode", _error->errorCode())
                         << LOG_KV("errorMsg", _error->errorMessage())
                         << LOG_KV("number", blockNumber);
-                    // TODO: add error code
-                    auto error = std::make_shared<Error>(
-                        _error->errorCode(), "add state cache failed" + _error->errorMessage());
-                    _onReceiptStored(error);
+                    _onReceiptStored(_error);
                 }
             });
     }
@@ -245,10 +249,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage())
                                   << LOG_KV("blockNumber", _blockNumber);
-                // TODO: to add errorCode and message
-                auto error = std::make_shared<Error>(
-                    _error->errorCode(), "callback error in getBlock" + _error->errorMessage());
-                _onGetBlock(error, nullptr);
+                _onGetBlock(_error, nullptr);
                 return;
             }
             _onGetBlock(nullptr, _block);
@@ -261,8 +262,8 @@ void Ledger::asyncGetBlockNumber(
     getLatestBlockNumber([_onGetBlock](BlockNumber _number) {
         if (_number == -1)
         {
-            // TODO: to add errorCode
-            auto error = std::make_shared<Error>(-1, "getLatestBlock error, callback -1");
+            auto error = std::make_shared<Error>(
+                LedgerError::CallbackError, "getLatestBlock error, callback -1");
             _onGetBlock(error, -1);
             return;
         }
@@ -276,8 +277,8 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
     if (_blockNumber < 0)
     {
         LEDGER_LOG(FATAL) << LOG_BADGE("asyncGetBlockHashByNumber") << LOG_DESC("Error parameters");
-        // TODO: to add errorCode
-        auto error = std::make_shared<Error>(-1, "wrong block number, callback empty hash");
+        auto error = std::make_shared<Error>(
+            LedgerError::ErrorArgument, "wrong block number, callback empty hash");
         _onGetBlock(error, HashType());
         return;
     }
@@ -290,22 +291,18 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage())
                                   << LOG_KV("blockNumber", _blockNumber);
-                // TODO: add error code and msg
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getBlockHashByNumber callback error" + _error->errorMessage());
-                _onGetBlock(error, HashType());
+                _onGetBlock(_error, HashType());
                 return;
             }
             if (!_hashEntry)
             {
                 LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBlockHashByNumber")
-                                  << LOG_DESC("error happened in get null entry")
+                                  << LOG_DESC("getBlockHashByNumber callback null entry")
                                   << LOG_KV("blockNumber", _blockNumber);
                 _onGetBlock(nullptr, HashType());
                 return;
             }
-            auto hash = _hashEntry->getField(SYS_VALUE);
-            _onGetBlock(nullptr, HashType(hash));
+            _onGetBlock(nullptr, HashType(_hashEntry->getField(SYS_VALUE)));
         });
 }
 
@@ -321,17 +318,13 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage())
                                   << LOG_KV("blockHash", _blockHash.hex());
-
-                // TODO: add error code
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getBlockNumberByHash callback error" + _error->errorMessage());
-                _onGetBlock(error, -1);
+                _onGetBlock(_error, -1);
                 return;
             }
             if (!_numberEntry)
             {
                 LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBlockNumberByHash")
-                                  << LOG_DESC("error happened in get a null entry")
+                                  << LOG_DESC("getBlockNumberByHash callback null entry")
                                   << LOG_KV("blockHash", _blockHash.hex());
                 _onGetBlock(nullptr, -1);
                 return;
@@ -342,8 +335,8 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                 LEDGER_LOG(WARNING) << LOG_BADGE("asyncGetBlockNumberByHash")
                                     << LOG_DESC("get number error, number is null or empty")
                                     << LOG_KV("blockHash", _blockHash.hex());
-                // TODO: add error code
-                auto error = std::make_shared<Error>(-1, "get number error");
+                auto error = std::make_shared<Error>(LedgerError::CallbackError,
+                    "asyncGetBlockNumberByHash get a empty number string");
                 _onGetBlock(error, -1);
                 return;
             }
@@ -360,8 +353,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
     {
         LEDGER_LOG(FATAL) << LOG_BADGE("asyncGetBatchTxsByHashList")
                           << LOG_DESC("Error parameters");
-        // TODO: add error code
-        auto error = std::make_shared<Error>(-1, "nullptr in parameters");
+        auto error = std::make_shared<Error>(LedgerError::ErrorArgument, "nullptr in parameters");
         _onGetTx(error, nullptr, nullptr);
         return;
     }
@@ -379,9 +371,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
                                   << LOG_DESC("getBatchTxByHashList callback error")
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage());
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getBatchTxByHashList callback error" + _error->errorMessage());
-                _onGetTx(error, nullptr, nullptr);
+                _onGetTx(_error, nullptr, nullptr);
                 return;
             }
             if (_withProof)
@@ -449,10 +439,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
                                   << LOG_DESC("getReceiptByTxHash callback error")
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage());
-                // TODO: add error code
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getReceiptByTxHash callback error" + _error->errorMessage());
-                _onGetTx(error, nullptr, nullptr);
+                _onGetTx(_error, nullptr, nullptr);
                 return;
             }
             if (!_receiptEntry)
@@ -470,9 +457,8 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
                                   << LOG_KV("txHash", _txHash.hex())
                                   << LOG_KV(
                                          "encodedReceiptValue", _receiptEntry->getField(SYS_VALUE));
-                // TODO: add error code
-                auto error =
-                    std::make_shared<Error>(-1, "getReceiptByTxHash callback empty receipt");
+                auto error = std::make_shared<Error>(
+                    LedgerError::DecodeError, "getReceiptByTxHash callback wrong receipt");
                 _onGetTx(error, nullptr, nullptr);
                 return;
             }
@@ -486,10 +472,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
                                               << LOG_DESC("getReceiptProof callback error")
                                               << LOG_KV("errorCode", _error->errorCode())
                                               << LOG_KV("errorMsg", _error->errorMessage());
-                            // TODO: add error code
-                            auto error = std::make_shared<Error>(_error->errorCode(),
-                                "getReceiptProof callback error" + _error->errorMessage());
-                            _onGetTx(error, receipt, nullptr);
+                            _onGetTx(_error, receipt, nullptr);
                             return;
                         }
                         _onGetTx(nullptr, receipt, _proof);
@@ -516,7 +499,7 @@ void Ledger::asyncGetTotalTransactionCount(
 
     getStorageGetter()->getCurrentState(SYS_KEY_TOTAL_TRANSACTION_COUNT, getMemoryTableFactory(0),
         [&countPromise](Error::Ptr _error, bcos::storage::Entry::Ptr _totalCountEntry) {
-            if ((!_error || _error->errorCode() == CommonError::SUCCESS))
+            if (!_error || _error->errorCode() == CommonError::SUCCESS)
             {
                 // entry must exist
                 auto totalStr = _totalCountEntry->getField(SYS_VALUE);
@@ -530,7 +513,7 @@ void Ledger::asyncGetTotalTransactionCount(
         });
     getStorageGetter()->getCurrentState(SYS_KEY_TOTAL_FAILED_TRANSACTION, getMemoryTableFactory(0),
         [&failedPromise](Error::Ptr _error, bcos::storage::Entry::Ptr _totalFailedEntry) {
-            if ((!_error || _error->errorCode() == CommonError::SUCCESS))
+            if (!_error || _error->errorCode() == CommonError::SUCCESS)
             {
                 // entry must exist
                 auto totalFailedStr = _totalFailedEntry->getField(SYS_VALUE);
@@ -552,9 +535,8 @@ void Ledger::asyncGetTotalTransactionCount(
     {
         LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetTransactionReceiptByHash")
                           << LOG_DESC("error happened in get total tx count");
-        // TODO: add error code
-        auto error = std::make_shared<Error>(
-            -1, "timeout to fetch all data in asyncGetTotalTransactionCount");
+        auto error = std::make_shared<Error>(LedgerError::CollectAsyncCallbackError,
+            "can't not fetch all data in asyncGetTotalTransactionCount");
         _callback(error, -1, -1, -1);
         return;
     }
@@ -572,10 +554,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                                   << LOG_DESC("getSysConfig callback error")
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage());
-                // TODO: add error code
-                auto error = std::make_shared<Error>(
-                    _error->errorCode(), "getSysConfig callback error" + _error->errorMessage());
-                _onGetConfig(error, "", -1);
+                _onGetConfig(_error, "", -1);
                 return;
             }
             if (!_configEntry)
@@ -590,9 +569,6 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
             auto numberStr = _configEntry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER);
             BlockNumber number =
                 numberStr.empty() ? -1 : boost::lexical_cast<BlockNumber>(numberStr);
-            LEDGER_LOG(TRACE) << LOG_BADGE("asyncGetSystemConfigByKey")
-                              << LOG_DESC("get config in db") << LOG_KV("key", _key)
-                              << LOG_KV("value", value);
             _onGetConfig(nullptr, value, number);
         });
 }
@@ -605,8 +581,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
     if (_startNumber < 0 || _offset < 0)
     {
         LEDGER_LOG(FATAL) << LOG_BADGE("asyncGetNonceList") << LOG_DESC("Error parameters");
-        // TODO: to add errorCode
-        auto error = std::make_shared<Error>(-1, "error parameter");
+        auto error = std::make_shared<Error>(LedgerError::ErrorArgument, "error parameter");
         _onGetList(error, nullptr);
         return;
     }
@@ -622,9 +597,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
             {
                 LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetNonceList")
                                   << LOG_DESC("error happened in open table or get entry");
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getNoncesBatchFromStorage callback error" + _error->errorMessage());
-                _onGetList(error, nullptr);
+                _onGetList(_error, nullptr);
             }
         });
 }
@@ -632,14 +605,6 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
 void Ledger::asyncGetNodeListByType(const std::string& _type,
     std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
 {
-    if (_type != CONSENSUS_SEALER && _type != CONSENSUS_OBSERVER)
-    {
-        LEDGER_LOG(FATAL) << LOG_BADGE("asyncGetNodeListByType") << LOG_DESC("Error parameters");
-        // TODO: to add errorCode
-        auto error = std::make_shared<Error>(-1, "error type");
-        _onGetConfig(error, nullptr);
-        return;
-    }
     getStorageGetter()->asyncGetConsensusConfig(_type, getMemoryTableFactory(0),
         m_blockFactory->cryptoSuite()->keyFactory(),
         [_onGetConfig](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
@@ -653,9 +618,7 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
                                   << LOG_DESC("error happened in open table or get entry")
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage());
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "asyncGetConsensusConfig callback error" + _error->errorMessage());
-                _onGetConfig(error, nullptr);
+                _onGetConfig(_error, nullptr);
             }
         });
 }
@@ -668,7 +631,7 @@ void Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag,
     /// if true, then it can callback immediately
     bool singlePartFlag = (_blockFlag & (_blockFlag - 1)) == 0;
 
-    if (bool(cachedBlock.second))
+    if (cachedBlock.second)
     {
         LEDGER_LOG(TRACE) << LOG_BADGE("getBlock") << LOG_DESC("Cache hit, read from cache")
                           << LOG_KV("blockNumber", _blockNumber);
@@ -692,13 +655,13 @@ void Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag,
                                          block](Error::Ptr _error, BlockHeader::Ptr _header) {
             if ((!_error || _error->errorCode() == CommonError::SUCCESS))
             {
-                // should handle nullptr header
+                /// should handle nullptr header
                 if (singlePartFlag)
                 {
                     if (!_header)
                     {
-                        // TODO: add errorCode
-                        auto error = std::make_shared<Error>(-1, "getBlockHeader callback nullptr");
+                        auto error = std::make_shared<Error>(
+                            LedgerError::CallbackError, "getBlockHeader callback nullptr");
                         _onGetBlock(error, nullptr);
                         return;
                     }
@@ -719,9 +682,7 @@ void Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag,
                               << LOG_KV("blockNumber", _blockNumber);
             if (singlePartFlag)
             {
-                auto error = std::make_shared<Error>(
-                    _error->errorCode(), "getBlockHeader callback error " + _error->errorMessage());
-                _onGetBlock(error, nullptr);
+                _onGetBlock(_error, nullptr);
                 return;
             }
             headerPromise->set_value(false);
@@ -755,9 +716,7 @@ void Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag,
                               << LOG_KV("blockNumber", _blockNumber);
             if (singlePartFlag)
             {
-                auto error = std::make_shared<Error>(
-                    _error->errorCode(), "getBlockTxs callback error " + _error->errorMessage());
-                _onGetBlock(error, nullptr);
+                _onGetBlock(_error, nullptr);
                 return;
             }
             txsPromise->set_value(false);
@@ -791,9 +750,7 @@ void Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag,
                                   << LOG_KV("blockNumber", _blockNumber);
                 if (singlePartFlag)
                 {
-                    auto error = std::make_shared<Error>(_error->errorCode(),
-                        "getBlockReceipts callback error " + _error->errorMessage());
-                    _onGetBlock(error, nullptr);
+                    _onGetBlock(_error, nullptr);
                     return;
                 }
                 receiptsPromise->set_value(false);
@@ -838,7 +795,8 @@ void Ledger::getBlock(const BlockNumber& _blockNumber, int32_t _blockFlag,
             _onGetBlock(nullptr, block);
             return;
         }
-        auto error = std::make_shared<Error>(-1, "some data fetch failed");
+        auto error = std::make_shared<Error>(
+            LedgerError::CollectAsyncCallbackError, "some data fetch failed");
         _onGetBlock(error, nullptr);
     }
 }
@@ -884,7 +842,7 @@ void Ledger::getBlockHeader(const bcos::protocol::BlockNumber& _blockNumber,
 {
     auto cachedHeader = m_blockHeaderCache.get(_blockNumber);
 
-    if (bool(cachedHeader.second))
+    if (cachedHeader.second)
     {
         LEDGER_LOG(TRACE) << LOG_BADGE("getBlockHeader")
                           << LOG_DESC("CacheHeader hit, read from cache")
@@ -904,9 +862,7 @@ void Ledger::getBlockHeader(const bcos::protocol::BlockNumber& _blockNumber,
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage())
                                   << LOG_KV("blockNumber", _blockNumber);
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getBlockHeaderFromStorage callback error" + _error->errorMessage());
-                _onGetHeader(error, nullptr);
+                _onGetHeader(_error, nullptr);
                 return;
             }
             if (!_headerEntry)
@@ -934,7 +890,7 @@ void Ledger::getTxs(const bcos::protocol::BlockNumber& _blockNumber,
     std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onGetTxs)
 {
     auto cachedTransactions = m_transactionsCache.get(_blockNumber);
-    if (bool(cachedTransactions.second))
+    if (cachedTransactions.second)
     {
         LEDGER_LOG(TRACE) << LOG_BADGE("getTxs") << LOG_DESC("CacheTxs hit, read from cache")
                           << LOG_KV("blockNumber", _blockNumber);
@@ -953,9 +909,7 @@ void Ledger::getTxs(const bcos::protocol::BlockNumber& _blockNumber,
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage())
                                   << LOG_KV("blockNumber", _blockNumber);
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getTxsFromStorage callback error" + _error->errorMessage());
-                _onGetTxs(error, nullptr);
+                _onGetTxs(_error, nullptr);
                 return;
             }
             if (!_blockEntry)
@@ -972,8 +926,8 @@ void Ledger::getTxs(const bcos::protocol::BlockNumber& _blockNumber,
                 LEDGER_LOG(ERROR) << LOG_BADGE("getTxs")
                                   << LOG_DESC("getTxsFromStorage get error block")
                                   << LOG_KV("blockNumber", _blockNumber);
-                // TODO: add error code
-                auto error = std::make_shared<Error>(-1, "getTxsFromStorage get error block");
+                auto error = std::make_shared<Error>(
+                    LedgerError::DecodeError, "getTxsFromStorage get error block");
                 _onGetTxs(error, nullptr);
                 return;
             }
@@ -989,9 +943,7 @@ void Ledger::getTxs(const bcos::protocol::BlockNumber& _blockNumber,
                             << LOG_KV("errorCode", _error->errorCode())
                             << LOG_KV("errorMsg", _error->errorMessage())
                             << LOG_KV("txsSize", _txs->size());
-                        auto error = std::make_shared<Error>(_error->errorCode(),
-                            "getBatchTxByHashList callback error" + _error->errorMessage());
-                        _onGetTxs(error, nullptr);
+                        _onGetTxs(_error, nullptr);
                         return;
                     }
                     LEDGER_LOG(TRACE) << LOG_BADGE("getTxs") << LOG_DESC("Get txs from storage");
@@ -1030,9 +982,7 @@ void Ledger::getReceipts(const bcos::protocol::BlockNumber& _blockNumber,
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage())
                                   << LOG_KV("blockNumber", _blockNumber);
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getTxsFromStorage callback error" + _error->errorMessage());
-                _onGetReceipts(error, nullptr);
+                _onGetReceipts(_error, nullptr);
                 return;
             }
             if (!_blockEntry)
@@ -1046,8 +996,8 @@ void Ledger::getReceipts(const bcos::protocol::BlockNumber& _blockNumber,
                 LEDGER_LOG(ERROR) << LOG_BADGE("getReceipts")
                                   << LOG_DESC("getTxsFromStorage get txHashList error")
                                   << LOG_KV("blockNumber", _blockNumber);
-                // TODO: add error code
-                auto error = std::make_shared<Error>(-1, "getTxsFromStorage get empty block");
+                auto error = std::make_shared<Error>(
+                    LedgerError::DecodeError, "getTxsFromStorage get empty block");
                 _onGetReceipts(error, nullptr);
                 return;
             }
@@ -1062,9 +1012,7 @@ void Ledger::getReceipts(const bcos::protocol::BlockNumber& _blockNumber,
                                           << LOG_KV("errorCode", _error->errorCode())
                                           << LOG_KV("errorMsg", _error->errorMessage())
                                           << LOG_KV("blockNumber", _blockNumber);
-                        auto error = std::make_shared<Error>(_error->errorCode(),
-                            "getBatchReceiptsByHashList callback error" + _error->errorMessage());
-                        _onGetReceipts(error, nullptr);
+                        _onGetReceipts(_error, nullptr);
                         return;
                     }
                     LEDGER_LOG(TRACE)
@@ -1089,9 +1037,7 @@ void Ledger::getTxProof(
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage())
                                   << LOG_KV("txHash", _txHash.hex());
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getReceiptByTxHash callback error" + _error->errorMessage());
-                _onGetProof(error, nullptr);
+                _onGetProof(_error, nullptr);
                 return;
             }
             if (!_receiptEntry)
@@ -1109,9 +1055,8 @@ void Ledger::getTxProof(
                                   << LOG_KV("txHash", _txHash.hex())
                                   << LOG_KV(
                                          "encodedReceiptValue", _receiptEntry->getField(SYS_VALUE));
-                // TODO: add error code
-                auto error =
-                    std::make_shared<Error>(-1, "getReceiptByTxHash callback empty receipt");
+                auto error = std::make_shared<Error>(
+                    LedgerError::DecodeError, "getReceiptByTxHash callback empty receipt");
                 _onGetProof(error, nullptr);
                 return;
             }
@@ -1120,14 +1065,11 @@ void Ledger::getTxProof(
                                     Error::Ptr _error, TransactionsPtr _txs) {
                 if (_error && _error->errorCode() != CommonError::SUCCESS)
                 {
-                    // TODO: add error msg
                     LEDGER_LOG(ERROR)
                         << LOG_BADGE("getTxProof") << LOG_DESC("getTxs callback error")
                         << LOG_KV("errorCode", _error->errorCode())
                         << LOG_KV("errorMsg", _error->errorMessage());
-                    auto error = std::make_shared<Error>(
-                        _error->errorCode(), "getTxs callback error" + _error->errorMessage());
-                    _onGetProof(error, nullptr);
+                    _onGetProof(_error, nullptr);
                     return;
                 }
                 if (!_txs)
@@ -1135,8 +1077,8 @@ void Ledger::getTxProof(
                     LEDGER_LOG(ERROR)
                         << LOG_BADGE("getTxProof") << LOG_DESC("get txs error")
                         << LOG_KV("blockNumber", blockNumber) << LOG_KV("txHash", _txHash.hex());
-                    // TODO: add error code
-                    auto error = std::make_shared<Error>(-1, "getTxs callback empty txs");
+                    auto error = std::make_shared<Error>(
+                        LedgerError::CallbackError, "getTxs callback empty txs");
                     _onGetProof(error, nullptr);
                     return;
                 }
@@ -1171,10 +1113,7 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                                   << LOG_DESC("getTxsFromStorage callback error")
                                   << LOG_KV("errorCode", _error->errorCode())
                                   << LOG_KV("errorMsg", _error->errorMessage());
-                // TODO: add error code
-                auto error = std::make_shared<Error>(_error->errorCode(),
-                    "getTxsFromStorage callback error" + _error->errorMessage());
-                _onGetProof(error, nullptr);
+                _onGetProof(_error, nullptr);
                 return;
             }
             if (!_blockEntry)
@@ -1188,10 +1127,9 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
             auto block = decodeBlock(m_blockFactory, _blockEntry->getField(SYS_VALUE));
             if (!block)
             {
-                // TODO: add error code
                 LEDGER_LOG(ERROR) << LOG_BADGE("getReceiptProof")
                                   << LOG_DESC("getTxsFromStorage callback empty block txs");
-                auto error = std::make_shared<Error>(-1, "empty txs");
+                auto error = std::make_shared<Error>(LedgerError::DecodeError, "empty txs");
                 _onGetProof(error, nullptr);
                 return;
             }
@@ -1205,20 +1143,17 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                                           << LOG_DESC("getBatchReceiptsByHashList callback error")
                                           << LOG_KV("errorCode", _error->errorCode())
                                           << LOG_KV("errorMsg", _error->errorMessage());
-                        // TODO: add error code and message
-                        auto error = std::make_shared<Error>(_error->errorCode(),
-                            "getBatchReceiptsByHashList callback error" + _error->errorMessage());
-                        _onGetProof(error, nullptr);
+                        _onGetProof(_error, nullptr);
                         return;
                     }
                     if (!receipts || receipts->empty())
                     {
-                        // TODO: add error code
                         LEDGER_LOG(ERROR) << LOG_BADGE("getReceiptProof")
                                           << LOG_DESC(
                                                  "getBatchReceiptsByHashList callback empty "
                                                  "receipts");
-                        auto error = std::make_shared<Error>(-1, "empty receipts");
+                        auto error =
+                            std::make_shared<Error>(LedgerError::CallbackError, "empty receipts");
                         _onGetProof(error, nullptr);
                         return;
                     }
@@ -1291,7 +1226,8 @@ void Ledger::asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::H
                 auto errorMsg = "asyncGetLedgerConfig:  asyncGetSystemConfigList failed for " +
                                 boost::diagnostic_information(e);
                 LEDGER_LOG(ERROR) << LOG_DESC(errorMsg);
-                _onGetLedgerConfig(std::make_shared<Error>(-1, errorMsg), nullptr);
+                _onGetLedgerConfig(
+                    std::make_shared<Error>(LedgerError::CallbackError, errorMsg), nullptr);
             }
         });
 
@@ -1341,7 +1277,7 @@ bool Ledger::isBlockShouldCommit(const BlockNumber& _blockNumber, const std::str
             getStorageGetter()->getBlockHashByNumber(_number, getMemoryTableFactory(0),
                 [&hashPromise, _number, _blockNumber](
                     Error::Ptr _error, bcos::storage::Entry::Ptr _hashEntry) {
-                    if ((!_error || _error->errorCode() == CommonError::SUCCESS))
+                    if (!_error || _error->errorCode() == CommonError::SUCCESS)
                     {
                         if (!_hashEntry)
                         {
@@ -1367,7 +1303,8 @@ bool Ledger::isBlockShouldCommit(const BlockNumber& _blockNumber, const std::str
     LEDGER_LOG(WARNING) << LOG_BADGE("isBlockShouldCommit")
                         << LOG_DESC("incorrect block number or incorrect parent hash")
                         << LOG_KV("needNumber", number + 1)
-                        << LOG_KV("committedNumber", _blockNumber);
+                        << LOG_KV("committedNumber", _blockNumber) << LOG_KV("lastBlockHash", hash)
+                        << LOG_KV("committedParentHash", _parentHash);
     return false;
 }
 
@@ -1400,7 +1337,8 @@ void Ledger::writeNumber2Nonces(
     {
         LEDGER_LOG(DEBUG) << LOG_BADGE("WriteNoncesToBlock")
                           << LOG_DESC("Write row in SYS_BLOCK_NUMBER_2_NONCES error")
-                          << LOG_KV("blockNumber", blockNumberStr);
+                          << LOG_KV("blockNumber", blockNumberStr)
+                          << LOG_KV("hash", block->blockHeader()->hash().abridged());
     }
 }
 
@@ -1415,7 +1353,8 @@ void Ledger::writeHash2Number(
     {
         LEDGER_LOG(DEBUG) << LOG_BADGE("WriteHash2Number")
                           << LOG_DESC("Write row in SYS_HASH_2_NUMBER error")
-                          << LOG_KV("blockHash", header->hash().hex());
+                          << LOG_KV("number", header->number())
+                          << LOG_KV("blockHash", header->hash().abridged());
     }
 }
 
@@ -1423,9 +1362,8 @@ void Ledger::writeNumber2BlockHeader(
     const BlockHeader::Ptr& _header, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
 {
     auto encodedBlockHeader = std::make_shared<bytes>();
-    auto emptyBlock = m_blockFactory->createBlock();
-    emptyBlock->setBlockHeader(_header);
-    emptyBlock->blockHeader()->encode(*encodedBlockHeader);
+    auto header = _header;
+    _header->encode(*encodedBlockHeader);
 
     bool ret = getStorageSetter()->setNumber2Header(_tableFactory,
         boost::lexical_cast<std::string>(_header->number()), asString(*encodedBlockHeader));
@@ -1433,7 +1371,8 @@ void Ledger::writeNumber2BlockHeader(
     {
         LEDGER_LOG(DEBUG) << LOG_BADGE("WriteNumber2Header")
                           << LOG_DESC("Write row in SYS_NUMBER_2_BLOCK_HEADER error")
-                          << LOG_KV("blockNumber", _header->number());
+                          << LOG_KV("blockNumber", _header->number())
+                          << LOG_KV("hash", _header->hash().abridged());
     }
 }
 void Ledger::writeTotalTransactionCount(
