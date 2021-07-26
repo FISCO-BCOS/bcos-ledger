@@ -177,7 +177,8 @@ bcos::protocol::TransactionReceipt::Ptr decodeReceipt(
     }
     catch (std::exception const& e)
     {
-        LEDGER_LOG(ERROR) << LOG_BADGE("decodeReceipt") << LOG_DESC("decode error, return nullptr");
+        LEDGER_LOG(ERROR) << LOG_BADGE("decodeReceipt") << LOG_DESC("decode error, return nullptr")
+                          << LOG_KV("error", boost::diagnostic_information(e));
     }
     return receipt;
 }
