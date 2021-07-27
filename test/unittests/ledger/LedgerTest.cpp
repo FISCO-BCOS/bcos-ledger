@@ -51,7 +51,13 @@ public:
         BOOST_CHECK(m_blockFactory->transactionFactory() != nullptr);
         initStorage();
     }
-    ~LedgerFixture() {}
+    ~LedgerFixture()
+    {
+        if (m_ledger)
+        {
+            m_ledger->stop();
+        }
+    }
 
     inline void initStorage()
     {
@@ -248,8 +254,6 @@ public:
     std::shared_ptr<Ledger> m_ledger = nullptr;
     LedgerConfig::Ptr m_param;
     BlocksPtr m_fakeBlocks;
-    boost::condition_variable m_signalled;
-    boost::mutex x_signalled;
 };
 
 BOOST_FIXTURE_TEST_SUITE(LedgerTest, LedgerFixture)
