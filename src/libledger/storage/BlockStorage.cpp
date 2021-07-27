@@ -48,23 +48,17 @@ void BlockStorage::getBlockHeader(const BlockNumber& _blockNumber,
     LEDGER_LOG(TRACE) << LOG_BADGE("getBlockHeader") << LOG_DESC("Cache missed, read from storage")
                       << LOG_KV("blockNumber", _blockNumber);
 
-    auto table = _tableFactory->openTable(SYS_NUMBER_2_BLOCK_HEADER);
-    if (!table)
-    {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Open table error from db")
-                          << LOG_KV("openTable", SYS_NUMBER_2_BLOCK_HEADER);
-        // TODO: add error code and msg
-        auto error = std::make_shared<Error>(-1, "");
-        _onGetHeader(error, nullptr);
-        return;
-    }
-    table->asyncGetRow(boost::lexical_cast<std::string>(_blockNumber),
+    StorageUtilities::asyncTableGetter(_tableFactory, SYS_NUMBER_2_BLOCK_HEADER,
+        boost::lexical_cast<std::string>(_blockNumber),
         [_onGetHeader, _blockNumber, this](const Error::Ptr& _error, Entry::Ptr _headerEntry) {
             if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
-                auto error = std::make_shared<Error>(
-                    _error->errorCode(), "asyncGetRow callback error" + _error->errorMessage());
-                _onGetHeader(error, nullptr);
+                LEDGER_LOG(ERROR) << LOG_BADGE("getBlockHeader")
+                                  << LOG_DESC("Get header from storage error")
+                                  << LOG_KV("errorCode", _error->errorCode())
+                                  << LOG_KV("errorMsg", _error->errorMessage())
+                                  << LOG_KV("blockNumber", _blockNumber);
+                _onGetHeader(_error, nullptr);
                 return;
             }
             if (!_headerEntry)
@@ -99,8 +93,8 @@ void BlockStorage::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _startN
     if (!table)
     {
         LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_BLOCK_NUMBER_2_NONCES table error from db");
-        // TODO: add error code and msg
-        auto error = std::make_shared<Error>(-1, "");
+        auto error = std::make_shared<Error>(LedgerError::OpenTableFailed,
+            "Open table error from db, tableName: " + SYS_BLOCK_NUMBER_2_NONCES);
         _onGetData(error, nullptr);
         return;
     }
@@ -114,9 +108,7 @@ void BlockStorage::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _startN
                                         const std::map<std::string, Entry::Ptr>& numberEntryMap) {
         if (_error && _error->errorCode() != CommonError::SUCCESS)
         {
-            // TODO: add error code and msg
-            auto error = std::make_shared<Error>(_error->errorCode(), "" + _error->errorMessage());
-            _onGetData(error, nullptr);
+            _onGetData(_error, nullptr);
             return;
         }
         auto retMap = std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();

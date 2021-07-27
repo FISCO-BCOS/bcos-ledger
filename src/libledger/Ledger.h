@@ -42,28 +42,6 @@
 
 namespace bcos::ledger
 {
-class WrapperLedgerConfig
-{
-public:
-    using Ptr = std::shared_ptr<WrapperLedgerConfig>;
-    explicit WrapperLedgerConfig(LedgerConfig::Ptr _ledgerConfig)
-    {
-        m_ledgerConfig = _ledgerConfig;
-    }
-
-    void setSysConfigFetched(bool _fetched) { m_sysConfigFetched = _fetched; }
-    void setConsensusConfigFetched(bool _fetched) { m_consensusConfigFetched = _fetched; }
-    LedgerConfig::Ptr ledgerConfig() { return m_ledgerConfig; }
-
-    bool sysConfigFetched() const { return m_sysConfigFetched; }
-    bool consensusConfigFetched() const { return m_consensusConfigFetched; }
-
-private:
-    LedgerConfig::Ptr m_ledgerConfig;
-    std::atomic_bool m_sysConfigFetched = {false};
-    std::atomic_bool m_consensusConfigFetched = {false};
-};
-
 class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledger>
 {
 public:
@@ -151,8 +129,6 @@ private:
     void getBlock(const protocol::BlockNumber& _blockNumber, int32_t _blockFlag,
         std::function<void(Error::Ptr, protocol::Block::Ptr)>);
     void getLatestBlockNumber(std::function<void(protocol::BlockNumber)> _onGetNumber);
-    void asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash,
-        std::function<void(Error::Ptr, WrapperLedgerConfig::Ptr)> _onGetLedgerConfig);
 
     /****** Ledger attribute getter ******/
 

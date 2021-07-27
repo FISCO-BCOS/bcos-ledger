@@ -34,6 +34,28 @@
 
 namespace bcos::ledger
 {
+class WrapperLedgerConfig
+{
+public:
+    using Ptr = std::shared_ptr<WrapperLedgerConfig>;
+    explicit WrapperLedgerConfig(LedgerConfig::Ptr _ledgerConfig)
+    {
+        m_ledgerConfig = _ledgerConfig;
+    }
+
+    void setSysConfigFetched(bool _fetched) { m_sysConfigFetched = _fetched; }
+    void setConsensusConfigFetched(bool _fetched) { m_consensusConfigFetched = _fetched; }
+    LedgerConfig::Ptr ledgerConfig() { return m_ledgerConfig; }
+
+    bool sysConfigFetched() const { return m_sysConfigFetched; }
+    bool consensusConfigFetched() const { return m_consensusConfigFetched; }
+
+private:
+    LedgerConfig::Ptr m_ledgerConfig;
+    std::atomic_bool m_sysConfigFetched = {false};
+    std::atomic_bool m_consensusConfigFetched = {false};
+};
+
 class ConfigStorage
 {
 public:
@@ -119,6 +141,10 @@ public:
 
     LedgerConfig::Ptr getLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash,
         const storage::TableFactoryInterface::Ptr& _tableFactory);
+
+    void asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash,
+        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr, WrapperLedgerConfig::Ptr)> _onGetLedgerConfig);
 
 private:
     crypto::KeyFactory::Ptr m_keyFactory;

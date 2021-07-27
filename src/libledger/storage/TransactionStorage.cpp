@@ -45,25 +45,13 @@ void TransactionStorage::getTxs(const BlockNumber& _blockNumber,
     }
     LEDGER_LOG(TRACE) << LOG_BADGE("getTxs") << LOG_DESC("Cache missed, read from storage")
                       << LOG_KV("blockNumber", _blockNumber);
-
-    auto table = _tableFactory->openTable(SYS_NUMBER_2_TXS);
-    if (!table)
-    {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Open table error from db")
-                          << LOG_KV("openTable", SYS_NUMBER_2_TXS);
-        // TODO: add error code and msg
-        auto error = std::make_shared<Error>(-1, "");
-        _onGetTxs(error, nullptr);
-        return;
-    }
-    table->asyncGetRow(boost::lexical_cast<std::string>(_blockNumber),
+    StorageUtilities::asyncTableGetter(_tableFactory, SYS_NUMBER_2_TXS,
+        boost::lexical_cast<std::string>(_blockNumber),
         [_onGetTxs, _blockNumber, _tableFactory, this](
             const Error::Ptr& _error, Entry::Ptr _blockEntry) {
             if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
-                auto error = std::make_shared<Error>(
-                    _error->errorCode(), "asyncGetRow callback error" + _error->errorMessage());
-                _onGetTxs(error, nullptr);
+                _onGetTxs(_error, nullptr);
                 return;
             }
             if (!_blockEntry)
@@ -80,8 +68,8 @@ void TransactionStorage::getTxs(const BlockNumber& _blockNumber,
                 LEDGER_LOG(ERROR) << LOG_BADGE("getTxs")
                                   << LOG_DESC("getTxsFromStorage get error block")
                                   << LOG_KV("blockNumber", _blockNumber);
-                // TODO: add error code
-                auto error = std::make_shared<Error>(-1, "getTxsFromStorage get error block");
+                auto error = std::make_shared<Error>(
+                    LedgerError::DecodeError, "getTxsFromStorage get error block");
                 _onGetTxs(error, nullptr);
                 return;
             }
@@ -97,9 +85,7 @@ void TransactionStorage::getTxs(const BlockNumber& _blockNumber,
                             << LOG_KV("errorCode", _error->errorCode())
                             << LOG_KV("errorMsg", _error->errorMessage())
                             << LOG_KV("txsSize", _txs->size());
-                        auto error = std::make_shared<Error>(_error->errorCode(),
-                            "getBatchTxByHashList callback error" + _error->errorMessage());
-                        _onGetTxs(error, nullptr);
+                        _onGetTxs(_error, nullptr);
                         return;
                     }
                     LEDGER_LOG(TRACE) << LOG_BADGE("getTxs") << LOG_DESC("Get txs from storage");
@@ -129,24 +115,18 @@ void TransactionStorage::getReceipts(const BlockNumber& _blockNumber,
     LEDGER_LOG(TRACE) << LOG_BADGE("getReceipts") << LOG_DESC("Cache missed, read from storage")
                       << LOG_KV("blockNumber", _blockNumber);
 
-    auto table = _tableFactory->openTable(SYS_NUMBER_2_TXS);
-    if (!table)
-    {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Open table error from db")
-                          << LOG_KV("openTable", SYS_NUMBER_2_TXS);
-        // TODO: add error code and msg
-        auto error = std::make_shared<Error>(-1, "");
-        _onGetReceipts(error, nullptr);
-        return;
-    }
-    table->asyncGetRow(boost::lexical_cast<std::string>(_blockNumber),
+    StorageUtilities::asyncTableGetter(_tableFactory, SYS_NUMBER_2_TXS,
+        boost::lexical_cast<std::string>(_blockNumber),
         [_onGetReceipts, _blockNumber, _tableFactory, this](
             const Error::Ptr& _error, Entry::Ptr _blockEntry) {
             if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
-                auto error = std::make_shared<Error>(
-                    _error->errorCode(), "asyncGetRow callback error" + _error->errorMessage());
-                _onGetReceipts(error, nullptr);
+                LEDGER_LOG(ERROR) << LOG_BADGE("getReceipts")
+                                  << LOG_DESC("Get receipts from storage error")
+                                  << LOG_KV("errorCode", _error->errorCode())
+                                  << LOG_KV("errorMsg", _error->errorMessage())
+                                  << LOG_KV("blockNumber", _blockNumber);
+                _onGetReceipts(_error, nullptr);
                 return;
             }
             if (!_blockEntry)
@@ -160,8 +140,8 @@ void TransactionStorage::getReceipts(const BlockNumber& _blockNumber,
                 LEDGER_LOG(ERROR) << LOG_BADGE("getReceipts")
                                   << LOG_DESC("getTxsFromStorage get txHashList error")
                                   << LOG_KV("blockNumber", _blockNumber);
-                // TODO: add error code
-                auto error = std::make_shared<Error>(-1, "getTxsFromStorage get empty block");
+                auto error = std::make_shared<Error>(
+                    LedgerError::DecodeError, "getTxsFromStorage get empty block");
                 _onGetReceipts(error, nullptr);
                 return;
             }
@@ -175,14 +155,12 @@ void TransactionStorage::getReceipts(const BlockNumber& _blockNumber,
                                           << LOG_KV("errorCode", _error->errorCode())
                                           << LOG_KV("errorMsg", _error->errorMessage())
                                           << LOG_KV("blockNumber", _blockNumber);
-                        auto error = std::make_shared<Error>(_error->errorCode(),
-                            "getBatchReceiptsByHashList callback error" + _error->errorMessage());
-                        _onGetReceipts(error, nullptr);
+                        _onGetReceipts(_error, nullptr);
                         return;
                     }
                     LEDGER_LOG(TRACE)
                         << LOG_BADGE("getReceipts") << LOG_DESC("Get receipts from storage");
-                    if (_receipts && _receipts->size() > 0)
+                    if (_receipts && !_receipts->empty())
                         m_receiptCache.add(_blockNumber, _receipts);
                     _onGetReceipts(nullptr, _receipts);
                 });
@@ -199,9 +177,12 @@ void TransactionStorage::getTxProof(const crypto::HashType& _txHash,
             const Error::Ptr& _error, Entry::Ptr _receiptEntry) {
             if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
-                auto error = std::make_shared<Error>(
-                    _error->errorCode(), "asyncGetRow callback error" + _error->errorMessage());
-                _onGetProof(error, nullptr);
+                LEDGER_LOG(ERROR) << LOG_BADGE("getTxProof")
+                                  << LOG_DESC("getReceiptByTxHash from storage error")
+                                  << LOG_KV("errorCode", _error->errorCode())
+                                  << LOG_KV("errorMsg", _error->errorMessage())
+                                  << LOG_KV("txHash", _txHash.hex());
+                _onGetProof(_error, nullptr);
                 return;
             }
             if (!_receiptEntry)
@@ -215,11 +196,12 @@ void TransactionStorage::getTxProof(const crypto::HashType& _txHash,
             auto receipt = decodeReceipt(getReceiptFactory(), _receiptEntry->getField(SYS_VALUE));
             if (!receipt)
             {
-                LEDGER_LOG(TRACE) << LOG_BADGE("getTxProof") << LOG_DESC("receipt is null or empty")
-                                  << LOG_KV("txHash", _txHash.hex());
-                // TODO: add error code
-                auto error =
-                    std::make_shared<Error>(-1, "getReceiptByTxHash callback empty receipt");
+                LEDGER_LOG(ERROR) << LOG_BADGE("getTxProof") << LOG_DESC("receipt is null or empty")
+                                  << LOG_KV("txHash", _txHash.hex())
+                                  << LOG_KV(
+                                         "encodedReceiptValue", _receiptEntry->getField(SYS_VALUE));
+                auto error = std::make_shared<Error>(
+                    LedgerError::DecodeError, "getReceiptByTxHash callback empty receipt");
                 _onGetProof(error, nullptr);
                 return;
             }
@@ -228,14 +210,11 @@ void TransactionStorage::getTxProof(const crypto::HashType& _txHash,
                 [this, blockNumber, _onGetProof, _txHash](Error::Ptr _error, TransactionsPtr _txs) {
                     if (_error && _error->errorCode() != CommonError::SUCCESS)
                     {
-                        // TODO: add error msg
                         LEDGER_LOG(ERROR)
                             << LOG_BADGE("getTxProof") << LOG_DESC("getTxs callback error")
                             << LOG_KV("errorCode", _error->errorCode())
                             << LOG_KV("errorMsg", _error->errorMessage());
-                        auto error = std::make_shared<Error>(
-                            _error->errorCode(), "getTxs callback error" + _error->errorMessage());
-                        _onGetProof(error, nullptr);
+                        _onGetProof(_error, nullptr);
                         return;
                     }
                     if (!_txs)
@@ -243,8 +222,8 @@ void TransactionStorage::getTxProof(const crypto::HashType& _txHash,
                         LEDGER_LOG(ERROR) << LOG_BADGE("getTxProof") << LOG_DESC("get txs error")
                                           << LOG_KV("blockNumber", blockNumber)
                                           << LOG_KV("txHash", _txHash.hex());
-                        // TODO: add error code
-                        auto error = std::make_shared<Error>(-1, "getTxs callback empty txs");
+                        auto error = std::make_shared<Error>(
+                            LedgerError::CallbackError, "getTxs callback empty txs");
                         _onGetProof(error, nullptr);
                         return;
                     }
@@ -268,24 +247,22 @@ void TransactionStorage::getReceiptProof(protocol::TransactionReceipt::Ptr _rece
     const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
     std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof)
 {
-    auto table = _tableFactory->openTable(SYS_NUMBER_2_TXS);
-    if (!table)
+    if (!_receipt)
     {
-        LEDGER_LOG(DEBUG) << LOG_DESC("Open table error from db")
-                          << LOG_KV("openTable", SYS_NUMBER_2_TXS);
-        // TODO: add error code and msg
-        auto error = std::make_shared<Error>(-1, "");
-        _onGetProof(error, nullptr);
+        _onGetProof(nullptr, nullptr);
         return;
     }
-    table->asyncGetRow(boost::lexical_cast<std::string>(_receipt->blockNumber()),
+    StorageUtilities::asyncTableGetter(_tableFactory, SYS_NUMBER_2_TXS,
+        boost::lexical_cast<std::string>(_receipt->blockNumber()),
         [this, _onGetProof, _receipt, _tableFactory](
             const Error::Ptr& _error, Entry::Ptr _blockEntry) {
             if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
-                auto error = std::make_shared<Error>(
-                    _error->errorCode(), "asyncGetRow callback error" + _error->errorMessage());
-                _onGetProof(error, nullptr);
+                LEDGER_LOG(ERROR) << LOG_BADGE("getReceiptProof")
+                                  << LOG_DESC("getTxsFromStorage callback error")
+                                  << LOG_KV("errorCode", _error->errorCode())
+                                  << LOG_KV("errorMsg", _error->errorMessage());
+                _onGetProof(_error, nullptr);
                 return;
             }
             if (!_blockEntry)
@@ -299,10 +276,9 @@ void TransactionStorage::getReceiptProof(protocol::TransactionReceipt::Ptr _rece
             auto block = decodeBlock(m_blockFactory, _blockEntry->getField(SYS_VALUE));
             if (!block)
             {
-                // TODO: add error code
                 LEDGER_LOG(ERROR) << LOG_BADGE("getReceiptProof")
                                   << LOG_DESC("getTxsFromStorage callback empty block txs");
-                auto error = std::make_shared<Error>(-1, "empty txs");
+                auto error = std::make_shared<Error>(LedgerError::DecodeError, "empty txs");
                 _onGetProof(error, nullptr);
                 return;
             }
@@ -315,20 +291,17 @@ void TransactionStorage::getReceiptProof(protocol::TransactionReceipt::Ptr _rece
                                           << LOG_DESC("getBatchReceiptsByHashList callback error")
                                           << LOG_KV("errorCode", _error->errorCode())
                                           << LOG_KV("errorMsg", _error->errorMessage());
-                        // TODO: add error code and message
-                        auto error = std::make_shared<Error>(_error->errorCode(),
-                            "getBatchReceiptsByHashList callback error" + _error->errorMessage());
-                        _onGetProof(error, nullptr);
+                        _onGetProof(_error, nullptr);
                         return;
                     }
                     if (!receipts || receipts->empty())
                     {
-                        // TODO: add error code
                         LEDGER_LOG(ERROR) << LOG_BADGE("getReceiptProof")
                                           << LOG_DESC(
                                                  "getBatchReceiptsByHashList callback empty "
                                                  "receipts");
-                        auto error = std::make_shared<Error>(-1, "empty receipts");
+                        auto error =
+                            std::make_shared<Error>(LedgerError::CallbackError, "empty receipts");
                         _onGetProof(error, nullptr);
                         return;
                     }
@@ -356,7 +329,8 @@ void TransactionStorage::getBatchTxByHashList(std::shared_ptr<std::vector<std::s
     if (!table)
     {
         LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_TX table error from db");
-        auto error = std::make_shared<Error>(-1, "open table SYS_HASH_2_TX error");
+        auto error =
+            std::make_shared<Error>(LedgerError::OpenTableFailed, "open table SYS_HASH_2_TX error");
         _onGetTx(error, nullptr);
         return;
     }
@@ -364,9 +338,10 @@ void TransactionStorage::getBatchTxByHashList(std::shared_ptr<std::vector<std::s
                                        const std::map<std::string, Entry::Ptr>& _hashEntryMap) {
         if (_error && _error->errorCode() != CommonError::SUCCESS)
         {
-            LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_TX table error from db");
-            auto error = std::make_shared<Error>(_error->errorCode(), _error->errorMessage());
-            _onGetTx(error, nullptr);
+            LEDGER_LOG(DEBUG) << LOG_DESC("SYS_HASH_2_TX table asyncGetRows callback error")
+                              << LOG_KV("errorCode", _error->errorCode())
+                              << LOG_KV("errorMsg", _error->errorMessage());
+            _onGetTx(_error, nullptr);
             return;
         }
         auto txList = std::make_shared<Transactions>();
@@ -417,8 +392,8 @@ void TransactionStorage::getBatchReceiptsByHashList(
     if (!table)
     {
         LEDGER_LOG(DEBUG) << LOG_DESC("Open SYS_HASH_2_RECEIPT table error from db");
-        // TODO: add error code
-        auto error = std::make_shared<Error>(-1, "open table SYS_HASH_2_RECEIPT error");
+        auto error = std::make_shared<Error>(
+            LedgerError::OpenTableFailed, "open table SYS_HASH_2_RECEIPT error");
         _onGetReceipt(error, nullptr);
         return;
     }
@@ -426,8 +401,10 @@ void TransactionStorage::getBatchReceiptsByHashList(
                                        const std::map<std::string, Entry::Ptr>& _hashEntryMap) {
         if (_error && _error->errorCode() != CommonError::SUCCESS)
         {
-            auto error = std::make_shared<Error>(_error->errorCode(), _error->errorMessage());
-            _onGetReceipt(error, nullptr);
+            LEDGER_LOG(DEBUG) << LOG_DESC("SYS_HASH_2_RECEIPT table asyncGetRows callback error")
+                              << LOG_KV("errorCode", _error->errorCode())
+                              << LOG_KV("errorMsg", _error->errorMessage());
+            _onGetReceipt(_error, nullptr);
             return;
         }
         auto receiptList = std::make_shared<Receipts>();
