@@ -30,6 +30,7 @@
 #include "bcos-framework/libutilities/ThreadPool.h"
 #include "storage/StorageGetter.h"
 #include "storage/StorageSetter.h"
+#include "utilities/BlockUtilities.h"
 #include "utilities/Common.h"
 #include "utilities/FIFOCache.h"
 #include "utilities/MerkleProofUtility.h"
@@ -157,8 +158,10 @@ public:
 private:
     /****** base block data getter ******/
     void getBlock(const protocol::BlockNumber& _blockNumber, int32_t _blockFlag,
-        std::function<void(Error::Ptr, protocol::Block::Ptr)>);
+        std::function<void(Error::Ptr, BlockFetcher::Ptr)>);
     void getLatestBlockNumber(std::function<void(protocol::BlockNumber)> _onGetNumber);
+    void getLatestBlockHash(
+        protocol::BlockNumber _number, std::function<void(std::string_view)> _onGetHash);
     void getBlockHeader(const bcos::protocol::BlockNumber& _blockNumber,
         std::function<void(Error::Ptr, protocol::BlockHeader::Ptr)> _onGetHeader);
     void getTxs(const bcos::protocol::BlockNumber& _blockNumber,
@@ -201,10 +204,9 @@ private:
 
     inline StorageGetter::Ptr getStorageGetter() { return m_storageGetter; }
     inline StorageSetter::Ptr getStorageSetter() { return m_storageSetter; }
-    inline bcos::storage::StorageInterface::Ptr getStorage() { return m_storage; }
 
-    bool isBlockShouldCommit(
-        const protocol::BlockNumber& _blockNumber, const std::string& _parentHash);
+    void checkBlockShouldCommit(const protocol::BlockNumber& _blockNumber,
+        const std::string& _parentHash, std::function<void(bool)> _onGetResult);
 
     /****** data writer ******/
     void writeNumber(const protocol::BlockNumber& _blockNumber,
@@ -235,8 +237,11 @@ private:
     std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
         m_committedBlockNotifier;
 
+    Mutex m_commitMutex;
     mutable SharedMutex m_blockNumberMutex;
     protocol::BlockNumber m_blockNumber = -1;
+    mutable SharedMutex m_blockHashMutex;
+    crypto::HashType m_blockHash = crypto::HashType();
 
     size_t m_timeout = 10000;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

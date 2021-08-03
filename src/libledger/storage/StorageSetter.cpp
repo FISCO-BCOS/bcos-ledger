@@ -93,7 +93,7 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     _tableFactory->createTable(SYS_NUMBER_2_HASH, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_NUMBER_2_BLOCK_HEADER, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_NUMBER_2_TXS, "block_num", SYS_VALUE);
-    _tableFactory->createTable(SYS_HASH_2_RECEIPT, "block_num", SYS_VALUE);
+    _tableFactory->createTable(SYS_HASH_2_RECEIPT, "tx_hash", SYS_VALUE);
     _tableFactory->createTable(SYS_BLOCK_NUMBER_2_NONCES, "block_num", SYS_VALUE);
     createFileSystemTables(_tableFactory);
     // db sync commit
