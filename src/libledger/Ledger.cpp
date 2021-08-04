@@ -98,15 +98,23 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
             }
             ledger->m_blockHeaderCache.add(blockNumber, _header);
             ledger->notifyCommittedBlockNumber(blockNumber);
+            std::atomic_bool callbackNotified = {false};
             ledger->asyncGetLedgerConfig(blockNumber, _header->hash(),
-                [_header, _onCommitBlock](
+                [_header, _onCommitBlock, &callbackNotified](
                     Error::Ptr _error, WrapperLedgerConfig::Ptr _wrapperLedgerConfig) {
+                    // in case of the race condition when calls this callback multi-times
+                    Guard l(_wrapperLedgerConfig->mutex());
+                    if (callbackNotified)
+                    {
+                        return;
+                    }
                     if (_error)
                     {
                         LEDGER_LOG(WARNING)
                             << LOG_DESC("asyncCommitBlock failed for asyncGetLedgerConfig failed")
                             << LOG_KV("number", _header->number())
                             << LOG_KV("hash", _header->hash().abridged());
+                        callbackNotified.store(true);
                         _onCommitBlock(_error, nullptr);
                         return;
                     }
@@ -116,6 +124,7 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
                         LEDGER_LOG(INFO) << LOG_DESC("asyncCommitBlock: getLedgerConfig success")
                                          << LOG_KV("number", _header->number())
                                          << LOG_KV("hash", _header->hash().abridged());
+                        callbackNotified.store(true);
                         _onCommitBlock(nullptr, _wrapperLedgerConfig->ledgerConfig());
                     }
                 });

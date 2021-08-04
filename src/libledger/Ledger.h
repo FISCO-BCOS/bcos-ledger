@@ -56,10 +56,13 @@ public:
     bool sysConfigFetched() const { return m_sysConfigFetched; }
     bool consensusConfigFetched() const { return m_consensusConfigFetched; }
 
+    Mutex& mutex() { return m_mutex; }
+
 private:
     LedgerConfig::Ptr m_ledgerConfig;
     std::atomic_bool m_sysConfigFetched = {false};
     std::atomic_bool m_consensusConfigFetched = {false};
+    mutable Mutex m_mutex;
 };
 
 class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledger>

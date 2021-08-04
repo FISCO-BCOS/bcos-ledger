@@ -54,17 +54,18 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(
 {
     auto hashImpl = _cryptoSuite->hashImpl();
     u256 gasUsed = 12343242342 + random();
-    auto contractAddress = toAddress("5fe3c4c3e2079879a0dba1937aca95ac16e68f0f");
+    std::string contractAddress = "5fe3c4c3e2079879a0dba1937aca95ac16e68f0f";
     auto logEntries = fakeLogEntries(hashImpl, 2);
     TransactionStatus status = TransactionStatus::BadJumpDestination;
-    bytes output = contractAddress.asBytes();
+    auto contractAddressBytes = toAddress(contractAddress);
+    bytes output = contractAddressBytes.asBytes();
     for (int i = 0; i < (random() % 9); i++)
     {
-        output += contractAddress.asBytes();
+        output += contractAddressBytes.asBytes();
     }
     auto factory = std::make_shared<PBTransactionReceiptFactory>(_cryptoSuite);
     auto receipt = factory->createReceipt(
-        gasUsed, contractAddress.asBytes(), logEntries, (int32_t)status, output, _blockNumber);
+        gasUsed, contractAddress, logEntries, (int32_t)status, output, _blockNumber);
     return receipt;
 }
 
