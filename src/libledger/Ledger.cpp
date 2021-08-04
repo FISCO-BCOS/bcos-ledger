@@ -262,6 +262,15 @@ void Ledger::asyncStoreReceipts(storage::TableFactoryInterface::Ptr _tableFactor
 void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
     std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock)
 {
+    if (_blockNumber < 0 || _blockFlag < 0)
+    {
+        LEDGER_LOG(FATAL) << LOG_BADGE("asyncGetBlockDataByNumber") << LOG_DESC("Error parameters")
+                          << LOG_KV("blockNumber", _blockNumber) << LOG_KV("blockFlag", _blockFlag);
+        auto error = std::make_shared<Error>(
+            LedgerError::ErrorArgument, "asyncGetBlockDataByNumber error parameters");
+        _onGetBlock(error, nullptr);
+        return;
+    }
     auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
     getBlock(_blockNumber, _blockFlag,
         [self, _blockNumber, _blockFlag, _onGetBlock](
