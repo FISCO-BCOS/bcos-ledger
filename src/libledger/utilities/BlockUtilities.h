@@ -20,10 +20,52 @@
 
 #pragma once
 #include "Common.h"
+#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 
 namespace bcos::ledger
 {
+class BlockFetcher
+{
+public:
+    using Ptr = std::shared_ptr<BlockFetcher>;
+    explicit BlockFetcher(const protocol::Block::Ptr& _block) { m_block = _block; }
+    protocol::Block::Ptr block() const { return m_block; }
+    void setHeaderFetched(bool _headerFetched) { m_headerFetched = _headerFetched; }
+    void setTxsFetched(bool _txsFetched) { m_txsFetched = _txsFetched; }
+    void setReceiptsFetched(bool _receiptsFetched) { m_receiptsFetched = _receiptsFetched; }
+    void setFetchFlag(int32_t _flag) { m_flag = _flag; }
+    bool isFetchFinished()
+    {
+        if (m_flag < 0)
+        {
+            return false;
+        }
+        bool headerFlag = true;
+        bool txsFlag = true;
+        bool receiptFlag = true;
+        if (m_flag & ledger::HEADER)
+        {
+            headerFlag = m_headerFetched;
+        }
+        if (m_flag & ledger::TRANSACTIONS)
+        {
+            txsFlag = m_txsFetched;
+        }
+        if (m_flag & ledger::RECEIPTS)
+        {
+            receiptFlag = m_receiptsFetched;
+        }
+        return headerFlag && txsFlag && receiptFlag;
+    }
+
+private:
+    protocol::Block::Ptr m_block;
+    int32_t m_flag = -1;
+    std::atomic_bool m_headerFetched = {false};
+    std::atomic_bool m_txsFetched = {false};
+    std::atomic_bool m_receiptsFetched = {false};
+};
 protocol::TransactionsPtr blockTransactionListGetter(const protocol::Block::Ptr& _block);
 
 std::shared_ptr<std::vector<std::string>> blockTxHashListGetter(const protocol::Block::Ptr& _block);

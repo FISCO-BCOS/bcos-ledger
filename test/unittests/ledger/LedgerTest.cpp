@@ -498,6 +498,7 @@ BOOST_AUTO_TEST_CASE(commit)
             BOOST_CHECK(_config == nullptr);
             p1.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
@@ -507,8 +508,66 @@ BOOST_AUTO_TEST_CASE(commit)
         BOOST_CHECK(_config == nullptr);
         p2.set_value(true);
     });
-    BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
+}
+
+BOOST_AUTO_TEST_CASE(parallelCommit)
+{
+    initFixture();
+    initBlocks(5);
+
+    // test parallel commit
+    auto table = getTableFactory(1);
+    auto txDataList = std::make_shared<std::vector<bytesPointer>>();
+    auto txHashList = std::make_shared<protocol::HashList>();
+    for (size_t j = 0; j < m_fakeBlocks->at(0)->transactionsSize(); ++j)
+    {
+        auto txData = m_fakeBlocks->at(0)->transaction(j)->encode(false);
+        auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
+        txDataList->emplace_back(txPointer);
+        txHashList->emplace_back(m_fakeBlocks->at(0)->transaction(j)->hash());
+    }
+    m_storage->addStateCache(1, table);
+
+    std::promise<bool> p1;
+    auto f1 = p1.get_future();
+    m_ledger->asyncStoreTransactions(txDataList, txHashList, [=, &p1](Error::Ptr _error) {
+        BOOST_CHECK_EQUAL(_error, nullptr);
+        p1.set_value(true);
+    });
+    BOOST_CHECK_EQUAL(f1.get(), true);
+
+    std::promise<bool> p2;
+    auto f2 = p2.get_future();
+    m_ledger->asyncStoreReceipts(table, m_fakeBlocks->at(0), [=, &p2](Error::Ptr _error) {
+        BOOST_CHECK_EQUAL(_error, nullptr);
+        p2.set_value(true);
+    });
+    BOOST_CHECK_EQUAL(f2.get(), true);
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, 2), [&](const tbb::blocked_range<size_t>& _r) {
+        for (auto i = _r.begin(); i < _r.end(); ++i)
+        {
+            std::promise<bool> p3;
+            auto f3 = p3.get_future();
+            m_ledger->asyncCommitBlock(m_fakeBlocks->at(0)->blockHeader(),
+                [&](Error::Ptr _error, LedgerConfig::Ptr _config) {
+                    if (_error)
+                    {
+                        BOOST_CHECK(_error->errorCode() == LedgerError::ErrorCommitBlock);
+                        BCOS_LOG(INFO) << LOG_BADGE("TEST") << LOG_DESC(_error->errorMessage());
+                    }
+                    if (_config)
+                    {
+                        BOOST_CHECK_EQUAL(_config->blockNumber(), 1);
+                        BOOST_CHECK(!_config->consensusNodeList().empty());
+                        BOOST_CHECK(!_config->observerNodeList().empty());
+                    }
+                    p3.set_value(true);
+                });
+            BOOST_CHECK_EQUAL(f3.get(), true);
+        }
+    });
 }
 
 BOOST_AUTO_TEST_CASE(errorStorage)
