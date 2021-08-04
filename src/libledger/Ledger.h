@@ -56,8 +56,10 @@ public:
 
     bool sysConfigFetched() const { return m_sysConfigFetched; }
     bool consensusConfigFetched() const { return m_consensusConfigFetched; }
+    Mutex& mutex() { return m_mutex; }
 
 private:
+    mutable Mutex m_mutex;
     LedgerConfig::Ptr m_ledgerConfig;
     std::atomic_bool m_sysConfigFetched = {false};
     std::atomic_bool m_consensusConfigFetched = {false};
@@ -72,10 +74,12 @@ public:
         m_storage(_storage),
         m_storageGetter(StorageGetter::storageGetterFactory()),
         m_storageSetter(StorageSetter::storageSetterFactory()),
-        m_merkleProofUtility(std::make_shared<MerkleProofUtility>())
+        m_merkleProofUtility(std::make_shared<MerkleProofUtility>()),
+        m_commitPool(std::make_shared<bcos::ThreadPool>("commitThreadPool", 1))
     {
         assert(m_blockFactory);
         assert(m_storage);
+        assert(m_commitPool);
 
         auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
         auto headerDestructorThread = std::make_shared<ThreadPool>("headerCache", 1);
@@ -87,6 +91,8 @@ public:
         m_receiptCache.setDestructorThread(rcptDestructorThread);
     };
 
+    virtual ~Ledger() { m_commitPool->stop(); }
+
     virtual void stop()
     {
         m_blockCache.stop();
@@ -96,6 +102,8 @@ public:
         m_transactionsCache.stop();
 
         m_receiptCache.stop();
+
+        m_commitPool->stop();
     }
     void asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
         std::function<void(Error::Ptr, LedgerConfig::Ptr)> _onCommitBlock) override;
@@ -237,7 +245,6 @@ private:
     std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
         m_committedBlockNotifier;
 
-    Mutex m_commitMutex;
     mutable SharedMutex m_blockNumberMutex;
     protocol::BlockNumber m_blockNumber = -1;
     mutable SharedMutex m_blockHashMutex;
@@ -249,5 +256,6 @@ private:
     StorageGetter::Ptr m_storageGetter;
     StorageSetter::Ptr m_storageSetter;
     ledger::MerkleProofUtility::Ptr m_merkleProofUtility;
+    bcos::ThreadPool::Ptr m_commitPool = nullptr;
 };
 }  // namespace bcos::ledger

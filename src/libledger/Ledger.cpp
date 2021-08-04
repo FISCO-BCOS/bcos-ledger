@@ -45,27 +45,27 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
     }
 
     auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
-    auto tableFactory = getMemoryTableFactory(_header->number());
-    // default parent block hash located in parentInfo[0]
-    checkBlockShouldCommit(_header->number(), _header->parentInfo().at(0).blockHash.hex(),
-        [self, tableFactory, _header, _onCommitBlock](bool _isCommit) {
-            if (!_isCommit)
-            {
-                auto error = std::make_shared<Error>(LedgerError::ErrorCommitBlock,
-                    "[#asyncCommitBlock] Wrong block number or wrong parent hash");
-                _onCommitBlock(error, nullptr);
-                return;
-            }
-            auto ledger = self.lock();
-            if (!ledger)
-            {
-                auto error = std::make_shared<Error>(
-                    LedgerError::LedgerLockError, "can't not get ledger weak_ptr");
-                _onCommitBlock(error, nullptr);
-                return;
-            }
-            if (ledger->m_commitMutex.try_lock())
-            {
+    m_commitPool->enqueue([self, _header, _onCommitBlock]() {
+        auto ledger = self.lock();
+        if (!ledger)
+        {
+            auto error = std::make_shared<Error>(
+                LedgerError::LedgerLockError, "can't not get ledger weak_ptr");
+            _onCommitBlock(error, nullptr);
+            return;
+        }
+        auto tableFactory = ledger->getMemoryTableFactory(_header->number());
+        // default parent block hash located in parentInfo[0]
+        ledger->checkBlockShouldCommit(_header->number(),
+            _header->parentInfo().at(0).blockHash.hex(),
+            [ledger, tableFactory, _header, _onCommitBlock](bool _isCommit) {
+                if (!_isCommit)
+                {
+                    auto error = std::make_shared<Error>(LedgerError::ErrorCommitBlock,
+                        "[#asyncCommitBlock] Wrong block number or wrong parent hash");
+                    _onCommitBlock(error, nullptr);
+                    return;
+                }
                 try
                 {
                     tbb::parallel_invoke(
@@ -81,21 +81,13 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
 
                     tableFactory->asyncCommit([_header, _onCommitBlock, ledger](
                                                   Error::Ptr _error, size_t _commitSize) {
-                        if (_error && _error->errorCode() != CommonError::SUCCESS)
+                        if ((_error && _error->errorCode() != CommonError::SUCCESS) ||
+                            _commitSize < 1)
                         {
                             LEDGER_LOG(ERROR) << LOG_DESC("Commit Block failed in storage")
                                               << LOG_KV("number", _header->number())
-                                              << LOG_KV("code", _error->errorCode())
-                                              << LOG_KV("msg", _error->errorMessage());
-                            _onCommitBlock(_error, nullptr);
-                            return;
-                        }
-                        if (_commitSize < 1)
-                        {
-                            LEDGER_LOG(ERROR) << LOG_DESC("Commit Block failed in storage")
+                                              << LOG_KV("blockHash", _header->hash().abridged())
                                               << LOG_KV("commitSize", _commitSize);
-                            auto error = std::make_shared<Error>(
-                                LedgerError::ErrorCommitBlock, "Commit error, commitSize < 1");
                             _onCommitBlock(_error, nullptr);
                             return;
                         }
@@ -113,18 +105,25 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
                         }
                         ledger->m_blockHeaderCache.add(blockNumber, _header);
                         ledger->notifyCommittedBlockNumber(blockNumber);
+                        auto callbackNotified = std::make_shared<bool>(false);
                         ledger->asyncGetLedgerConfig(blockNumber, _header->hash(),
-                            [_header, _onCommitBlock, ledger](
+                            [_header, _onCommitBlock, callbackNotified](
                                 Error::Ptr _error, WrapperLedgerConfig::Ptr _wrapperLedgerConfig) {
+                                Guard l(_wrapperLedgerConfig->mutex());
+                                if (*callbackNotified)
+                                {
+                                    LEDGER_LOG(WARNING) << LOG_DESC("callback already notified");
+                                    return;
+                                }
                                 if (_error)
                                 {
                                     LEDGER_LOG(WARNING)
                                         << LOG_DESC(
-                                               "asyncCommitBlock failed for "
-                                               "asyncGetLedgerConfig failed")
+                                               "asyncCommitBlock failed for asyncGetLedgerConfig "
+                                               "failed")
                                         << LOG_KV("number", _header->number())
                                         << LOG_KV("hash", _header->hash().abridged());
-                                    ledger->m_commitMutex.unlock();
+                                    *callbackNotified = true;
                                     _onCommitBlock(_error, nullptr);
                                     return;
                                 }
@@ -135,7 +134,7 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
                                         << LOG_DESC("asyncCommitBlock: getLedgerConfig success")
                                         << LOG_KV("number", _header->number())
                                         << LOG_KV("hash", _header->hash().abridged());
-                                    ledger->m_commitMutex.unlock();
+                                    *callbackNotified = true;
                                     _onCommitBlock(nullptr, _wrapperLedgerConfig->ledgerConfig());
                                 }
                             });
@@ -151,17 +150,8 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
                     BOOST_THROW_EXCEPTION(
                         OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
                 }
-            }
-            else
-            {
-                LEDGER_LOG(FATAL) << LOG_BADGE("asyncCommitBlock")
-                                  << LOG_DESC("Commit mutex is locked")
-                                  << LOG_KV("blockNumber", _header->number());
-                auto error = std::make_shared<Error>(LedgerError::ErrorCommitBlock,
-                    "[#asyncCommitBlock] Commit mutex try lock failed.");
-                _onCommitBlock(error, nullptr);
-            }
-        });
+            });
+    });
 }
 
 void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _txToStore,
