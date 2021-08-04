@@ -34,7 +34,7 @@ namespace bcos
 namespace test
 {
 inline PBTransaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite,
-    KeyPairInterface::Ptr _keyPair, bytes const& _to, bytes const& _input, u256 const& _nonce,
+    KeyPairInterface::Ptr _keyPair, std::string const& _to, bytes const& _input, u256 const& _nonce,
     int64_t const& _blockLimit, std::string const& _chainId, std::string const& _groupId)
 {
     auto pbTransaction = std::make_shared<PBTransaction>(
@@ -47,7 +47,7 @@ inline PBTransaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite,
 }
 
 inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
-    KeyPairInterface::Ptr _keyPair, bytes const& _to, bytes const& _input, u256 const& _nonce,
+    KeyPairInterface::Ptr _keyPair, std::string const& _to, bytes const& _input, u256 const& _nonce,
     int64_t const& _blockLimit, std::string const& _chainId, std::string const& _groupId)
 {
     auto factory = std::make_shared<PBTransactionFactory>(_cryptoSuite);
@@ -59,7 +59,7 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
 inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite)
 {
     auto keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
-    auto to = keyPair->address(_cryptoSuite->hashImpl()).asBytes();
+    auto to = *toHexString(keyPair->address(_cryptoSuite->hashImpl()).asBytes());
     std::string inputStr = "testTransaction";
     bytes input = asBytes(inputStr);
     u256 nonce = 120012323;
@@ -74,7 +74,7 @@ inline TransactionsPtr fakeTransactions(int _size)
     auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
-    auto to = cryptoSuite->calculateAddress(keyPair->publicKey()).asBytes();
+    auto to = *toHexString(cryptoSuite->calculateAddress(keyPair->publicKey()).asBytes());
 
     TransactionsPtr txs = std::make_shared<Transactions>();
     for (int i = 0; i < _size; ++i)
