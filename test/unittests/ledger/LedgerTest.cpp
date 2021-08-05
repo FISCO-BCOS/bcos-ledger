@@ -186,7 +186,10 @@ public:
                 p2.set_value(true);
             });
             BOOST_CHECK_EQUAL(f2.get(), true);
+        }
 
+        for (int i = 0; i < _number; ++i)
+        {
             std::promise<bool> p3;
             auto f3 = p3.get_future();
             m_ledger->asyncCommitBlock(m_fakeBlocks->at(i)->blockHeader(),
@@ -511,7 +514,7 @@ BOOST_AUTO_TEST_CASE(commit)
     BOOST_CHECK_EQUAL(f2.get(), true);
 }
 
-BOOST_AUTO_TEST_CASE(parallelCommit)
+BOOST_AUTO_TEST_CASE(parallelCommitSameBlock)
 {
     initFixture();
     initBlocks(5);
@@ -569,6 +572,109 @@ BOOST_AUTO_TEST_CASE(parallelCommit)
         }
     });
 }
+
+BOOST_AUTO_TEST_CASE(parallelCommit)
+{
+    initFixture();
+    int blockNumber = 20;
+    initBlocks(blockNumber);
+
+    // test parallel commit 20 blocks
+    auto negativeTable = getTableFactory(-1);
+    m_storage->addStateCache(-1, negativeTable);
+    for (int i = 0; i < blockNumber; ++i)
+    {
+        auto table = getTableFactory(i + 1);
+        auto txDataList = std::make_shared<std::vector<bytesPointer>>();
+        auto txHashList = std::make_shared<protocol::HashList>();
+        for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
+        {
+            auto txData = m_fakeBlocks->at(i)->transaction(j)->encode(false);
+            auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
+            txDataList->emplace_back(txPointer);
+            txHashList->emplace_back(m_fakeBlocks->at(i)->transaction(j)->hash());
+        }
+        m_storage->addStateCache(i + 1, table);
+
+        std::promise<bool> p1;
+        auto f1 = p1.get_future();
+        m_ledger->asyncStoreTransactions(txDataList, txHashList, [=, &p1](Error::Ptr _error) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            p1.set_value(true);
+        });
+        BOOST_CHECK_EQUAL(f1.get(), true);
+
+        std::promise<bool> p2;
+        auto f2 = p2.get_future();
+        m_ledger->asyncStoreReceipts(table, m_fakeBlocks->at(i), [=, &p2](Error::Ptr _error) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            p2.set_value(true);
+        });
+        BOOST_CHECK_EQUAL(f2.get(), true);
+    }
+    BCOS_LOG(INFO) << LOG_BADGE("TEST") << LOG_DESC("==============Commit==============");
+
+    auto blockQueue = std::make_shared<std::queue<protocol::Block::Ptr>>();
+    for (int i = 0; i < blockNumber; ++i)
+    {
+        blockQueue->push(m_fakeBlocks->at(i));
+    }
+    auto count = std::make_shared<std::atomic_int>();
+    *count = 0;
+    while (!blockQueue->empty())
+    {
+        auto number = blockQueue->size();
+        auto blockVector = std::make_shared<std::vector<Block::Ptr>>();
+        for (size_t i = 0; i < number; ++i)
+        {
+            blockVector->push_back(blockQueue->front());
+            blockQueue->pop();
+        }
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, number),
+            [&, blockQueue, blockVector, count](const tbb::blocked_range<size_t>& _r) {
+                for (auto i = _r.begin(); i < _r.end(); ++i)
+                {
+                    auto block = blockVector->at(i);
+                    std::promise<bool> p;
+                    m_ledger->asyncCommitBlock(
+                        block->blockHeader(), [&, block, blockQueue, count](
+                                                  Error::Ptr _error, LedgerConfig::Ptr _config) {
+                            if (_error)
+                            {
+                                BOOST_CHECK(_error->errorCode() == LedgerError::ErrorCommitBlock);
+                                BCOS_LOG(INFO)
+                                    << LOG_BADGE("TEST") << LOG_DESC(_error->errorMessage());
+                                blockQueue->push(block);
+                            }
+                            if (_config)
+                            {
+                                BCOS_LOG(INFO) << LOG_BADGE("TEST")
+                                               << LOG_KV("commitNumber", _config->blockNumber());
+                                count->fetch_add(1);
+                            }
+                            p.set_value(true);
+                        });
+                    p.get_future().get();
+                }
+            });
+        BCOS_LOG(INFO) << LOG_BADGE("TEST") << LOG_KV("queueSize", blockQueue->size());
+    }
+    while (true)
+    {
+        if (count->load() == blockNumber)
+        {
+            break;
+        }
+    }
+
+    std::promise<bool> promise;
+    m_ledger->asyncGetBlockNumber([&](Error::Ptr, BlockNumber _number) {
+        BOOST_CHECK(_number == blockNumber);
+        promise.set_value(true);
+    });
+    BOOST_CHECK(promise.get_future().get() == true);
+}
+
 
 BOOST_AUTO_TEST_CASE(errorStorage)
 {
@@ -645,6 +751,15 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             p1.set_value(true);
         });
 
+    std::promise<bool> pp1;
+    auto ff1 = pp1.get_future();
+    m_ledger->asyncGetBlockDataByNumber(
+        -1, FULL_BLOCK, [=, &pp1](Error::Ptr _error, Block::Ptr _block) {
+            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK_EQUAL(_block, nullptr);
+            pp1.set_value(true);
+        });
+
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     // cache hit
@@ -705,6 +820,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             p7.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
+    BOOST_CHECK_EQUAL(ff1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);
     BOOST_CHECK_EQUAL(f4.get(), true);
