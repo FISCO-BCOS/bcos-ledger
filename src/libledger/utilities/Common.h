@@ -64,6 +64,7 @@ enum LedgerError : int32_t
     DecodeError = 3004,
     ErrorCommitBlock = 3005,
     CollectAsyncCallbackError = 3006,
-    LedgerLockError = 3007
+    LedgerLockError = 3007,
+    GetStorageError = 3008
 };
 }  // namespace bcos::ledger
