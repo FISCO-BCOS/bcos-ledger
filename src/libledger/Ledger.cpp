@@ -461,8 +461,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
                                                   << LOG_DESC("getTxProof timeout");
                             }
                             LEDGER_LOG(INFO)
-                                << LOG_BADGE("getBatchTxProof") << LOG_DESC("getTxProof complete")
-                                << LOG_KV("getResult", future.get());
+                                << LOG_BADGE("getBatchTxProof") << LOG_DESC("getTxProof complete");
                         }
                     });
                 auto proofMap = std::make_shared<std::map<std::string, MerkleProofPtr>>(
