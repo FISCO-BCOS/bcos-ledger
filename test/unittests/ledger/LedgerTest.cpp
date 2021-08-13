@@ -856,6 +856,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
             p1.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
@@ -867,6 +868,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
             p2.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f2.get(), true);
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
@@ -881,6 +883,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_proof->empty());
             p3.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f3.get(), true);
 
     std::promise<bool> p4;
     auto f4 = p4.get_future();
@@ -893,6 +896,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_proof == nullptr);
             p4.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f4.get(), true);
 
     std::promise<bool> p5;
     auto f5 = p5.get_future();
@@ -905,10 +909,6 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_proof == nullptr);
             p5.set_value(true);
         });
-    BOOST_CHECK_EQUAL(f1.get(), true);
-    BOOST_CHECK_EQUAL(f2.get(), true);
-    BOOST_CHECK_EQUAL(f3.get(), true);
-    BOOST_CHECK_EQUAL(f4.get(), true);
     BOOST_CHECK_EQUAL(f5.get(), true);
 }
 

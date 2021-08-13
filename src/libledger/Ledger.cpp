@@ -437,41 +437,35 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
             {
                 auto con_proofMap =
                     std::make_shared<tbb::concurrent_unordered_map<std::string, MerkleProofPtr>>();
+                auto count = std::make_shared<std::atomic_uint64_t>(0);
+                auto counter = [_txList, _txHashList, count, con_proofMap, _onGetTx]() {
+                    count->fetch_add(1);
+                    if (count->load() == _txHashList->size())
+                    {
+                        auto proofMap = std::make_shared<std::map<std::string, MerkleProofPtr>>(
+                            con_proofMap->begin(), con_proofMap->end());
+                        LEDGER_LOG(INFO) << LOG_BADGE("asyncGetBatchTxsByHashList")
+                                         << LOG_DESC("get tx list and proofMap complete")
+                                         << LOG_KV("txHashListSize", _txHashList->size())
+                                         << LOG_KV("proofMapSize", proofMap->size());
+                        _onGetTx(nullptr, _txList, proofMap);
+                    }
+                };
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, _txHashList->size()),
-                    [&](const tbb::blocked_range<size_t>& range) {
+                    [&, counter](const tbb::blocked_range<size_t>& range) {
                         for (size_t i = range.begin(); i < range.end(); ++i)
                         {
-                            std::promise<bool> p;
-                            auto future = p.get_future();
                             auto txHash = _txHashList->at(i);
-                            getTxProof(txHash, [con_proofMap, txHash, &p](
+                            getTxProof(txHash, [con_proofMap, txHash, counter](
                                                    Error::Ptr _error, MerkleProofPtr _proof) {
                                 if (!_error && _proof)
                                 {
                                     con_proofMap->insert(std::make_pair(txHash.hex(), _proof));
-                                    p.set_value(true);
-                                    return;
                                 }
-                                p.set_value(false);
+                                counter();
                             });
-                            if (std::future_status::ready !=
-                                future.wait_for(std::chrono::milliseconds(m_timeout)))
-                            {
-                                LEDGER_LOG(ERROR) << LOG_BADGE("getBatchTxProof")
-                                                  << LOG_DESC("getTxProof timeout");
-                            }
-                            LEDGER_LOG(INFO)
-                                << LOG_BADGE("getBatchTxProof") << LOG_DESC("getTxProof complete")
-                                << LOG_KV("getResult", future.get());
                         }
                     });
-                auto proofMap = std::make_shared<std::map<std::string, MerkleProofPtr>>(
-                    con_proofMap->begin(), con_proofMap->end());
-                LEDGER_LOG(INFO) << LOG_BADGE("asyncGetBatchTxsByHashList")
-                                 << LOG_DESC("get tx list and proofMap complete")
-                                 << LOG_KV("txHashListSize", _txHashList->size())
-                                 << LOG_KV("proofMapSize", proofMap->size());
-                _onGetTx(nullptr, _txList, proofMap);
             }
             else
             {
