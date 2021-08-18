@@ -462,6 +462,7 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
             BOOST_CHECK_EQUAL(_nodeList->size(), 0);
             p1.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
@@ -472,6 +473,7 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
             BOOST_CHECK(_nodeList->size() == 0);
             p2.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f2.get(), true);
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
@@ -482,8 +484,51 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
             BOOST_CHECK(_nodeList->size() == 0);
             p3.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f3.get(), true);
+}
+
+BOOST_AUTO_TEST_CASE(testNodeListByType)
+{
+    initFixture();
+    std::promise<bool> p1;
+    auto f1 = p1.get_future();
+    m_ledger->asyncGetNodeListByType(
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_nodeList->size(), 4);
+            p1.set_value(true);
+        });
     BOOST_CHECK_EQUAL(f1.get(), true);
+
+    consensus::ConsensusNodeList consensusNodeList;
+    auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto node =
+        std::make_shared<consensus::ConsensusNode>(signImpl->generateKeyPair()->publicKey(), 10);
+    consensusNodeList.emplace_back(node);
+    auto tableFactory = getTableFactory(0);
+    m_storageSetter->setConsensusConfig(tableFactory, CONSENSUS_SEALER, consensusNodeList, "5");
+    tableFactory->commit();
+
+    std::promise<bool> p2;
+    auto f2 = p2.get_future();
+    m_ledger->asyncGetNodeListByType(
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_nodeList->size(), 4);
+            p2.set_value(true);
+        });
     BOOST_CHECK_EQUAL(f2.get(), true);
+
+    initChain(5);
+
+    std::promise<bool> p3;
+    auto f3 = p3.get_future();
+    m_ledger->asyncGetNodeListByType(
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_nodeList->size(), 5);
+            p3.set_value(true);
+        });
     BOOST_CHECK_EQUAL(f3.get(), true);
 }
 
