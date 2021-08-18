@@ -129,17 +129,16 @@ public:
      * @param _tableFactory
      * @param _keyFactory key factory to generate nodeID
      */
-    void asyncGetConsensusConfig(std::string const& _nodeType,
+    void asyncGetConsensusConfig(std::string const& _nodeType, protocol::BlockNumber _number,
         const storage::TableFactoryInterface::Ptr& _tableFactory,
         crypto::KeyFactory::Ptr _keyFactory,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig);
 
     void asyncGetConsensusConfigList(std::vector<std::string> const& _nodeTypeList,
-        const storage::TableFactoryInterface::Ptr& _tableFactory,
+        protocol::BlockNumber _number, const storage::TableFactoryInterface::Ptr& _tableFactory,
         crypto::KeyFactory::Ptr _keyFactory,
         std::function<void(Error::Ptr, std::map<std::string, consensus::ConsensusNodeListPtr>)>
             _onGetConfig);
-
 
     void getBatchTxByHashList(std::shared_ptr<std::vector<std::string>> _hashList,
         const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,

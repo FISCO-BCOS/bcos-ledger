@@ -52,6 +52,8 @@ public:
             // add hash index to the blockCache queue, use to remove first element when the cache is
             // full
             m_CacheQueue.push_back(blockNumber);
+            LEDGER_LOG(DEBUG) << LOG_BADGE("FIFOCache.add") << LOG_DESC("Add item in cache")
+                              << LOG_KV("blockNumber", _number);
 
             return item;
         }
