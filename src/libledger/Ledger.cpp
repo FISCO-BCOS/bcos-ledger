@@ -620,44 +620,69 @@ void Ledger::asyncGetTotalTransactionCount(
 void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
     std::function<void(Error::Ptr, std::string, bcos::protocol::BlockNumber)> _onGetConfig)
 {
-    getStorageGetter()->getSysConfig(_key, getMemoryTableFactory(0),
-        [_key, _onGetConfig](Error::Ptr _error, bcos::storage::Entry::Ptr _configEntry) {
-            if (_error && _error->errorCode() != CommonError::SUCCESS)
-            {
-                LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetSystemConfigByKey")
-                                  << LOG_DESC("getSysConfig callback error")
-                                  << LOG_KV("errorCode", _error->errorCode())
-                                  << LOG_KV("errorMsg", _error->errorMessage());
-                _onGetConfig(_error, "", -1);
-                return;
-            }
-            if (!_configEntry)
-            {
-                LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetSystemConfigByKey")
-                                  << LOG_DESC("getSysConfig callback null entry")
-                                  << LOG_KV("key", _key);
-                auto error = std::make_shared<Error>(
-                    LedgerError::GetStorageError, "can not get config from storage");
-                _onGetConfig(error, "", -1);
-                return;
-            }
-            try
-            {
-                auto value = _configEntry->getField(SYS_VALUE);
-                auto numberStr = _configEntry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER);
-                BlockNumber number =
-                    numberStr.empty() ? -1 : boost::lexical_cast<BlockNumber>(numberStr);
-                _onGetConfig(nullptr, value, number);
-            }
-            catch (std::exception const& e)
-            {
-                LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetSystemConfigByKey")
-                                  << LOG_KV("exception", boost::diagnostic_information(e));
-                auto error = std::make_shared<Error>(
-                    LedgerError::GetStorageError, boost::diagnostic_information(e));
-                _onGetConfig(error, "", -1);
-            }
-        });
+    auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
+    getLatestBlockNumber([self, _key, _onGetConfig](BlockNumber _number) {
+        auto ledger = self.lock();
+        if (!ledger)
+        {
+            auto error = std::make_shared<Error>(
+                LedgerError::LedgerLockError, "can't not get ledger weak_ptr");
+            _onGetConfig(error, "", -1);
+            return;
+        }
+        ledger->getStorageGetter()->getSysConfig(_key, ledger->getMemoryTableFactory(0),
+            [_number, _key, _onGetConfig](
+                Error::Ptr _error, bcos::storage::Entry::Ptr _configEntry) {
+                if (_error && _error->errorCode() != CommonError::SUCCESS)
+                {
+                    LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetSystemConfigByKey")
+                                      << LOG_DESC("getSysConfig callback error")
+                                      << LOG_KV("errorCode", _error->errorCode())
+                                      << LOG_KV("errorMsg", _error->errorMessage());
+                    _onGetConfig(_error, "", -1);
+                    return;
+                }
+                if (!_configEntry)
+                {
+                    LEDGER_LOG(ERROR)
+                        << LOG_BADGE("asyncGetSystemConfigByKey")
+                        << LOG_DESC("getSysConfig callback null entry") << LOG_KV("key", _key);
+                    auto error = std::make_shared<Error>(
+                        LedgerError::GetStorageError, "can not get config from storage");
+                    _onGetConfig(error, "", -1);
+                    return;
+                }
+                try
+                {
+                    auto value = _configEntry->getField(SYS_VALUE);
+                    auto numberStr = _configEntry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER);
+                    BlockNumber enableNumber =
+                        numberStr.empty() ? -1 : boost::lexical_cast<BlockNumber>(numberStr);
+                    if (enableNumber <= _number)
+                    {
+                        _onGetConfig(nullptr, value, enableNumber);
+                    }
+                    else
+                    {
+                        LEDGER_LOG(WARNING)
+                            << LOG_BADGE("asyncGetSystemConfigByKey")
+                            << LOG_DESC("config not enable in latest number")
+                            << LOG_KV("enableNum", enableNumber) << LOG_KV("latestNum", _number);
+                        auto error = std::make_shared<Error>(LedgerError::GetStorageError,
+                            "enable number larger than latest number");
+                        _onGetConfig(error, "", -1);
+                    }
+                }
+                catch (std::exception const& e)
+                {
+                    LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetSystemConfigByKey")
+                                      << LOG_KV("exception", boost::diagnostic_information(e));
+                    auto error = std::make_shared<Error>(
+                        LedgerError::GetStorageError, boost::diagnostic_information(e));
+                    _onGetConfig(error, "", -1);
+                }
+            });
+    });
 }
 
 void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t _offset,
@@ -1250,7 +1275,7 @@ void Ledger::asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::H
     *keys = {SYSTEM_KEY_CONSENSUS_TIMEOUT, SYSTEM_KEY_TX_COUNT_LIMIT,
         SYSTEM_KEY_CONSENSUS_LEADER_PERIOD};
     storageGetter->asyncGetSystemConfigList(keys, tableFactory, false,
-        [keys, wrapperLedgerConfig, _onGetLedgerConfig](
+        [_number, wrapperLedgerConfig, _onGetLedgerConfig](
             const Error::Ptr& _error, std::map<std::string, Entry::Ptr> const& _entries) {
             if (_error)
             {
@@ -1262,24 +1287,41 @@ void Ledger::asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::H
             }
             try
             {
+                auto ledgerConfig = wrapperLedgerConfig->ledgerConfig();
+
                 // parse the configurations
                 auto consensusTimeout =
                     (_entries.at(SYSTEM_KEY_CONSENSUS_TIMEOUT))->getField(SYS_VALUE);
-                auto ledgerConfig = wrapperLedgerConfig->ledgerConfig();
-                ledgerConfig->setConsensusTimeout(boost::lexical_cast<uint64_t>(consensusTimeout));
-
                 auto txCountLimit = (_entries.at(SYSTEM_KEY_TX_COUNT_LIMIT))->getField(SYS_VALUE);
-                ledgerConfig->setBlockTxCountLimit(boost::lexical_cast<uint64_t>(txCountLimit));
-
                 auto consensusLeaderPeriod =
                     (_entries.at(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD))->getField(SYS_VALUE);
+
+                // check enable number
+                auto timeoutEnableNum = boost::lexical_cast<BlockNumber>(
+                    _entries.at(SYSTEM_KEY_CONSENSUS_TIMEOUT)
+                        ->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
+                auto limitEnableNum = boost::lexical_cast<BlockNumber>(
+                    _entries.at(SYSTEM_KEY_TX_COUNT_LIMIT)
+                        ->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
+                auto periodEnableNum = boost::lexical_cast<BlockNumber>(
+                    _entries.at(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD)
+                        ->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
+
+                ledgerConfig->setConsensusTimeout(
+                    (timeoutEnableNum <= _number ? boost::lexical_cast<uint64_t>(consensusTimeout) :
+                                                   0));
+                ledgerConfig->setBlockTxCountLimit(
+                    limitEnableNum <= _number ? boost::lexical_cast<uint64_t>(txCountLimit) : 0);
                 ledgerConfig->setLeaderSwitchPeriod(
-                    boost::lexical_cast<uint64_t>(consensusLeaderPeriod));
+                    periodEnableNum <= _number ?
+                        boost::lexical_cast<uint64_t>(consensusLeaderPeriod) :
+                        0);
                 LEDGER_LOG(INFO) << LOG_BADGE("asyncGetLedgerConfig")
                                  << LOG_DESC("asyncGetSystemConfigList success")
-                                 << LOG_KV("consensusTimeout", consensusTimeout)
-                                 << LOG_KV("txCountLimit", txCountLimit)
-                                 << LOG_KV("consensusLeaderPeriod", consensusLeaderPeriod);
+                                 << LOG_KV("consensusTimeout", ledgerConfig->consensusTimeout())
+                                 << LOG_KV("txCountLimit", ledgerConfig->blockTxCountLimit())
+                                 << LOG_KV("consensusLeaderPeriod",
+                                        ledgerConfig->leaderSwitchPeriod());
                 wrapperLedgerConfig->setSysConfigFetched(true);
                 _onGetLedgerConfig(nullptr, wrapperLedgerConfig);
             }

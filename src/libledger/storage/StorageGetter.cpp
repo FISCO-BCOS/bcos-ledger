@@ -195,11 +195,6 @@ void StorageGetter::asyncGetSystemConfigList(const std::shared_ptr<std::vector<s
             // Note: must make sure all the configs are not empty
             if (!_entries.count(key))
             {
-                auto entry = _entries.at(key);
-                if (entry)
-                {
-                    continue;
-                }
                 auto errorMsg =
                     "asyncGetSystemConfigList failed for get empty config for key: " + key;
                 LEDGER_LOG(ERROR) << LOG_DESC(errorMsg) << LOG_KV("key", key);

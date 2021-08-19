@@ -1099,7 +1099,6 @@ BOOST_AUTO_TEST_CASE(preStoreReceipt)
 BOOST_AUTO_TEST_CASE(getSystemConfig)
 {
     initFixture();
-    initChain(5);
 
     std::promise<bool> p1;
     auto f1 = p1.get_future();
@@ -1110,17 +1109,33 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
             BOOST_CHECK_EQUAL(_number, 0);
             p1.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
-    std::promise<bool> p2;
-    auto f2 = p2.get_future();
-    // hit cache
+    auto tableFactory = getTableFactory(0);
+    m_storageSetter->setSysConfig(tableFactory, SYSTEM_KEY_TX_COUNT_LIMIT, "2000", "5");
+    tableFactory->commit();
+
+    std::promise<bool> pp1;
+    m_ledger->asyncGetSystemConfigByKey(
+        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK_EQUAL(_value, "");
+            BOOST_CHECK_EQUAL(_number, -1);
+            pp1.set_value(true);
+        });
+    BOOST_CHECK_EQUAL(pp1.get_future().get(), true);
+
+    initChain(5);
+
+    std::promise<bool> pp2;
     m_ledger->asyncGetSystemConfigByKey(
         SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_value, "1000");
-            BOOST_CHECK_EQUAL(_number, 0);
-            p2.set_value(true);
+            BOOST_CHECK_EQUAL(_value, "2000");
+            BOOST_CHECK_EQUAL(_number, 5);
+            pp2.set_value(true);
         });
+    BOOST_CHECK_EQUAL(pp2.get_future().get(), true);
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
@@ -1132,8 +1147,6 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
             BOOST_CHECK_EQUAL(_number, -1);
             p3.set_value(true);
         });
-    BOOST_CHECK_EQUAL(f1.get(), true);
-    BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);
 }
 
