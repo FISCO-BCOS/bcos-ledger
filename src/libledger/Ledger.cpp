@@ -642,6 +642,9 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                     _onGetConfig(_error, "", -1);
                     return;
                 }
+                // The param was reset at height getLatestBlockNumber(), and takes effect in next block.
+                // So we query the status of getLatestBlockNumber() + 1.
+                auto number = _number + 1;
                 if (!_configEntry)
                 {
                     LEDGER_LOG(ERROR)
@@ -658,7 +661,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                     auto numberStr = _configEntry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER);
                     BlockNumber enableNumber =
                         numberStr.empty() ? -1 : boost::lexical_cast<BlockNumber>(numberStr);
-                    if (enableNumber <= _number)
+                    if (enableNumber <= number)
                     {
                         _onGetConfig(nullptr, value, enableNumber);
                     }
@@ -1289,39 +1292,55 @@ void Ledger::asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::H
             {
                 auto ledgerConfig = wrapperLedgerConfig->ledgerConfig();
 
+                // The param was reset at height getLatestBlockNumber(), and takes effect in next
+                // block. So we query the status of getLatestBlockNumber() + 1.
+                auto number = _number + 1;
+
                 // parse the configurations
                 auto consensusTimeout =
                     (_entries.at(SYSTEM_KEY_CONSENSUS_TIMEOUT))->getField(SYS_VALUE);
                 auto txCountLimit = (_entries.at(SYSTEM_KEY_TX_COUNT_LIMIT))->getField(SYS_VALUE);
-                auto consensusLeaderPeriod =
+                auto leaderPeriod =
                     (_entries.at(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD))->getField(SYS_VALUE);
 
                 // check enable number
-                auto timeoutEnableNum = boost::lexical_cast<BlockNumber>(
+                auto timeoutNum = boost::lexical_cast<BlockNumber>(
                     _entries.at(SYSTEM_KEY_CONSENSUS_TIMEOUT)
                         ->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
-                auto limitEnableNum = boost::lexical_cast<BlockNumber>(
+                auto limitNum = boost::lexical_cast<BlockNumber>(
                     _entries.at(SYSTEM_KEY_TX_COUNT_LIMIT)
                         ->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
-                auto periodEnableNum = boost::lexical_cast<BlockNumber>(
+                auto periodNum = boost::lexical_cast<BlockNumber>(
                     _entries.at(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD)
                         ->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
 
-                ledgerConfig->setConsensusTimeout(
-                    (timeoutEnableNum <= _number ? boost::lexical_cast<uint64_t>(consensusTimeout) :
-                                                   0));
-                ledgerConfig->setBlockTxCountLimit(
-                    limitEnableNum <= _number ? boost::lexical_cast<uint64_t>(txCountLimit) : 0);
-                ledgerConfig->setLeaderSwitchPeriod(
-                    periodEnableNum <= _number ?
-                        boost::lexical_cast<uint64_t>(consensusLeaderPeriod) :
-                        0);
+                if (timeoutNum > number || limitNum > number || periodNum > number)
+                {
+                    LEDGER_LOG(FATAL) << LOG_BADGE("asyncGetLedgerConfig")
+                                      << LOG_DESC(
+                                             "asyncGetSystemConfigList error for enable number "
+                                             "higher than number")
+                                      << LOG_KV("consensusTimeout", consensusTimeout)
+                                      << LOG_KV("txCountLimit", txCountLimit)
+                                      << LOG_KV("consensusLeaderPeriod", leaderPeriod)
+                                      << LOG_KV("consensusTimeoutNum", timeoutNum)
+                                      << LOG_KV("txCountLimitNum", limitNum)
+                                      << LOG_KV("consensusLeaderPeriodNum", periodNum)
+                                      << LOG_KV("latestNumber", _number);
+                }
+                ledgerConfig->setConsensusTimeout(boost::lexical_cast<uint64_t>(consensusTimeout));
+                ledgerConfig->setBlockTxCountLimit(boost::lexical_cast<uint64_t>(txCountLimit));
+                ledgerConfig->setLeaderSwitchPeriod(boost::lexical_cast<uint64_t>(leaderPeriod));
+
                 LEDGER_LOG(INFO) << LOG_BADGE("asyncGetLedgerConfig")
                                  << LOG_DESC("asyncGetSystemConfigList success")
-                                 << LOG_KV("consensusTimeout", ledgerConfig->consensusTimeout())
-                                 << LOG_KV("txCountLimit", ledgerConfig->blockTxCountLimit())
-                                 << LOG_KV("consensusLeaderPeriod",
-                                        ledgerConfig->leaderSwitchPeriod());
+                                 << LOG_KV("consensusTimeout", consensusTimeout)
+                                 << LOG_KV("txCountLimit", txCountLimit)
+                                 << LOG_KV("consensusLeaderPeriod", leaderPeriod)
+                                 << LOG_KV("consensusTimeoutNum", timeoutNum)
+                                 << LOG_KV("txCountLimitNum", limitNum)
+                                 << LOG_KV("consensusLeaderPeriodNum", periodNum)
+                                 << LOG_KV("latestNumber", _number);
                 wrapperLedgerConfig->setSysConfigFetched(true);
                 _onGetLedgerConfig(nullptr, wrapperLedgerConfig);
             }
