@@ -226,7 +226,7 @@ bool StorageSetter::syncTableSetter(const bcos::storage::TableFactoryInterface::
         auto ret = table->setRow(_row, entry);
 
         LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", _tableName)
-                          << LOG_KV("row", _row) << LOG_KV("value", _fieldValue);
+                          << LOG_KV("row", _row);
         return ret;
     }
     else

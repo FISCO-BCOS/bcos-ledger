@@ -642,8 +642,8 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                     _onGetConfig(_error, "", -1);
                     return;
                 }
-                // The param was reset at height getLatestBlockNumber(), and takes effect in next block.
-                // So we query the status of getLatestBlockNumber() + 1.
+                // The param was reset at height getLatestBlockNumber(), and takes effect in next
+                // block. So we query the status of getLatestBlockNumber() + 1.
                 auto number = _number + 1;
                 if (!_configEntry)
                 {
@@ -724,7 +724,7 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
     std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
 {
     auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
-    getLatestBlockNumber([self, _type, _onGetConfig](BlockNumber _num) {
+    getLatestBlockNumber([self, _type, _onGetConfig](BlockNumber _number) {
         auto ledger = self.lock();
         if (!ledger)
         {
@@ -733,7 +733,10 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
             _onGetConfig(error, nullptr);
             return;
         }
-        ledger->getStorageGetter()->asyncGetConsensusConfig(_type, _num,
+        // The param was reset at height getLatestBlockNumber(), and takes effect in next
+        // block. So we query the status of getLatestBlockNumber() + 1.
+        auto number = _number + 1;
+        ledger->getStorageGetter()->asyncGetConsensusConfig(_type, number,
             ledger->getMemoryTableFactory(0), ledger->m_blockFactory->cryptoSuite()->keyFactory(),
             [_onGetConfig](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
                 if (!_error || _error->errorCode() == CommonError::SUCCESS)
@@ -853,7 +856,7 @@ void Ledger::getLatestBlockNumber(std::function<void(protocol::BlockNumber)> _on
 {
     if (m_blockNumber != -1)
     {
-        LEDGER_LOG(DEBUG) << LOG_BADGE("getLatestBlockNumber") << LOG_DESC("blockNumber cache hit")
+        LEDGER_LOG(TRACE) << LOG_BADGE("getLatestBlockNumber") << LOG_DESC("blockNumber cache hit")
                           << LOG_KV("number", m_blockNumber);
         _onGetNumber(m_blockNumber);
         return;
@@ -901,7 +904,7 @@ void Ledger::getLatestBlockHash(
 {
     if (m_blockHash != HashType())
     {
-        LEDGER_LOG(DEBUG) << LOG_BADGE("getLatestBlockHash") << LOG_DESC("blockHash cache hit")
+        LEDGER_LOG(TRACE) << LOG_BADGE("getLatestBlockHash") << LOG_DESC("blockHash cache hit")
                           << LOG_KV("hash", m_blockHash.hex());
         _onGetHash(m_blockHash.hex());
         return;
@@ -1358,7 +1361,10 @@ void Ledger::asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::H
     std::vector<std::string> nodeTypeList = {CONSENSUS_SEALER, CONSENSUS_OBSERVER};
     getLatestBlockNumber(
         [=](BlockNumber _number) {
-            storageGetter->asyncGetConsensusConfigList(nodeTypeList, _number, tableFactory,
+            // The param was reset at height getLatestBlockNumber(), and takes effect in next
+            // block. So we query the status of getLatestBlockNumber() + 1.
+            auto number = _number + 1;
+            storageGetter->asyncGetConsensusConfigList(nodeTypeList, number, tableFactory,
                 m_blockFactory->cryptoSuite()->keyFactory(),
                 [wrapperLedgerConfig, _onGetLedgerConfig](Error::Ptr _error,
                     std::map<std::string, consensus::ConsensusNodeListPtr> _nodeMap) {
