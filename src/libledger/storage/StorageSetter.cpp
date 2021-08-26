@@ -177,7 +177,7 @@ void StorageSetter::recursiveBuildDir(
                               << LOG_KV("str", subdirectories);
             return;
         }
-        FileInfo newDirectory(dir, FS_TYPE_DIR, 0);
+        FileInfo newDirectory(dir, FS_TYPE_DIR);
         bool exist = false;
         for (const FileInfo& _f : parentDir.getSubDir())
         {

@@ -277,9 +277,9 @@ BOOST_AUTO_TEST_CASE(testGetterSetter)
 
 BOOST_AUTO_TEST_CASE(testDirInfo)
 {
-    auto f1 = std::make_shared<FileInfo>("test1", "dir", 0);
-    auto f2 = std::make_shared<FileInfo>("test2", "dir", 0);
-    auto f3 = std::make_shared<FileInfo>("test3", "dir", 0);
+    auto f1 = std::make_shared<FileInfo>("test1", "dir");
+    auto f2 = std::make_shared<FileInfo>("test2", "dir");
+    auto f3 = std::make_shared<FileInfo>("test3", "dir");
     std::vector<FileInfo> v;
     v.emplace_back(*f1);
     v.emplace_back(*f2);
