@@ -93,7 +93,7 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     _tableFactory->createTable(SYS_NUMBER_2_HASH, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_NUMBER_2_BLOCK_HEADER, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_NUMBER_2_TXS, "block_num", SYS_VALUE);
-    _tableFactory->createTable(SYS_HASH_2_RECEIPT, "block_num", SYS_VALUE);
+    _tableFactory->createTable(SYS_HASH_2_RECEIPT, "tx_hash", SYS_VALUE);
     _tableFactory->createTable(SYS_BLOCK_NUMBER_2_NONCES, "block_num", SYS_VALUE);
     createFileSystemTables(_tableFactory);
     // db sync commit
@@ -177,7 +177,7 @@ void StorageSetter::recursiveBuildDir(
                               << LOG_KV("str", subdirectories);
             return;
         }
-        FileInfo newDirectory(dir, FS_TYPE_DIR, 0);
+        FileInfo newDirectory(dir, FS_TYPE_DIR);
         bool exist = false;
         for (const FileInfo& _f : parentDir.getSubDir())
         {
@@ -226,7 +226,7 @@ bool StorageSetter::syncTableSetter(const bcos::storage::TableFactoryInterface::
         auto ret = table->setRow(_row, entry);
 
         LEDGER_LOG(TRACE) << LOG_BADGE("Write data to DB") << LOG_KV("openTable", _tableName)
-                          << LOG_KV("row", _row) << LOG_KV("value", _fieldValue);
+                          << LOG_KV("row", _row);
         return ret;
     }
     else

@@ -186,7 +186,10 @@ public:
                 p2.set_value(true);
             });
             BOOST_CHECK_EQUAL(f2.get(), true);
+        }
 
+        for (int i = 0; i < _number; ++i)
+        {
             std::promise<bool> p3;
             auto f3 = p3.get_future();
             m_ledger->asyncCommitBlock(m_fakeBlocks->at(i)->blockHeader(),
@@ -360,7 +363,7 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetBlockHashByNumber(1000, [=, &p2](Error::Ptr _error, HashType _hash) {
-        BOOST_CHECK_EQUAL(_error, nullptr);
+        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
         BOOST_CHECK_EQUAL(_hash, HashType());
         p2.set_value(true);
     });
@@ -389,7 +392,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
     auto f1 = p1.get_future();
     // error hash
     m_ledger->asyncGetBlockNumberByHash(HashType(), [&](Error::Ptr _error, BlockNumber _number) {
-        BOOST_CHECK_EQUAL(_error, nullptr);
+        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
         BOOST_CHECK_EQUAL(_number, -1);
         p1.set_value(true);
     });
@@ -398,7 +401,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
     auto f2 = p2.get_future();
     m_ledger->asyncGetBlockNumberByHash(
         HashType("123"), [&](Error::Ptr _error, BlockNumber _number) {
-            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
             BOOST_CHECK_EQUAL(_number, -1);
             p2.set_value(true);
         });
@@ -459,6 +462,7 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
             BOOST_CHECK_EQUAL(_nodeList->size(), 0);
             p1.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
@@ -469,6 +473,7 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
             BOOST_CHECK(_nodeList->size() == 0);
             p2.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f2.get(), true);
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
@@ -479,8 +484,51 @@ BOOST_AUTO_TEST_CASE(getNodeListByType)
             BOOST_CHECK(_nodeList->size() == 0);
             p3.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f3.get(), true);
+}
+
+BOOST_AUTO_TEST_CASE(testNodeListByType)
+{
+    initFixture();
+    std::promise<bool> p1;
+    auto f1 = p1.get_future();
+    m_ledger->asyncGetNodeListByType(
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_nodeList->size(), 4);
+            p1.set_value(true);
+        });
     BOOST_CHECK_EQUAL(f1.get(), true);
+
+    consensus::ConsensusNodeList consensusNodeList;
+    auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto node =
+        std::make_shared<consensus::ConsensusNode>(signImpl->generateKeyPair()->publicKey(), 10);
+    consensusNodeList.emplace_back(node);
+    auto tableFactory = getTableFactory(0);
+    m_storageSetter->setConsensusConfig(tableFactory, CONSENSUS_SEALER, consensusNodeList, "5");
+    tableFactory->commit();
+
+    std::promise<bool> p2;
+    auto f2 = p2.get_future();
+    m_ledger->asyncGetNodeListByType(
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_nodeList->size(), 4);
+            p2.set_value(true);
+        });
     BOOST_CHECK_EQUAL(f2.get(), true);
+
+    initChain(5);
+
+    std::promise<bool> p3;
+    auto f3 = p3.get_future();
+    m_ledger->asyncGetNodeListByType(
+        CONSENSUS_SEALER, [&](Error::Ptr _error, consensus::ConsensusNodeListPtr _nodeList) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK_EQUAL(_nodeList->size(), 5);
+            p3.set_value(true);
+        });
     BOOST_CHECK_EQUAL(f3.get(), true);
 }
 
@@ -498,6 +546,7 @@ BOOST_AUTO_TEST_CASE(commit)
             BOOST_CHECK(_config == nullptr);
             p1.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
@@ -507,9 +556,170 @@ BOOST_AUTO_TEST_CASE(commit)
         BOOST_CHECK(_config == nullptr);
         p2.set_value(true);
     });
-    BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
 }
+
+BOOST_AUTO_TEST_CASE(parallelCommitSameBlock)
+{
+    initFixture();
+    initBlocks(5);
+
+    // test parallel commit
+    auto table = getTableFactory(1);
+    auto txDataList = std::make_shared<std::vector<bytesPointer>>();
+    auto txHashList = std::make_shared<protocol::HashList>();
+    for (size_t j = 0; j < m_fakeBlocks->at(0)->transactionsSize(); ++j)
+    {
+        auto txData = m_fakeBlocks->at(0)->transaction(j)->encode(false);
+        auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
+        txDataList->emplace_back(txPointer);
+        txHashList->emplace_back(m_fakeBlocks->at(0)->transaction(j)->hash());
+    }
+    m_storage->addStateCache(1, table);
+
+    std::promise<bool> p1;
+    auto f1 = p1.get_future();
+    m_ledger->asyncStoreTransactions(txDataList, txHashList, [=, &p1](Error::Ptr _error) {
+        BOOST_CHECK_EQUAL(_error, nullptr);
+        p1.set_value(true);
+    });
+    BOOST_CHECK_EQUAL(f1.get(), true);
+
+    std::promise<bool> p2;
+    auto f2 = p2.get_future();
+    m_ledger->asyncStoreReceipts(table, m_fakeBlocks->at(0), [=, &p2](Error::Ptr _error) {
+        BOOST_CHECK_EQUAL(_error, nullptr);
+        p2.set_value(true);
+    });
+    BOOST_CHECK_EQUAL(f2.get(), true);
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, 2), [&](const tbb::blocked_range<size_t>& _r) {
+        for (auto i = _r.begin(); i < _r.end(); ++i)
+        {
+            std::promise<bool> p3;
+            auto f3 = p3.get_future();
+            m_ledger->asyncCommitBlock(m_fakeBlocks->at(0)->blockHeader(),
+                [&](Error::Ptr _error, LedgerConfig::Ptr _config) {
+                    if (_error)
+                    {
+                        BOOST_CHECK(_error->errorCode() == LedgerError::ErrorCommitBlock);
+                        BCOS_LOG(INFO) << LOG_BADGE("TEST") << LOG_DESC(_error->errorMessage());
+                    }
+                    if (_config)
+                    {
+                        BOOST_CHECK_EQUAL(_config->blockNumber(), 1);
+                        BOOST_CHECK(!_config->consensusNodeList().empty());
+                        BOOST_CHECK(!_config->observerNodeList().empty());
+                    }
+                    p3.set_value(true);
+                });
+            BOOST_CHECK_EQUAL(f3.get(), true);
+        }
+    });
+}
+
+BOOST_AUTO_TEST_CASE(parallelCommit)
+{
+    initFixture();
+    int blockNumber = 20;
+    initBlocks(blockNumber);
+
+    // test parallel commit 20 blocks
+    auto negativeTable = getTableFactory(-1);
+    m_storage->addStateCache(-1, negativeTable);
+    for (int i = 0; i < blockNumber; ++i)
+    {
+        auto table = getTableFactory(i + 1);
+        auto txDataList = std::make_shared<std::vector<bytesPointer>>();
+        auto txHashList = std::make_shared<protocol::HashList>();
+        for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
+        {
+            auto txData = m_fakeBlocks->at(i)->transaction(j)->encode(false);
+            auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
+            txDataList->emplace_back(txPointer);
+            txHashList->emplace_back(m_fakeBlocks->at(i)->transaction(j)->hash());
+        }
+        m_storage->addStateCache(i + 1, table);
+
+        std::promise<bool> p1;
+        auto f1 = p1.get_future();
+        m_ledger->asyncStoreTransactions(txDataList, txHashList, [=, &p1](Error::Ptr _error) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            p1.set_value(true);
+        });
+        BOOST_CHECK_EQUAL(f1.get(), true);
+
+        std::promise<bool> p2;
+        auto f2 = p2.get_future();
+        m_ledger->asyncStoreReceipts(table, m_fakeBlocks->at(i), [=, &p2](Error::Ptr _error) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            p2.set_value(true);
+        });
+        BOOST_CHECK_EQUAL(f2.get(), true);
+    }
+    BCOS_LOG(INFO) << LOG_BADGE("TEST") << LOG_DESC("==============Commit==============");
+
+    auto blockQueue = std::make_shared<std::queue<protocol::Block::Ptr>>();
+    for (int i = 0; i < blockNumber; ++i)
+    {
+        blockQueue->push(m_fakeBlocks->at(i));
+    }
+    auto count = std::make_shared<std::atomic_int>();
+    *count = 0;
+    while (!blockQueue->empty())
+    {
+        auto number = blockQueue->size();
+        auto blockVector = std::make_shared<std::vector<Block::Ptr>>();
+        for (size_t i = 0; i < number; ++i)
+        {
+            blockVector->push_back(blockQueue->front());
+            blockQueue->pop();
+        }
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, number),
+            [&, blockQueue, blockVector, count](const tbb::blocked_range<size_t>& _r) {
+                for (auto i = _r.begin(); i < _r.end(); ++i)
+                {
+                    auto block = blockVector->at(i);
+                    std::promise<bool> p;
+                    m_ledger->asyncCommitBlock(
+                        block->blockHeader(), [&, block, blockQueue, count](
+                                                  Error::Ptr _error, LedgerConfig::Ptr _config) {
+                            if (_error)
+                            {
+                                BOOST_CHECK(_error->errorCode() == LedgerError::ErrorCommitBlock);
+                                BCOS_LOG(INFO)
+                                    << LOG_BADGE("TEST") << LOG_DESC(_error->errorMessage());
+                                blockQueue->push(block);
+                            }
+                            if (_config)
+                            {
+                                BCOS_LOG(INFO) << LOG_BADGE("TEST")
+                                               << LOG_KV("commitNumber", _config->blockNumber());
+                                count->fetch_add(1);
+                            }
+                            p.set_value(true);
+                        });
+                    p.get_future().get();
+                }
+            });
+        BCOS_LOG(INFO) << LOG_BADGE("TEST") << LOG_KV("queueSize", blockQueue->size());
+    }
+    while (true)
+    {
+        if (count->load() == blockNumber)
+        {
+            break;
+        }
+    }
+
+    std::promise<bool> promise;
+    m_ledger->asyncGetBlockNumber([&](Error::Ptr, BlockNumber _number) {
+        BOOST_CHECK(_number == blockNumber);
+        promise.set_value(true);
+    });
+    BOOST_CHECK(promise.get_future().get() == true);
+}
+
 
 BOOST_AUTO_TEST_CASE(errorStorage)
 {
@@ -586,6 +796,15 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             p1.set_value(true);
         });
 
+    std::promise<bool> pp1;
+    auto ff1 = pp1.get_future();
+    m_ledger->asyncGetBlockDataByNumber(
+        -1, FULL_BLOCK, [=, &pp1](Error::Ptr _error, Block::Ptr _block) {
+            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK_EQUAL(_block, nullptr);
+            pp1.set_value(true);
+        });
+
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     // cache hit
@@ -646,6 +865,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             p7.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
+    BOOST_CHECK_EQUAL(ff1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);
     BOOST_CHECK_EQUAL(f4.get(), true);
@@ -681,6 +901,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
             p1.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
@@ -692,6 +913,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
             p2.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f2.get(), true);
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
@@ -706,6 +928,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_proof->empty());
             p3.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f3.get(), true);
 
     std::promise<bool> p4;
     auto f4 = p4.get_future();
@@ -718,6 +941,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_proof == nullptr);
             p4.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f4.get(), true);
 
     std::promise<bool> p5;
     auto f5 = p5.get_future();
@@ -730,10 +954,6 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_proof == nullptr);
             p5.set_value(true);
         });
-    BOOST_CHECK_EQUAL(f1.get(), true);
-    BOOST_CHECK_EQUAL(f2.get(), true);
-    BOOST_CHECK_EQUAL(f3.get(), true);
-    BOOST_CHECK_EQUAL(f4.get(), true);
     BOOST_CHECK_EQUAL(f5.get(), true);
 }
 
@@ -770,7 +990,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
     // error hash
     m_ledger->asyncGetTransactionReceiptByHash(HashType(), false,
         [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
-            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
             BOOST_CHECK_EQUAL(_receipt, nullptr);
             BOOST_CHECK(_proof == nullptr);
             p3.set_value(true);
@@ -780,7 +1000,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
     auto f4 = p4.get_future();
     m_ledger->asyncGetTransactionReceiptByHash(HashType("123"), true,
         [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
-            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
             BOOST_CHECK_EQUAL(_receipt, nullptr);
             BOOST_CHECK(_proof == nullptr);
             p4.set_value(true);
@@ -879,7 +1099,6 @@ BOOST_AUTO_TEST_CASE(preStoreReceipt)
 BOOST_AUTO_TEST_CASE(getSystemConfig)
 {
     initFixture();
-    initChain(5);
 
     std::promise<bool> p1;
     auto f1 = p1.get_future();
@@ -890,30 +1109,44 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
             BOOST_CHECK_EQUAL(_number, 0);
             p1.set_value(true);
         });
+    BOOST_CHECK_EQUAL(f1.get(), true);
 
-    std::promise<bool> p2;
-    auto f2 = p2.get_future();
-    // hit cache
+    auto tableFactory = getTableFactory(0);
+    m_storageSetter->setSysConfig(tableFactory, SYSTEM_KEY_TX_COUNT_LIMIT, "2000", "5");
+    tableFactory->commit();
+
+    std::promise<bool> pp1;
+    m_ledger->asyncGetSystemConfigByKey(
+        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
+            BOOST_CHECK(_error != nullptr);
+            BOOST_CHECK_EQUAL(_value, "");
+            BOOST_CHECK_EQUAL(_number, -1);
+            pp1.set_value(true);
+        });
+    BOOST_CHECK_EQUAL(pp1.get_future().get(), true);
+
+    initChain(5);
+
+    std::promise<bool> pp2;
     m_ledger->asyncGetSystemConfigByKey(
         SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
             BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK_EQUAL(_value, "1000");
-            BOOST_CHECK_EQUAL(_number, 0);
-            p2.set_value(true);
+            BOOST_CHECK_EQUAL(_value, "2000");
+            BOOST_CHECK_EQUAL(_number, 5);
+            pp2.set_value(true);
         });
+    BOOST_CHECK_EQUAL(pp2.get_future().get(), true);
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
     // get error key
     m_ledger->asyncGetSystemConfigByKey(
         "test", [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
-            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK(_error->errorCode() == LedgerError::GetStorageError);
             BOOST_CHECK_EQUAL(_value, "");
             BOOST_CHECK_EQUAL(_number, -1);
             p3.set_value(true);
         });
-    BOOST_CHECK_EQUAL(f1.get(), true);
-    BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);
 }
 

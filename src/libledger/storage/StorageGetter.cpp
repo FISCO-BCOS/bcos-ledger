@@ -119,7 +119,7 @@ void StorageGetter::getNoncesBatchFromStorage(bcos::protocol::BlockNumber _start
                 retMap->emplace(
                     std::make_pair(boost::lexical_cast<BlockNumber>(number), nonceList));
             }
-            catch (std::out_of_range const& e)
+            catch (std::exception const& e)
             {
                 continue;
             }
@@ -195,11 +195,6 @@ void StorageGetter::asyncGetSystemConfigList(const std::shared_ptr<std::vector<s
             // Note: must make sure all the configs are not empty
             if (!_entries.count(key))
             {
-                auto entry = _entries.at(key);
-                if (entry)
-                {
-                    continue;
-                }
                 auto errorMsg =
                     "asyncGetSystemConfigList failed for get empty config for key: " + key;
                 LEDGER_LOG(ERROR) << LOG_DESC(errorMsg) << LOG_KV("key", key);
@@ -212,13 +207,13 @@ void StorageGetter::asyncGetSystemConfigList(const std::shared_ptr<std::vector<s
     });
 }
 
-void StorageGetter::asyncGetConsensusConfig(std::string const& _nodeType,
+void StorageGetter::asyncGetConsensusConfig(std::string const& _nodeType, BlockNumber _number,
     const storage::TableFactoryInterface::Ptr& _tableFactory, crypto::KeyFactory::Ptr _keyFactory,
     std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig)
 {
     std::vector<std::string> nodeTypeList;
     nodeTypeList.emplace_back(_nodeType);
-    asyncGetConsensusConfigList(nodeTypeList, _tableFactory, _keyFactory,
+    asyncGetConsensusConfigList(nodeTypeList, _number, _tableFactory, _keyFactory,
         [_nodeType, _onGetConfig](
             Error::Ptr _error, std::map<std::string, consensus::ConsensusNodeListPtr> _nodeMap) {
             if (_error)
@@ -236,7 +231,8 @@ void StorageGetter::asyncGetConsensusConfig(std::string const& _nodeType,
 }
 
 void StorageGetter::asyncGetConsensusConfigList(std::vector<std::string> const& _nodeTypeList,
-    const TableFactoryInterface::Ptr& _tableFactory, crypto::KeyFactory::Ptr _keyFactory,
+    protocol::BlockNumber _number, const TableFactoryInterface::Ptr& _tableFactory,
+    crypto::KeyFactory::Ptr _keyFactory,
     std::function<void(Error::Ptr, std::map<std::string, consensus::ConsensusNodeListPtr>)>
         _onGetConfig)
 {
@@ -253,7 +249,7 @@ void StorageGetter::asyncGetConsensusConfigList(std::vector<std::string> const& 
         return;
     }
     table->asyncGetPrimaryKeys(
-        nullptr, [_onGetConfig, table, _nodeTypeList, _keyFactory, emptyMap](
+        nullptr, [_onGetConfig, table, _nodeTypeList, _keyFactory, _number, emptyMap](
                      const Error::Ptr& _error, std::vector<std::string> _keys) {
             if (_error && _error->errorCode() != CommonError::SUCCESS)
             {
@@ -261,39 +257,48 @@ void StorageGetter::asyncGetConsensusConfigList(std::vector<std::string> const& 
                 return;
             }
             auto keys = std::make_shared<std::vector<std::string>>(_keys);
-            table->asyncGetRows(
-                keys, [_nodeTypeList, _keyFactory, _onGetConfig, emptyMap](const Error::Ptr& _error,
-                          const std::map<std::string, Entry::Ptr>& _entryMap) {
-                    if (_error && _error->errorCode() != CommonError::SUCCESS)
+            table->asyncGetRows(keys, [_nodeTypeList, _keyFactory, _onGetConfig, _number, emptyMap](
+                                          const Error::Ptr& _error,
+                                          const std::map<std::string, Entry::Ptr>& _entryMap) {
+                if (_error && _error->errorCode() != CommonError::SUCCESS)
+                {
+                    _onGetConfig(_error, emptyMap);
+                    return;
+                }
+                std::map<std::string, consensus::ConsensusNodeListPtr> nodeMap;
+                for (auto const& type : _nodeTypeList)
+                {
+                    auto node = std::make_shared<ConsensusNodeList>();
+                    for (const auto& nodePair : _entryMap)
                     {
-                        _onGetConfig(_error, emptyMap);
-                        return;
-                    }
-                    std::map<std::string, consensus::ConsensusNodeListPtr> nodeMap;
-                    for (auto const& type : _nodeTypeList)
-                    {
-                        auto node = std::make_shared<ConsensusNodeList>();
-                        for (const auto& nodePair : _entryMap)
+                        if (!nodePair.second)
                         {
-                            if (!nodePair.second)
-                            {
-                                continue;
-                            }
+                            continue;
+                        }
+                        try
+                        {
                             auto nodeType = nodePair.second->getField(NODE_TYPE);
-                            if (nodeType == type)
+                            auto enableNum = boost::lexical_cast<BlockNumber>(
+                                nodePair.second->getField(NODE_ENABLE_NUMBER));
+                            auto weight = boost::lexical_cast<uint64_t>(
+                                nodePair.second->getField(NODE_WEIGHT));
+                            if ((nodeType == type) && enableNum <= _number)
                             {
                                 crypto::NodeIDPtr nodeID =
                                     _keyFactory->createKey(*fromHexString(nodePair.first));
                                 // Note: use try-catch to handle the exception case
-                                auto weight = boost::lexical_cast<uint64_t>(
-                                    nodePair.second->getField(NODE_WEIGHT));
                                 node->emplace_back(std::make_shared<ConsensusNode>(nodeID, weight));
                             }
                         }
-                        nodeMap[type] = node;
+                        catch (...)
+                        {
+                            continue;
+                        }
                     }
-                    _onGetConfig(nullptr, nodeMap);
-                });
+                    nodeMap[type] = node;
+                }
+                _onGetConfig(nullptr, nodeMap);
+            });
         });
 }
 

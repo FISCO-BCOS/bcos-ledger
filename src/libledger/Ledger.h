@@ -30,6 +30,7 @@
 #include "bcos-framework/libutilities/ThreadPool.h"
 #include "storage/StorageGetter.h"
 #include "storage/StorageSetter.h"
+#include "utilities/BlockUtilities.h"
 #include "utilities/Common.h"
 #include "utilities/FIFOCache.h"
 #include "utilities/MerkleProofUtility.h"
@@ -55,8 +56,10 @@ public:
 
     bool sysConfigFetched() const { return m_sysConfigFetched; }
     bool consensusConfigFetched() const { return m_consensusConfigFetched; }
+    Mutex& mutex() { return m_mutex; }
 
 private:
+    mutable Mutex m_mutex;
     LedgerConfig::Ptr m_ledgerConfig;
     std::atomic_bool m_sysConfigFetched = {false};
     std::atomic_bool m_consensusConfigFetched = {false};
@@ -71,10 +74,12 @@ public:
         m_storage(_storage),
         m_storageGetter(StorageGetter::storageGetterFactory()),
         m_storageSetter(StorageSetter::storageSetterFactory()),
-        m_merkleProofUtility(std::make_shared<MerkleProofUtility>())
+        m_merkleProofUtility(std::make_shared<MerkleProofUtility>()),
+        m_commitPool(std::make_shared<bcos::ThreadPool>("commitThreadPool", 1))
     {
         assert(m_blockFactory);
         assert(m_storage);
+        assert(m_commitPool);
 
         auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
         auto headerDestructorThread = std::make_shared<ThreadPool>("headerCache", 1);
@@ -86,6 +91,8 @@ public:
         m_receiptCache.setDestructorThread(rcptDestructorThread);
     };
 
+    virtual ~Ledger() { m_commitPool->stop(); }
+
     virtual void stop()
     {
         m_blockCache.stop();
@@ -95,6 +102,8 @@ public:
         m_transactionsCache.stop();
 
         m_receiptCache.stop();
+
+        m_commitPool->stop();
     }
     void asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
         std::function<void(Error::Ptr, LedgerConfig::Ptr)> _onCommitBlock) override;
@@ -157,8 +166,10 @@ public:
 private:
     /****** base block data getter ******/
     void getBlock(const protocol::BlockNumber& _blockNumber, int32_t _blockFlag,
-        std::function<void(Error::Ptr, protocol::Block::Ptr)>);
+        std::function<void(Error::Ptr, BlockFetcher::Ptr)>);
     void getLatestBlockNumber(std::function<void(protocol::BlockNumber)> _onGetNumber);
+    void getLatestBlockHash(
+        protocol::BlockNumber _number, std::function<void(std::string_view)> _onGetHash);
     void getBlockHeader(const bcos::protocol::BlockNumber& _blockNumber,
         std::function<void(Error::Ptr, protocol::BlockHeader::Ptr)> _onGetHeader);
     void getTxs(const bcos::protocol::BlockNumber& _blockNumber,
@@ -201,10 +212,9 @@ private:
 
     inline StorageGetter::Ptr getStorageGetter() { return m_storageGetter; }
     inline StorageSetter::Ptr getStorageSetter() { return m_storageSetter; }
-    inline bcos::storage::StorageInterface::Ptr getStorage() { return m_storage; }
 
-    bool isBlockShouldCommit(
-        const protocol::BlockNumber& _blockNumber, const std::string& _parentHash);
+    void checkBlockShouldCommit(const protocol::BlockNumber& _blockNumber,
+        const std::string& _parentHash, std::function<void(bool)> _onGetResult);
 
     /****** data writer ******/
     void writeNumber(const protocol::BlockNumber& _blockNumber,
@@ -237,6 +247,8 @@ private:
 
     mutable SharedMutex m_blockNumberMutex;
     protocol::BlockNumber m_blockNumber = -1;
+    mutable SharedMutex m_blockHashMutex;
+    crypto::HashType m_blockHash = crypto::HashType();
 
     size_t m_timeout = 10000;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
@@ -244,5 +256,6 @@ private:
     StorageGetter::Ptr m_storageGetter;
     StorageSetter::Ptr m_storageSetter;
     ledger::MerkleProofUtility::Ptr m_merkleProofUtility;
+    bcos::ThreadPool::Ptr m_commitPool = nullptr;
 };
 }  // namespace bcos::ledger
