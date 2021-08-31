@@ -30,57 +30,8 @@ using namespace bcos::storage;
 
 namespace bcos::ledger
 {
-std::string FileInfo::toString()
-{
-    std::stringstream ss;
-    boost::archive::text_oarchive oa(ss);
-    oa << *this;
-    return ss.str();
-}
-
-bool FileInfo::fromString(FileInfo& _f, std::string _str)
-{
-    std::stringstream ss(_str);
-    try
-    {
-        boost::archive::text_iarchive ia(ss);
-        ia >> _f;
-    }
-    catch (boost::archive::archive_exception const& e)
-    {
-        LEDGER_LOG(ERROR) << LOG_BADGE("FileInfo::fromString") << LOG_DESC("deserialization error")
-                          << LOG_KV("e.what", e.what()) << LOG_KV("str", _str);
-        return false;
-    }
-    return true;
-}
-
-std::string DirInfo::toString()
-{
-    std::stringstream ss;
-    boost::archive::text_oarchive oa(ss);
-    oa << *this;
-    return ss.str();
-}
-
-bool DirInfo::fromString(DirInfo& _dir, std::string _str)
-{
-    std::stringstream ss(_str);
-    try
-    {
-        boost::archive::text_iarchive ia(ss);
-        ia >> _dir;
-    }
-    catch (boost::archive::archive_exception const& e)
-    {
-        LEDGER_LOG(ERROR) << LOG_BADGE("DirInfo::fromString") << LOG_DESC("deserialization error")
-                          << LOG_KV("e.what", e.what()) << LOG_KV("str", _str);
-        return false;
-    }
-    return true;
-}
-
-void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tableFactory)
+void StorageSetter::createTables(
+    const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _groupId)
 {
     auto configFields = SYS_VALUE + "," + SYS_CONFIG_ENABLE_BLOCK_NUMBER;
     auto consensusFields = NODE_TYPE + "," + NODE_WEIGHT + "," + NODE_ENABLE_NUMBER;
@@ -95,7 +46,7 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     _tableFactory->createTable(SYS_NUMBER_2_TXS, "block_num", SYS_VALUE);
     _tableFactory->createTable(SYS_HASH_2_RECEIPT, "tx_hash", SYS_VALUE);
     _tableFactory->createTable(SYS_BLOCK_NUMBER_2_NONCES, "block_num", SYS_VALUE);
-    createFileSystemTables(_tableFactory);
+    createFileSystemTables(_tableFactory, _groupId);
     // db sync commit
     auto retPair = _tableFactory->commit();
     if ((retPair.second == nullptr || retPair.second->errorCode() == CommonError::SUCCESS) &&
@@ -113,22 +64,29 @@ void StorageSetter::createTables(const storage::TableFactoryInterface::Ptr& _tab
     }
 }
 
-void StorageSetter::createFileSystemTables(const storage::TableFactoryInterface::Ptr& _tableFactory)
+void StorageSetter::createFileSystemTables(
+    const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _groupId)
 {
-    _tableFactory->createTable(FS_ROOT, SYS_KEY, SYS_VALUE);
+    // create / dir
+    _tableFactory->createTable(FS_ROOT, FS_KEY_NAME, FS_FIELD_COMBINED);
     auto table = _tableFactory->openTable(FS_ROOT);
-    auto typeEntry = table->newEntry();
-    typeEntry->setField(SYS_VALUE, FS_TYPE_DIR);
-    table->setRow(FS_KEY_TYPE, typeEntry);
+    assert(table);
+    auto rootEntry = table->newEntry();
+    rootEntry->setField(FS_FIELD_TYPE, FS_TYPE_DIR);
+    // TODO: set root default permission?
+    rootEntry->setField(FS_FIELD_ACCESS, "");
+    rootEntry->setField(FS_FIELD_OWNER, "root");
+    rootEntry->setField(FS_FIELD_GID, "/usr");
+    rootEntry->setField(FS_FIELD_EXTRA, "");
+    table->setRow(FS_ROOT, rootEntry);
 
-    auto subEntry = table->newEntry();
-    subEntry->setField(SYS_VALUE, DirInfo::emptyDirString());
-    table->setRow(FS_KEY_SUB, subEntry);
+    std::string appsDir = "/" + _groupId + FS_APPS;
+    std::string tableDir = "/" + _groupId + FS_USER_TABLE;
 
-    recursiveBuildDir(_tableFactory, FS_USER_BIN);
-    recursiveBuildDir(_tableFactory, FS_USER_LOCAL);
+    recursiveBuildDir(_tableFactory, FS_USER);
     recursiveBuildDir(_tableFactory, FS_SYS_BIN);
-    recursiveBuildDir(_tableFactory, FS_USER_DATA);
+    recursiveBuildDir(_tableFactory, appsDir);
+    recursiveBuildDir(_tableFactory, tableDir);
 }
 void StorageSetter::recursiveBuildDir(
     const TableFactoryInterface::Ptr& _tableFactory, const std::string& _absoluteDir)
@@ -137,6 +95,7 @@ void StorageSetter::recursiveBuildDir(
     {
         return;
     }
+    // transfer /usr/local/bin => ["usr", "local", "bin"]
     auto dirList = std::make_shared<std::vector<std::string>>();
     std::string absoluteDir = _absoluteDir;
     if (absoluteDir[0] == '/')
@@ -149,67 +108,39 @@ void StorageSetter::recursiveBuildDir(
     }
     boost::split(*dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
     std::string root = "/";
-    DirInfo parentDir;
     for (auto& dir : *dirList)
     {
         auto table = _tableFactory->openTable(root);
+        if (!table)
+        {
+            LEDGER_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
+                              << LOG_DESC("can not open path table") << LOG_KV("tableName", root);
+            return;
+        }
         if (root != "/")
         {
             root += "/";
         }
-        if (!table)
+        auto entry = table->getRow(dir);
+        if (entry)
         {
-            LEDGER_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
-                              << LOG_DESC("can not open table root") << LOG_KV("root", root);
-            return;
-        }
-        auto entry = table->getRow(FS_KEY_SUB);
-        if (!entry)
-        {
-            LEDGER_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
-                              << LOG_DESC("can get entry of FS_KEY_SUB") << LOG_KV("root", root);
-            return;
-        }
-        auto subdirectories = entry->getField(SYS_VALUE);
-        if (!DirInfo::fromString(parentDir, subdirectories))
-        {
-            LEDGER_LOG(ERROR) << LOG_BADGE("recursiveBuildDir") << LOG_DESC("parse error")
-                              << LOG_KV("str", subdirectories);
-            return;
-        }
-        FileInfo newDirectory(dir, FS_TYPE_DIR);
-        bool exist = false;
-        for (const FileInfo& _f : parentDir.getSubDir())
-        {
-            if (_f.getName() == dir)
-            {
-                exist = true;
-                break;
-            }
-        }
-        if (exist)
-        {
+            LEDGER_LOG(DEBUG) << LOG_BADGE("recursiveBuildDir")
+                              << LOG_DESC("dir already existed in parent dir, continue")
+                              << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
             root += dir;
             continue;
         }
-        parentDir.getMutableSubDir().emplace_back(newDirectory);
-        entry->setField(SYS_VALUE, parentDir.toString());
-        table->setRow(FS_KEY_SUB, entry);
+        // not exist, then create table and write in parent dir
+        auto newFileEntry = table->newEntry();
+        newFileEntry->setField(FS_FIELD_TYPE, FS_TYPE_DIR);
+        // FIXME: consider permission inheritance
+        newFileEntry->setField(FS_FIELD_ACCESS, "");
+        newFileEntry->setField(FS_FIELD_OWNER, "root");
+        newFileEntry->setField(FS_FIELD_GID, "/usr");
+        newFileEntry->setField(FS_FIELD_EXTRA, "");
+        table->setRow(dir, newFileEntry);
 
-        std::string newDirPath = root + dir;
-        _tableFactory->createTable(newDirPath, SYS_KEY, SYS_VALUE);
-        auto newTable = _tableFactory->openTable(newDirPath);
-        auto typeEntry = newTable->newEntry();
-        typeEntry->setField(SYS_VALUE, FS_TYPE_DIR);
-        newTable->setRow(FS_KEY_TYPE, typeEntry);
-
-        auto subEntry = newTable->newEntry();
-        subEntry->setField(SYS_VALUE, DirInfo::emptyDirString());
-        newTable->setRow(FS_KEY_SUB, subEntry);
-
-        auto numberEntry = newTable->newEntry();
-        numberEntry->setField(SYS_VALUE, "0");
-        newTable->setRow(FS_KEY_NUM, numberEntry);
+        _tableFactory->createTable(root + dir, FS_KEY_NAME, FS_FIELD_COMBINED);
         root += dir;
     }
 }

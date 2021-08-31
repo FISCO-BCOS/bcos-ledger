@@ -101,9 +101,9 @@ public:
 
         auto tableFactory = getTableFactory(0);
         m_storage->addStateCache(0, tableFactory);
-        auto result = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
+        auto result = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
         BOOST_CHECK(result);
-        auto result2 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
+        auto result2 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
         BOOST_CHECK(result2);
     }
 
@@ -117,12 +117,12 @@ public:
 
         auto tableFactory = getTableFactory(0);
         m_storage->addStateCache(0, tableFactory);
-        auto result1 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
+        auto result1 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
         BOOST_CHECK(!result1);
         m_param->setConsensusTimeout(10);
-        auto result2 = m_ledger->buildGenesisBlock(m_param, 30, "");
+        auto result2 = m_ledger->buildGenesisBlock(m_param, "test", 30, "");
         BOOST_CHECK(!result2);
-        auto result3 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
+        auto result3 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
         BOOST_CHECK(result3);
     }
 
@@ -335,7 +335,7 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
 BOOST_AUTO_TEST_CASE(getBlockNumber)
 {
     auto tableFactory = getTableFactory(0);
-    m_storageSetter->createTables(tableFactory);
+    m_storageSetter->createTables(tableFactory, "test");
     m_storage->addStateCache(0, tableFactory);
     m_storageSetter->setCurrentState(getStateTable(0), SYS_KEY_CURRENT_NUMBER, "-1");
     std::promise<bool> p1;
@@ -429,7 +429,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
 BOOST_AUTO_TEST_CASE(getTotalTransactionCount)
 {
     auto tableFactory = getTableFactory(0);
-    m_storageSetter->createTables(tableFactory);
+    m_storageSetter->createTables(tableFactory, "test");
     m_storage->addStateCache(0, tableFactory);
     m_storageSetter->setCurrentState(getStateTable(0), SYS_KEY_TOTAL_TRANSACTION_COUNT, "");
     m_storageSetter->setCurrentState(getStateTable(0), SYS_KEY_TOTAL_FAILED_TRANSACTION, "");

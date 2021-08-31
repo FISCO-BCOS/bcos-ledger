@@ -43,7 +43,7 @@ public:
         BOOST_TEST(tableFactory != nullptr);
         storageGetter = StorageGetter::storageGetterFactory();
         storageSetter = StorageSetter::storageSetterFactory();
-        storageSetter->createTables(tableFactory);
+        storageSetter->createTables(tableFactory, "test");
     }
     ~TableFactoryFixture() {}
 
@@ -57,25 +57,16 @@ BOOST_FIXTURE_TEST_SUITE(StorageUtilitiesTest, TableFactoryFixture)
 BOOST_AUTO_TEST_CASE(testCreateTable)
 {
     auto table = tableFactory->openTable(FS_ROOT);
-    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_TYPE)->getField(SYS_VALUE), "directory");
-    DirInfo d1;
-    DirInfo::fromString(d1, table->getRow(FS_KEY_SUB)->getField(SYS_VALUE));
-    BOOST_CHECK_EQUAL(d1.getSubDir().at(0).getName(), "usr");
-    BOOST_CHECK_EQUAL(d1.getSubDir().at(1).getName(), "bin");
-    BOOST_CHECK_EQUAL(d1.getSubDir().at(2).getName(), "data");
+    BOOST_CHECK_EQUAL(table->getRow(FS_ROOT)->getField(FS_FIELD_TYPE), FS_TYPE_DIR);
+    BOOST_CHECK(table->getPrimaryKeys(nullptr).size() == 4);
 
-    table = tableFactory->openTable("/usr");
-    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_TYPE)->getField(SYS_VALUE), "directory");
-    DirInfo d2;
-    DirInfo::fromString(d2, table->getRow(FS_KEY_SUB)->getField(SYS_VALUE));
-    BOOST_CHECK_EQUAL(d2.getSubDir().at(0).getName(), "bin");
-    BOOST_CHECK_EQUAL(d2.getSubDir().at(1).getName(), "local");
+    BOOST_CHECK_EQUAL(table->getRow("usr")->getField(FS_FIELD_TYPE), FS_TYPE_DIR);
+    BOOST_CHECK_EQUAL(table->getRow("test")->getField(FS_FIELD_TYPE), FS_TYPE_DIR);
+    BOOST_CHECK_EQUAL(table->getRow("sys")->getField(FS_FIELD_TYPE), FS_TYPE_DIR);
 
-    table = tableFactory->openTable("/bin");
-    BOOST_CHECK_EQUAL(table->getRow(FS_KEY_TYPE)->getField(SYS_VALUE), "directory");
-    DirInfo d3;
-    DirInfo::fromString(d3, table->getRow(FS_KEY_SUB)->getField(SYS_VALUE));
-    BOOST_CHECK_EQUAL(d3.getSubDir().at(0).getName(), "extensions");
+    table = tableFactory->openTable("/test");
+    BOOST_CHECK(table->getRow("apps")->getField(FS_FIELD_TYPE) == FS_TYPE_DIR);
+    BOOST_CHECK(table->getRow("tables")->getField(FS_FIELD_TYPE) == FS_TYPE_DIR);
 }
 BOOST_AUTO_TEST_CASE(testTableSetterGetterByRowAndField)
 {
@@ -97,7 +88,7 @@ BOOST_AUTO_TEST_CASE(testErrorOpenTable)
 {
     auto tableFactory = fakeErrorTableFactory();
     auto storageSetter = StorageSetter::storageSetterFactory();
-    BOOST_CHECK_THROW(storageSetter->createTables(tableFactory), CreateSysTableFailed);
+    BOOST_CHECK_THROW(storageSetter->createTables(tableFactory, "test"), CreateSysTableFailed);
     BOOST_CHECK_THROW(
         storageSetter->syncTableSetter(tableFactory, "errorTable", "error", "error", ""),
         OpenSysTableFailed);
@@ -274,32 +265,5 @@ BOOST_AUTO_TEST_CASE(testGetterSetter)
             BOOST_CHECK(!_nodeList->empty());
         });
 }
-
-BOOST_AUTO_TEST_CASE(testDirInfo)
-{
-    auto f1 = std::make_shared<FileInfo>("test1", "dir");
-    auto f2 = std::make_shared<FileInfo>("test2", "dir");
-    auto f3 = std::make_shared<FileInfo>("test3", "dir");
-    std::vector<FileInfo> v;
-    v.emplace_back(*f1);
-    v.emplace_back(*f2);
-    v.emplace_back(*f3);
-    auto d = std::make_shared<DirInfo>(v);
-
-    auto ret = d->toString();
-    std::cout << ret << std::endl;
-    DirInfo d2;
-    BOOST_CHECK_EQUAL(DirInfo::fromString(d2, ret), true);
-    BOOST_CHECK_EQUAL(DirInfo::fromString(d2, ret), true);
-    BOOST_CHECK_EQUAL(d->getSubDir().at(1).getName(), d2.getSubDir().at(1).getName());
-    BOOST_CHECK_EQUAL(DirInfo::fromString(d2, "123"), false);
-
-    auto d_e = std::make_shared<DirInfo>();
-    auto ret_e = d_e->toString();
-    std::cout << ret_e << std::endl;
-    DirInfo d2_e;
-    BOOST_CHECK_EQUAL(DirInfo::fromString(d2_e, ret_e), true);
-}
-
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
