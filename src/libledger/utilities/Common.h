@@ -42,18 +42,22 @@ static const std::string NODE_ENABLE_NUMBER = "enable_number";
 
 // FileSystem paths
 static const std::string FS_ROOT = "/";
-static const std::string FS_USER_BIN = "/usr/bin";
-static const std::string FS_USER_LOCAL = "/usr/local";
-static const std::string FS_SYS_BIN = "/bin/extensions";
-static const std::string FS_USER_DATA = "/data";
+static const std::string FS_APPS = "/apps";
+static const std::string FS_USER = "/usr";
+static const std::string FS_SYS_BIN = "/sys";
+static const std::string FS_USER_TABLE = "/tables";
 // FileSystem keys
-static const std::string FS_KEY_TYPE = "type";
-static const std::string FS_KEY_SUB = "subdirectories";
-static const std::string FS_KEY_NUM = "enable_number";
+static const std::string FS_KEY_NAME = "name";
+static const std::string FS_FIELD_TYPE = "type";
+static const std::string FS_FIELD_ACCESS = "access";
+static const std::string FS_FIELD_OWNER = "uid";
+static const std::string FS_FIELD_GID = "gid";
+static const std::string FS_FIELD_EXTRA = "extra";
+static const std::string FS_FIELD_COMBINED = "type,access,uid,gid,extra";
+
 // FileSystem file type
 static const std::string FS_TYPE_DIR = "directory";
 static const std::string FS_TYPE_CONTRACT = "contract";
-static const std::string FS_TYPE_LINK = "link";
 
 enum LedgerError : int32_t
 {

@@ -38,55 +38,6 @@ namespace bcos::ledger
 {
 DERIVE_BCOS_EXCEPTION(OpenSysTableFailed);
 DERIVE_BCOS_EXCEPTION(CreateSysTableFailed);
-class FileInfo
-{
-public:
-    FileInfo() = default;
-    FileInfo(const std::string& name, const std::string& type)
-      : name(name), type(type)
-    {}
-    const std::string& getName() const { return name; }
-    const std::string& getType() const { return type; }
-
-    std::string toString();
-    static bool fromString(FileInfo& _f, std::string _str);
-
-private:
-    friend class boost::serialization::access;
-    template <typename Archive>
-    void serialize(Archive& ar, const unsigned int)
-    {
-        ar& name;
-        ar& type;
-    }
-    std::string name;
-    std::string type;
-};
-class DirInfo
-{
-public:
-    DirInfo() = default;
-    explicit DirInfo(const std::vector<FileInfo>& subDir) : subDir(subDir) {}
-    const std::vector<FileInfo>& getSubDir() const { return subDir; }
-    std::vector<FileInfo>& getMutableSubDir() { return subDir; }
-    std::string toString();
-    static bool fromString(DirInfo& _dir, std::string _str);
-    static std::string emptyDirString()
-    {
-        DirInfo emptyDir;
-        return emptyDir.toString();
-    }
-
-private:
-    friend class boost::serialization::access;
-    template <typename Archive>
-    void serialize(Archive& ar, const unsigned int)
-    {
-        ar& subDir;
-    }
-    std::vector<FileInfo> subDir;
-};
-
 class StorageSetter final
 {
 public:
@@ -97,9 +48,11 @@ public:
         return std::make_shared<StorageSetter>();
     }
 
-    void createTables(const storage::TableFactoryInterface::Ptr& _tableFactory);
+    void createTables(
+        const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _groupId);
 
-    void createFileSystemTables(const storage::TableFactoryInterface::Ptr& _tableFactory);
+    void createFileSystemTables(
+        const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _groupId);
     void recursiveBuildDir(
         const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _absoluteDir);
     /**

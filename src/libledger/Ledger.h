@@ -160,8 +160,8 @@ public:
     }
 
     /****** init ledger ******/
-    bool buildGenesisBlock(
-        LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit, std::string _genesisData);
+    bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::string& _groupId,
+        size_t _gasLimit, const std::string& _genesisData);
 
 private:
     /****** base block data getter ******/
@@ -238,6 +238,7 @@ private:
     void notifyCommittedBlockNumber(protocol::BlockNumber _blockNumber);
 
     /****** runtime cache ******/
+    // FIXME: FIFOCache may unexpected modify
     FIFOCache<protocol::Block::Ptr, protocol::Block> m_blockCache;
     FIFOCache<protocol::BlockHeader::Ptr, protocol::BlockHeader> m_blockHeaderCache;
     FIFOCache<protocol::TransactionsPtr, protocol::Transactions> m_transactionsCache;
