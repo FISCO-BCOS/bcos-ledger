@@ -449,7 +449,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
                     {
                         auto proofMap = std::make_shared<std::map<std::string, MerkleProofPtr>>(
                             con_proofMap->begin(), con_proofMap->end());
-                        LEDGER_LOG(INFO) << LOG_BADGE("asyncGetBatchTxsByHashList")
+                        LEDGER_LOG(DEBUG) << LOG_BADGE("asyncGetBatchTxsByHashList")
                                          << LOG_DESC("get tx list and proofMap complete")
                                          << LOG_KV("txHashListSize", _txHashList->size())
                                          << LOG_KV("proofMapSize", proofMap->size());
@@ -474,7 +474,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
             }
             else
             {
-                LEDGER_LOG(INFO) << LOG_BADGE("asyncGetBatchTxsByHashList")
+                LEDGER_LOG(DEBUG) << LOG_BADGE("asyncGetBatchTxsByHashList")
                                  << LOG_DESC("get tx list complete")
                                  << LOG_KV("txHashListSize", _txHashList->size())
                                  << LOG_KV("withProof", _withProof);
@@ -1501,7 +1501,7 @@ void Ledger::writeTotalTransactionCount(
     // empty block
     if (block->transactionsSize() == 0 && block->receiptsSize() == 0)
     {
-        LEDGER_LOG(ERROR) << LOG_BADGE("writeTotalTransactionCount")
+        LEDGER_LOG(WARNING) << LOG_BADGE("writeTotalTransactionCount")
                           << LOG_DESC("Empty block, stop update total tx count")
                           << LOG_KV("blockNumber", block->blockHeader()->number());
         return;
@@ -1660,7 +1660,7 @@ bool Ledger::buildGenesisBlock(
     {
         LEDGER_LOG(INFO) << LOG_BADGE("buildGenesisBlock")
                          << LOG_DESC(
-                                std::string(SYS_NUMBER_2_BLOCK_HEADER) + " table does not exist");
+                                std::string(SYS_NUMBER_2_BLOCK_HEADER) + " table does not exist, create system tables");
         getStorageSetter()->createTables(getMemoryTableFactory(0));
     };
     Block::Ptr block = nullptr;
@@ -1690,7 +1690,8 @@ bool Ledger::buildGenesisBlock(
     if (block == nullptr)
     {
         auto txLimit = _ledgerConfig->blockTxCountLimit();
-        LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit);
+        LEDGER_LOG(INFO) << LOG_DESC("Build the genesis block")
+                         << LOG_KV("genesisData", _genesisData) << LOG_KV("txLimit", txLimit);
         auto tableFactory = getMemoryTableFactory(0);
         // build a block
         block = m_blockFactory->createBlock();
