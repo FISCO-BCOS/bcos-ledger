@@ -91,16 +91,14 @@ void MerkleProofUtility::parseMerkleMap(
     // trans parent2ChildList into child2Parent concurrently
     tbb::parallel_for_each(parent2ChildList->begin(), parent2ChildList->end(),
         [&](std::pair<const std::string, std::vector<std::string>>& _childListIterator) {
-            auto childList = _childListIterator.second;
-            auto parent = _childListIterator.first;
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, childList.size()),
-                [=, &child2Parent](const tbb::blocked_range<size_t>& range) {
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, _childListIterator.second.size()),
+                [&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i < range.end(); i++)
                     {
-                        std::string child = childList[i];
+                        std::string child = _childListIterator.second[i];
                         if (!child.empty())
                         {
-                            child2Parent[child] = parent;
+                            child2Parent[child] = _childListIterator.first;
                         }
                     }
                 });
