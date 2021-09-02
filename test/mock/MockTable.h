@@ -21,7 +21,7 @@
 
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/libtable/Table.h"
-#include "bcos-framework/libtable/TableFactory.h"
+#include "bcos-framework/libtable/TableStorage.h"
 #include "bcos-ledger/libledger/utilities/Common.h"
 #include <tbb/concurrent_unordered_map.h>
 
@@ -36,7 +36,7 @@ public:
     using Ptr = std::shared_ptr<MockTable>;
 
     explicit MockTable(std::string const& _tableName)
-      : Table(nullptr, nullptr, nullptr, 0), m_tableName(_tableName)
+      : Table(nullptr, nullptr, 0), m_tableName(_tableName)
     {}
 
     std::shared_ptr<Entry> getRow(const std::string& _key) override
@@ -69,13 +69,13 @@ private:
     std::unordered_map<std::string, Entry::Ptr> m_fakeStorage;
 };
 
-class MockErrorTableFactory : public TableFactory
+class MockErrorTableFactory : public TableStorage
 {
 public:
     explicit MockErrorTableFactory(storage::StorageInterface::Ptr _db)
-      : TableFactory(_db, nullptr, -1)
+      : TableStorage(_db, nullptr, -1)
     {
-        m_sysTables.emplace_back(SYS_TABLE);
+        m_sysTables.emplace_back(TableStorage::SYS_TABLES);
     }
     std::shared_ptr<TableInterface> openTable(const std::string& _tableName) override
     {

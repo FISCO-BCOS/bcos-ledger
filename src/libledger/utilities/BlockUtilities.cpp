@@ -118,12 +118,13 @@ int blockReceiptListSetter(
 }
 
 bcos::protocol::Block::Ptr decodeBlock(
-    const protocol::BlockFactory::Ptr& _blockFactory, const std::string& _blockStr)
+    const protocol::BlockFactory::Ptr& _blockFactory, const std::string_view& _blockStr)
 {
     protocol::Block::Ptr block = nullptr;
     try
     {
-        block = _blockFactory->createBlock(asBytes(_blockStr), false, false);
+        block = _blockFactory->createBlock(
+            bytesConstRef((bcos::byte*)_blockStr.data(), _blockStr.size()), false, false);
     }
     catch (std::exception const& e)
     {
@@ -135,12 +136,13 @@ bcos::protocol::Block::Ptr decodeBlock(
 }
 
 bcos::protocol::BlockHeader::Ptr decodeBlockHeader(
-    const protocol::BlockHeaderFactory::Ptr& _headerFactory, const std::string& _headerStr)
+    const protocol::BlockHeaderFactory::Ptr& _headerFactory, const std::string_view& _headerStr)
 {
     protocol::BlockHeader::Ptr header = nullptr;
     try
     {
-        header = _headerFactory->createBlockHeader(asBytes(_headerStr));
+        header = _headerFactory->createBlockHeader(
+            bytesConstRef((bcos::byte*)_headerStr.data(), _headerStr.size()));
     }
     catch (std::exception const& e)
     {

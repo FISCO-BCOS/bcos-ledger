@@ -31,7 +31,7 @@ using namespace bcos::storage;
 namespace bcos::ledger
 {
 void StorageSetter::createTables(
-    const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _groupId)
+    const storage::TableStorage::Ptr& _tableFactory, const std::string& _groupId)
 {
     auto configFields = SYS_VALUE + "," + SYS_CONFIG_ENABLE_BLOCK_NUMBER;
     auto consensusFields = NODE_TYPE + "," + NODE_WEIGHT + "," + NODE_ENABLE_NUMBER;
@@ -47,6 +47,8 @@ void StorageSetter::createTables(
     _tableFactory->createTable(SYS_HASH_2_RECEIPT, "tx_hash", SYS_VALUE);
     _tableFactory->createTable(SYS_BLOCK_NUMBER_2_NONCES, "block_num", SYS_VALUE);
     createFileSystemTables(_tableFactory, _groupId);
+
+    /*
     // db sync commit
     auto retPair = _tableFactory->commit();
     if ((retPair.second == nullptr || retPair.second->errorCode() == CommonError::SUCCESS) &&
@@ -62,10 +64,11 @@ void StorageSetter::createTables(
                           << LOG_KV("msg", retPair.second->errorMessage());
         BOOST_THROW_EXCEPTION(CreateSysTableFailed() << errinfo_comment(""));
     }
+    */
 }
 
 void StorageSetter::createFileSystemTables(
-    const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _groupId)
+    const storage::TableStorage::Ptr& _tableFactory, const std::string& _groupId)
 {
     // create / dir
     _tableFactory->createTable(FS_ROOT, FS_KEY_NAME, FS_FIELD_COMBINED);
@@ -89,7 +92,7 @@ void StorageSetter::createFileSystemTables(
     recursiveBuildDir(_tableFactory, tableDir);
 }
 void StorageSetter::recursiveBuildDir(
-    const TableFactoryInterface::Ptr& _tableFactory, const std::string& _absoluteDir)
+    const TableStorage::Ptr& _tableFactory, const std::string& _absoluteDir)
 {
     if (_absoluteDir.empty())
     {
@@ -145,7 +148,7 @@ void StorageSetter::recursiveBuildDir(
     }
 }
 
-bool StorageSetter::syncTableSetter(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+bool StorageSetter::syncTableSetter(const bcos::storage::TableStorage::Ptr& _tableFactory,
     const std::string& _tableName, const std::string& _row, const std::string& _fieldName,
     const std::string& _fieldValue)
 {
@@ -166,41 +169,41 @@ bool StorageSetter::syncTableSetter(const bcos::storage::TableFactoryInterface::
     }
 }
 
-bool StorageSetter::setCurrentState(const TableFactoryInterface::Ptr& _tableFactory,
+bool StorageSetter::setCurrentState(const TableStorage::Ptr& _tableFactory,
     const std::string& _row, const std::string& _stateValue)
 {
     return syncTableSetter(_tableFactory, SYS_CURRENT_STATE, _row, SYS_VALUE, _stateValue);
 }
-bool StorageSetter::setNumber2Header(const TableFactoryInterface::Ptr& _tableFactory,
+bool StorageSetter::setNumber2Header(const TableStorage::Ptr& _tableFactory,
     const std::string& _row, const std::string& _headerValue)
 {
     return syncTableSetter(_tableFactory, SYS_NUMBER_2_BLOCK_HEADER, _row, SYS_VALUE, _headerValue);
 }
-bool StorageSetter::setNumber2Txs(const TableFactoryInterface::Ptr& _tableFactory,
+bool StorageSetter::setNumber2Txs(const TableStorage::Ptr& _tableFactory,
     const std::string& _row, const std::string& _txsValue)
 {
     return syncTableSetter(_tableFactory, SYS_NUMBER_2_TXS, _row, SYS_VALUE, _txsValue);
 }
 
-bool StorageSetter::setHash2Number(const TableFactoryInterface::Ptr& _tableFactory,
+bool StorageSetter::setHash2Number(const TableStorage::Ptr& _tableFactory,
     const std::string& _row, const std::string& _numberValue)
 {
     return syncTableSetter(_tableFactory, SYS_HASH_2_NUMBER, _row, SYS_VALUE, _numberValue);
 }
 
-bool StorageSetter::setNumber2Hash(const TableFactoryInterface::Ptr& _tableFactory,
+bool StorageSetter::setNumber2Hash(const TableStorage::Ptr& _tableFactory,
     const std::string& _row, const std::string& _hashValue)
 {
     return syncTableSetter(_tableFactory, SYS_NUMBER_2_HASH, _row, SYS_VALUE, _hashValue);
 }
 
-bool StorageSetter::setNumber2Nonces(const TableFactoryInterface::Ptr& _tableFactory,
+bool StorageSetter::setNumber2Nonces(const TableStorage::Ptr& _tableFactory,
     const std::string& _row, const std::string& _noncesValue)
 {
     return syncTableSetter(_tableFactory, SYS_BLOCK_NUMBER_2_NONCES, _row, SYS_VALUE, _noncesValue);
 }
 
-bool StorageSetter::setSysConfig(const TableFactoryInterface::Ptr& _tableFactory,
+bool StorageSetter::setSysConfig(const TableStorage::Ptr& _tableFactory,
     const std::string& _key, const std::string& _value, const std::string& _enableBlock)
 {
     auto table = _tableFactory->openTable(SYS_CONFIG);
@@ -222,7 +225,7 @@ bool StorageSetter::setSysConfig(const TableFactoryInterface::Ptr& _tableFactory
 }
 
 bool StorageSetter::setConsensusConfig(
-    const bcos::storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _type,
+    const bcos::storage::TableStorage::Ptr& _tableFactory, const std::string& _type,
     const consensus::ConsensusNodeList& _nodeList, const std::string& _enableBlock)
 {
     auto table = _tableFactory->openTable(SYS_CONSENSUS);
@@ -248,13 +251,13 @@ bool StorageSetter::setConsensusConfig(
     }
 }
 
-bool StorageSetter::setHashToTx(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+bool StorageSetter::setHashToTx(const bcos::storage::TableStorage::Ptr& _tableFactory,
     const std::string& _txHash, const std::string& _encodeTx)
 {
     return syncTableSetter(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE, _encodeTx);
 }
 
-bool StorageSetter::setHashToReceipt(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+bool StorageSetter::setHashToReceipt(const bcos::storage::TableStorage::Ptr& _tableFactory,
     const std::string& _txHash, const std::string& _encodeReceipt)
 {
     return syncTableSetter(_tableFactory, SYS_HASH_2_RECEIPT, _txHash, SYS_VALUE, _encodeReceipt);

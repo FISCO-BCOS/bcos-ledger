@@ -27,9 +27,10 @@
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
-#include "bcos-framework/interfaces/storage/TableInterface.h"
+#include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/storage/Common.h>
+#include <bcos-framework/libtable/TableStorage.h>
 
 namespace bcos::ledger
 {
@@ -45,15 +46,15 @@ public:
         return std::make_shared<StorageGetter>();
     }
 
-    bool checkTableExist(const std::string& _tableName,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+    bool checkTableExist(
+        const std::string& _tableName, const bcos::storage::TableStorage::Ptr& _tableFactory);
     /**
      * @brief get transactions in SYS_NUMBER_2_TXS table
      * @param _blockNumber the number of block
      * @param _tableFactory
      */
     void getTxsFromStorage(bcos::protocol::BlockNumber _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const bcos::storage::TableStorage::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
@@ -62,7 +63,7 @@ public:
      * @param _tableFactory
      */
     void getBlockHeaderFromStorage(bcos::protocol::BlockNumber _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const bcos::storage::TableStorage::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
@@ -71,12 +72,11 @@ public:
      * @param _tableFactory
      */
     void getNoncesFromStorage(bcos::protocol::BlockNumber _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const bcos::storage::TableStorage::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     void getNoncesBatchFromStorage(bcos::protocol::BlockNumber _startNumber,
-        protocol::BlockNumber _endNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        protocol::BlockNumber _endNumber, const bcos::storage::TableStorage::Ptr& _tableFactory,
         const bcos::protocol::BlockFactory::Ptr& _blockFactory,
         std::function<void(
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
@@ -90,7 +90,7 @@ public:
      * @return return string data of block number
      */
     void getBlockNumberByHash(std::string _hash,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const bcos::storage::TableStorage::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
@@ -99,7 +99,7 @@ public:
      * @param _tableFactory
      */
     void getBlockHashByNumber(protocol::BlockNumber _num,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const bcos::storage::TableStorage::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
@@ -107,7 +107,7 @@ public:
      * @param _tableFactory
      * @param _row
      */
-    void getCurrentState(std::string _row, const storage::TableFactoryInterface::Ptr& _tableFactory,
+    void getCurrentState(std::string _row, const storage::TableStorage::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
@@ -115,14 +115,12 @@ public:
      * @param _tableFactory
      * @param _key row key in table
      */
-    void getSysConfig(std::string _key, const storage::TableFactoryInterface::Ptr& _tableFactory,
+    void getSysConfig(std::string _key, const storage::TableStorage::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetConfig);
 
-    void asyncGetSystemConfigList(const std::shared_ptr<std::vector<std::string>>& _keys,
-        const storage::TableFactoryInterface::Ptr& _tableFactory, bool _allowEmpty,
-        std::function<void(
-            const Error::Ptr&, std::map<std::string, bcos::storage::Entry::Ptr> const&)>
-            _onGetConfig);
+    void asyncGetSystemConfigList(const std::vector<std::string>& _keys,
+        const storage::TableStorage::Ptr& _tableFactory, bool _allowEmpty,
+        std::function<void(Error::Ptr&&, std::vector<bcos::storage::Entry::Ptr>&&)> _onGetConfig);
     /**
      * @brief get consensus node list in table SYS_CONSENSUS
      * @param _nodeType
@@ -130,27 +128,26 @@ public:
      * @param _keyFactory key factory to generate nodeID
      */
     void asyncGetConsensusConfig(std::string const& _nodeType, protocol::BlockNumber _number,
-        const storage::TableFactoryInterface::Ptr& _tableFactory,
-        crypto::KeyFactory::Ptr _keyFactory,
+        const storage::TableStorage::Ptr& _tableFactory, crypto::KeyFactory::Ptr _keyFactory,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig);
 
     void asyncGetConsensusConfigList(std::vector<std::string> const& _nodeTypeList,
-        protocol::BlockNumber _number, const storage::TableFactoryInterface::Ptr& _tableFactory,
+        protocol::BlockNumber _number, const storage::TableStorage::Ptr& _tableFactory,
         crypto::KeyFactory::Ptr _keyFactory,
         std::function<void(Error::Ptr, std::map<std::string, consensus::ConsensusNodeListPtr>)>
             _onGetConfig);
 
     void getBatchTxByHashList(std::shared_ptr<std::vector<std::string>> _hashList,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const bcos::storage::TableStorage::Ptr& _tableFactory,
         const bcos::protocol::TransactionFactory::Ptr& _txFactory,
         std::function<void(Error::Ptr, protocol::TransactionsPtr)> _onGetTx);
 
     void getReceiptByTxHash(std::string _txHash,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const bcos::storage::TableStorage::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     void getBatchReceiptsByHashList(std::shared_ptr<std::vector<std::string>> _hashList,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+        const bcos::storage::TableStorage::Ptr& _tableFactory,
         const bcos::protocol::TransactionReceiptFactory::Ptr& _receiptFactory,
         std::function<void(Error::Ptr, protocol::ReceiptsPtr)> _onGetReceipt);
 
@@ -162,7 +159,7 @@ public:
      * @param _field
      * @param _onGetEntry callback when get entry in db
      */
-    void asyncTableGetter(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    void asyncTableGetter(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _tableName, std::string _row,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetEntry);
 };

@@ -24,7 +24,7 @@
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/libtable/TableFactory.h"
+#include "bcos-framework/libtable/TableStorage.h"
 #include "bcos-framework/libutilities/Common.h"
 #include "bcos-framework/libutilities/Exceptions.h"
 #include "bcos-framework/libutilities/ThreadPool.h"
@@ -81,38 +81,37 @@ public:
         assert(m_storage);
         assert(m_commitPool);
 
-        auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
-        auto headerDestructorThread = std::make_shared<ThreadPool>("headerCache", 1);
-        auto txsDestructorThread = std::make_shared<ThreadPool>("txsCache", 1);
-        auto rcptDestructorThread = std::make_shared<ThreadPool>("receiptsCache", 1);
-        m_blockCache.setDestructorThread(blockDestructorThread);
-        m_blockHeaderCache.setDestructorThread(headerDestructorThread);
-        m_transactionsCache.setDestructorThread(txsDestructorThread);
-        m_receiptCache.setDestructorThread(rcptDestructorThread);
+        // auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
+        // auto headerDestructorThread = std::make_shared<ThreadPool>("headerCache", 1);
+        // auto txsDestructorThread = std::make_shared<ThreadPool>("txsCache", 1);
+        // auto rcptDestructorThread = std::make_shared<ThreadPool>("receiptsCache", 1);
+        // m_blockCache.setDestructorThread(blockDestructorThread);
+        // m_blockHeaderCache.setDestructorThread(headerDestructorThread);
+        // m_transactionsCache.setDestructorThread(txsDestructorThread);
+        // m_receiptCache.setDestructorThread(rcptDestructorThread);
     };
 
     virtual ~Ledger() { m_commitPool->stop(); }
 
     virtual void stop()
     {
-        m_blockCache.stop();
+        // m_blockCache.stop();
 
-        m_blockHeaderCache.stop();
+        // m_blockHeaderCache.stop();
 
-        m_transactionsCache.stop();
+        // m_transactionsCache.stop();
 
-        m_receiptCache.stop();
+        // m_receiptCache.stop();
 
-        m_commitPool->stop();
+        // m_commitPool->stop();
     }
-    void asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
-        std::function<void(Error::Ptr, LedgerConfig::Ptr)> _onCommitBlock) override;
+
+    void asyncPrewriteBlock(bcos::storage::TableStorage::Ptr storage,
+        bcos::protocol::Block::ConstPtr block,
+        std::function<void(Error::Ptr&&)> callback) override;
 
     void asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _txToStore,
         crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored) override;
-
-    void asyncStoreReceipts(storage::TableFactoryInterface::Ptr _tableFactory,
-        protocol::Block::Ptr _block, std::function<void(Error::Ptr)> _onReceiptStored) override;
 
     void asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock) override;
@@ -186,12 +185,12 @@ private:
     /****** Ledger attribute getter ******/
 
     // TODO: if storage merge table factory, it can use new tableFactory
-    inline storage::TableFactoryInterface::Ptr getMemoryTableFactory(
+    inline storage::TableStorage::Ptr getMemoryTableFactory(
         const protocol::BlockNumber& _number)
     {
         // if you use this tableFactory to write data, _number should be latest block number;
         // if you use it read data, _number can be -1
-        return std::make_shared<storage::TableFactory>(
+        return std::make_shared<storage::TableStorage>(
             m_storage, m_blockFactory->cryptoSuite()->hashImpl(), _number);
     }
 
@@ -218,38 +217,27 @@ private:
 
     /****** data writer ******/
     void writeNumber(const protocol::BlockNumber& _blockNumber,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+        const bcos::storage::TableStorage::Ptr& _tableFactory);
     void writeTotalTransactionCount(const bcos::protocol::Block::Ptr& block,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+        const bcos::storage::TableStorage::Ptr& _tableFactory);
     void writeNumber2Nonces(const bcos::protocol::Block::Ptr& block,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+        const bcos::storage::TableStorage::Ptr& _tableFactory);
     void writeHash2Number(const bcos::protocol::BlockHeader::Ptr& header,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+        const bcos::storage::TableStorage::Ptr& _tableFactory);
     void writeNumber2BlockHeader(const bcos::protocol::BlockHeader::Ptr& _header,
-        const bcos::storage::TableFactoryInterface::Ptr& _tableFactory);
+        const bcos::storage::TableStorage::Ptr& _tableFactory);
     // transaction encoded in block
     void writeNumber2Transactions(const bcos::protocol::Block::Ptr& _block,
-        const storage::TableFactoryInterface::Ptr& _tableFactory);
+        const storage::TableStorage::Ptr& _tableFactory);
     // receipts encoded in block
     void writeHash2Receipt(const bcos::protocol::Block::Ptr& _block,
-        const storage::TableFactoryInterface::Ptr& _tableFactory);
+        const storage::TableStorage::Ptr& _tableFactory);
 
     // notify block commit
     void notifyCommittedBlockNumber(protocol::BlockNumber _blockNumber);
 
-    /****** runtime cache ******/
-    // FIXME: FIFOCache may unexpected modify
-    FIFOCache<protocol::Block::Ptr, protocol::Block> m_blockCache;
-    FIFOCache<protocol::BlockHeader::Ptr, protocol::BlockHeader> m_blockHeaderCache;
-    FIFOCache<protocol::TransactionsPtr, protocol::Transactions> m_transactionsCache;
-    FIFOCache<protocol::ReceiptsPtr, protocol::Receipts> m_receiptCache;
     std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
         m_committedBlockNotifier;
-
-    mutable SharedMutex m_blockNumberMutex;
-    protocol::BlockNumber m_blockNumber = -1;
-    mutable SharedMutex m_blockHashMutex;
-    crypto::HashType m_blockHash = crypto::HashType();
 
     size_t m_timeout = 10000;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
@@ -257,6 +245,5 @@ private:
     StorageGetter::Ptr m_storageGetter;
     StorageSetter::Ptr m_storageSetter;
     ledger::MerkleProofUtility::Ptr m_merkleProofUtility;
-    bcos::ThreadPool::Ptr m_commitPool = nullptr;
 };
 }  // namespace bcos::ledger

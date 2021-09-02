@@ -20,15 +20,17 @@
 
 #include "bcos-ledger/libledger/storage/StorageGetter.h"
 #include "bcos-ledger/libledger/storage/StorageSetter.h"
+#include "bcos-ledger/libledger/utilities/Common.h"
 #include "mock/MockKeyFactor.h"
 #include "unittests/ledger/common/FakeBlock.h"
-#include "unittests/ledger/common/FakeTable.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include <bcos-framework/libtable/TableStorage.h>
 #include <bcos-framework/testutils/TestPromptFixture.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
+using namespace bcos::storage;
 using namespace bcos::ledger;
 using namespace bcos::protocol;
 
@@ -39,7 +41,7 @@ class TableFactoryFixture : public TestPromptFixture
 public:
     TableFactoryFixture() : TestPromptFixture()
     {
-        tableFactory = fakeTableFactory(0);
+        tableFactory = std::make_shared<TableStorage>();
         BOOST_TEST(tableFactory != nullptr);
         storageGetter = StorageGetter::storageGetterFactory();
         storageSetter = StorageSetter::storageSetterFactory();
@@ -47,7 +49,7 @@ public:
     }
     ~TableFactoryFixture() {}
 
-    TableFactoryInterface::Ptr tableFactory = nullptr;
+    TableStorage::Ptr tableFactory = nullptr;
     StorageSetter::Ptr storageSetter = nullptr;
     StorageGetter::Ptr storageGetter = nullptr;
 };
@@ -86,7 +88,8 @@ BOOST_AUTO_TEST_CASE(testTableSetterGetterByRowAndField)
 }
 BOOST_AUTO_TEST_CASE(testErrorOpenTable)
 {
-    auto tableFactory = fakeErrorTableFactory();
+    // auto tableFactory = fakeErrorTableFactory();
+    auto tableFactory = std::make_shared<TableStorage>();
     auto storageSetter = StorageSetter::storageSetterFactory();
     BOOST_CHECK_THROW(storageSetter->createTables(tableFactory, "test"), CreateSysTableFailed);
     BOOST_CHECK_THROW(

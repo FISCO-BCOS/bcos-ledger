@@ -27,7 +27,7 @@
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
-#include "bcos-framework/interfaces/storage/TableInterface.h"
+#include "bcos-framework/libtable/TableStorage.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
@@ -49,12 +49,12 @@ public:
     }
 
     void createTables(
-        const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _groupId);
+        const storage::TableStorage::Ptr& _tableFactory, const std::string& _groupId);
 
     void createFileSystemTables(
-        const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _groupId);
+        const storage::TableStorage::Ptr& _tableFactory, const std::string& _groupId);
     void recursiveBuildDir(
-        const storage::TableFactoryInterface::Ptr& _tableFactory, const std::string& _absoluteDir);
+        const storage::TableStorage::Ptr& _tableFactory, const std::string& _absoluteDir);
     /**
      * @brief update tableName set fieldName=fieldValue where row=_row
      * @param _tableFactory
@@ -64,7 +64,7 @@ public:
      * @param _fieldValue
      * @return return update result
      */
-    bool syncTableSetter(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool syncTableSetter(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _tableName, const std::string& _row, const std::string& _fieldName,
         const std::string& _fieldValue);
 
@@ -75,7 +75,7 @@ public:
      * @param _stateValue string value
      * @return return update result
      */
-    bool setCurrentState(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool setCurrentState(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _row, const std::string& _stateValue);
 
     /**
@@ -85,7 +85,7 @@ public:
      * @param _headerValue encoded block header string value
      * @return return update result
      */
-    bool setNumber2Header(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool setNumber2Header(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _row, const std::string& _headerValue);
 
     /**
@@ -95,7 +95,7 @@ public:
      * @param _txsValue encoded block string value, which txs contain in
      * @return return update result
      */
-    bool setNumber2Txs(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool setNumber2Txs(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _row, const std::string& _txsValue);
 
     /**
@@ -105,10 +105,10 @@ public:
      * @param _numberValue block number string value
      * @return return update result
      */
-    bool setHash2Number(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool setHash2Number(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _row, const std::string& _numberValue);
 
-    bool setNumber2Hash(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool setNumber2Hash(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _row, const std::string& _hashValue);
 
     /**
@@ -118,7 +118,7 @@ public:
      * @param _noncesValue encoded nonces string value
      * @return return update result
      */
-    bool setNumber2Nonces(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool setNumber2Nonces(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _row, const std::string& _noncesValue);
 
     /**
@@ -130,7 +130,7 @@ public:
      * @param _enableBlock
      * @return
      */
-    bool setSysConfig(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool setSysConfig(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _key, const std::string& _value, const std::string& _enableBlock);
 
     /**
@@ -142,14 +142,14 @@ public:
      * @param _enableBlock
      * @return
      */
-    bool setConsensusConfig(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool setConsensusConfig(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _type, const consensus::ConsensusNodeList& _nodeList,
         const std::string& _enableBlock);
 
-    bool setHashToTx(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool setHashToTx(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _txHash, const std::string& _encodeTx);
 
-    bool setHashToReceipt(const bcos::storage::TableFactoryInterface::Ptr& _tableFactory,
+    bool setHashToReceipt(const bcos::storage::TableStorage::Ptr& _tableFactory,
         const std::string& _txHash, const std::string& _encodeReceipt);
 };
 }  // namespace bcos::ledger

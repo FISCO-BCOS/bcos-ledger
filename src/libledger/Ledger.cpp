@@ -32,6 +32,38 @@ using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::crypto;
 
+void Ledger::asyncPrewriteBlock(bcos::storage::TableStorage::Ptr storage,
+    bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback)
+{
+    if (!block)
+    {
+        callback(
+            BCOS_ERROR_PTR(LedgerError::ErrorArgument, "asyncPrewriteBlock failed, empty block"));
+        return;
+    }
+
+    TableStorage::Ptr tableStorage;
+    tableStorage->asyncOpenTable(
+        SYS_CURRENT_STATE, [callback](Error::Ptr&& error, Table::Ptr&& table) {
+            if (error)
+            {
+                callback(BCOS_ERROR_WITH_PREV_PTR(
+                    LedgerError::OpenTableFailed, "Open s_current_state failed", error));
+                return;
+            }
+
+            if (!table)
+            {
+                callback(BCOS_ERROR_PTR(
+                    LedgerError::OpenTableFailed, "Table s_current_state not found"));
+                return;
+            }
+
+            auto entry = table->newEntry();
+        });
+}
+
+/*
 void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
     std::function<void(Error::Ptr, LedgerConfig::Ptr)> _onCommitBlock)
 {
@@ -158,6 +190,7 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
         }
     });
 }
+*/
 
 void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _txToStore,
     crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored)
@@ -181,6 +214,7 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
             getStorageSetter()->setHashToTx(
                 tableFactory, txHashHex, asString(*(_txToStore->at(i))));
         }
+        /*
         tableFactory->asyncCommit([_onTxStored](Error::Ptr _error, size_t _commitSize) {
             if (!_error || _error->errorCode() == CommonError::SUCCESS)
             {
@@ -196,6 +230,7 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
                 _onTxStored(_error);
             }
         });
+        */
     }
     catch (OpenSysTableFailed const& e)
     {
@@ -208,6 +243,7 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
     }
 }
 
+/*
 void Ledger::asyncStoreReceipts(storage::TableFactoryInterface::Ptr _tableFactory,
     protocol::Block::Ptr _block, std::function<void(Error::Ptr)> _onReceiptStored)
 {
@@ -263,6 +299,7 @@ void Ledger::asyncStoreReceipts(storage::TableFactoryInterface::Ptr _tableFactor
             OpenSysTableFailed() << errinfo_comment(" write block data to storage failed."));
     }
 }
+*/
 
 void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
     std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock)
@@ -361,7 +398,7 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
                 _onGetBlock(error, HashType());
                 return;
             }
-            _onGetBlock(nullptr, HashType(_hashEntry->getField(SYS_VALUE)));
+            _onGetBlock(nullptr, HashType(std::string(_hashEntry->getField(SYS_VALUE))));
         });
 }
 
@@ -663,7 +700,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                         numberStr.empty() ? -1 : boost::lexical_cast<BlockNumber>(numberStr);
                     if (enableNumber <= number)
                     {
-                        _onGetConfig(nullptr, value, enableNumber);
+                        _onGetConfig(nullptr, std::string(value), enableNumber);
                     }
                     else
                     {
@@ -1280,9 +1317,10 @@ void Ledger::asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::H
     auto keys = std::make_shared<std::vector<std::string>>();
     *keys = {SYSTEM_KEY_CONSENSUS_TIMEOUT, SYSTEM_KEY_TX_COUNT_LIMIT,
         SYSTEM_KEY_CONSENSUS_LEADER_PERIOD};
-    storageGetter->asyncGetSystemConfigList(keys, tableFactory, false,
+
+    storageGetter->asyncGetSystemConfigList(*keys, tableFactory, false,
         [_number, wrapperLedgerConfig, _onGetLedgerConfig](
-            const Error::Ptr& _error, std::map<std::string, Entry::Ptr> const& _entries) {
+            Error::Ptr&& _error, std::vector<Entry::Ptr>&& _entries) {
             if (_error)
             {
                 LEDGER_LOG(WARNING)
@@ -1300,24 +1338,20 @@ void Ledger::asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::H
                 auto number = _number + 1;
 
                 // parse the configurations
-                auto consensusTimeout =
-                    (_entries.at(SYSTEM_KEY_CONSENSUS_TIMEOUT))->getField(SYS_VALUE);
-                auto txCountLimit = (_entries.at(SYSTEM_KEY_TX_COUNT_LIMIT))->getField(SYS_VALUE);
-                auto leaderPeriod =
-                    (_entries.at(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD))->getField(SYS_VALUE);
+                auto consensusTimeout = _entries[0]->getField(SYS_VALUE);
+                auto txCountLimit = _entries[1]->getField(SYS_VALUE);
+                auto leaderPeriod = _entries[2]->getField(SYS_VALUE);
 
                 // check enable number
-                auto timeoutNum = boost::lexical_cast<BlockNumber>(
-                    _entries.at(SYSTEM_KEY_CONSENSUS_TIMEOUT)
-                        ->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
-                auto limitNum = boost::lexical_cast<BlockNumber>(
-                    _entries.at(SYSTEM_KEY_TX_COUNT_LIMIT)
-                        ->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
-                auto periodNum = boost::lexical_cast<BlockNumber>(
-                    _entries.at(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD)
-                        ->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
+                auto timeoutEnableNum = boost::lexical_cast<BlockNumber>(
+                    _entries[0]->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
+                auto limitEnableNum = boost::lexical_cast<BlockNumber>(
+                    _entries[0]->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
+                auto periodEnableNum = boost::lexical_cast<BlockNumber>(
+                    _entries[0]->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
 
-                if (timeoutNum > number || limitNum > number || periodNum > number)
+                if (timeoutEnableNum > number || limitEnableNum > number ||
+                    periodEnableNum > number)
                 {
                     LEDGER_LOG(FATAL) << LOG_BADGE("asyncGetLedgerConfig")
                                       << LOG_DESC(
@@ -1326,9 +1360,9 @@ void Ledger::asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::H
                                       << LOG_KV("consensusTimeout", consensusTimeout)
                                       << LOG_KV("txCountLimit", txCountLimit)
                                       << LOG_KV("consensusLeaderPeriod", leaderPeriod)
-                                      << LOG_KV("consensusTimeoutNum", timeoutNum)
-                                      << LOG_KV("txCountLimitNum", limitNum)
-                                      << LOG_KV("consensusLeaderPeriodNum", periodNum)
+                                      << LOG_KV("consensusTimeoutNum", timeoutEnableNum)
+                                      << LOG_KV("txCountLimitNum", limitEnableNum)
+                                      << LOG_KV("consensusLeaderPeriodNum", periodEnableNum)
                                       << LOG_KV("latestNumber", _number);
                 }
                 ledgerConfig->setConsensusTimeout(boost::lexical_cast<uint64_t>(consensusTimeout));
@@ -1340,9 +1374,9 @@ void Ledger::asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::H
                                  << LOG_KV("consensusTimeout", consensusTimeout)
                                  << LOG_KV("txCountLimit", txCountLimit)
                                  << LOG_KV("consensusLeaderPeriod", leaderPeriod)
-                                 << LOG_KV("consensusTimeoutNum", timeoutNum)
-                                 << LOG_KV("txCountLimitNum", limitNum)
-                                 << LOG_KV("consensusLeaderPeriodNum", periodNum)
+                                 << LOG_KV("consensusTimeoutNum", timeoutEnableNum)
+                                 << LOG_KV("txCountLimitNum", limitEnableNum)
+                                 << LOG_KV("consensusLeaderPeriodNum", periodEnableNum)
                                  << LOG_KV("latestNumber", _number);
                 wrapperLedgerConfig->setSysConfigFetched(true);
                 _onGetLedgerConfig(nullptr, wrapperLedgerConfig);
@@ -1429,7 +1463,7 @@ void Ledger::checkBlockShouldCommit(const BlockNumber& _blockNumber, const std::
 }
 
 void Ledger::writeNumber(
-    const BlockNumber& blockNumber, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
+    const BlockNumber& blockNumber, const bcos::storage::TableStorage::Ptr& _tableFactory)
 {
     bool ret = getStorageSetter()->setCurrentState(
         _tableFactory, SYS_KEY_CURRENT_NUMBER, boost::lexical_cast<std::string>(blockNumber));
@@ -1442,7 +1476,7 @@ void Ledger::writeNumber(
 }
 
 void Ledger::writeNumber2Nonces(
-    const Block::Ptr& block, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
+    const Block::Ptr& block, const bcos::storage::TableStorage::Ptr& _tableFactory)
 {
     auto blockNumberStr = boost::lexical_cast<std::string>(block->blockHeader()->number());
     auto emptyBlock = m_blockFactory->createBlock();
@@ -1463,7 +1497,7 @@ void Ledger::writeNumber2Nonces(
 }
 
 void Ledger::writeHash2Number(
-    const BlockHeader::Ptr& header, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
+    const BlockHeader::Ptr& header, const bcos::storage::TableStorage::Ptr& _tableFactory)
 {
     bool ret = getStorageSetter()->setHash2Number(
         _tableFactory, header->hash().hex(), boost::lexical_cast<std::string>(header->number()));
@@ -1479,7 +1513,7 @@ void Ledger::writeHash2Number(
 }
 
 void Ledger::writeNumber2BlockHeader(
-    const BlockHeader::Ptr& _header, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
+    const BlockHeader::Ptr& _header, const bcos::storage::TableStorage::Ptr& _tableFactory)
 {
     auto encodedBlockHeader = std::make_shared<bytes>();
     auto header = _header;
@@ -1496,7 +1530,7 @@ void Ledger::writeNumber2BlockHeader(
     }
 }
 void Ledger::writeTotalTransactionCount(
-    const Block::Ptr& block, const bcos::storage::TableFactoryInterface::Ptr& _tableFactory)
+    const Block::Ptr& block, const bcos::storage::TableStorage::Ptr& _tableFactory)
 {
     // empty block
     if (block->transactionsSize() == 0 && block->receiptsSize() == 0)
@@ -1564,7 +1598,7 @@ void Ledger::writeTotalTransactionCount(
         });
 }
 void Ledger::writeNumber2Transactions(
-    const Block::Ptr& _block, const TableFactoryInterface::Ptr& _tableFactory)
+    const Block::Ptr& _block, const TableStorage::Ptr& _tableFactory)
 {
     if (_block->transactionsSize() == 0)
     {
@@ -1594,7 +1628,7 @@ void Ledger::writeNumber2Transactions(
     }
 }
 void Ledger::writeHash2Receipt(
-    const bcos::protocol::Block::Ptr& _block, const TableFactoryInterface::Ptr& _tableFactory)
+    const bcos::protocol::Block::Ptr& _block, const TableStorage::Ptr& _tableFactory)
 {
     tbb::parallel_for(tbb::blocked_range<size_t>(0, _block->transactionsSize()),
         [&](const tbb::blocked_range<size_t>& range) {
@@ -1737,6 +1771,8 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
                     getStorageSetter()->setCurrentState(
                         tableFactory, SYS_KEY_TOTAL_FAILED_TRANSACTION, "0");
                 });
+
+            /*
             // db sync commit
             LEDGER_LOG(INFO) << LOG_DESC("[buildGenesisBlock]commit all the table data");
             auto retPair = tableFactory->commit();
@@ -1752,6 +1788,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
                 LEDGER_LOG(ERROR) << LOG_DESC("[#buildGenesisBlock]Storage commit error");
                 return false;
             }
+            */
         }
         catch (OpenSysTableFailed const& e)
         {
