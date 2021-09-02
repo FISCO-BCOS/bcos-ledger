@@ -524,6 +524,9 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
             }
             if (_withProof)
             {
+                LEDGER_LOG(DEBUG) << LOG_BADGE("asyncGetTransactionReceiptByHash")
+                                  << LOG_DESC("getReceipt require proof")
+                                  << LOG_KV("txHash", _txHash.hex());
                 getReceiptProof(
                     receipt, [receipt, _onGetTx](Error::Ptr _error, MerkleProofPtr _proof) {
                         if (_error && _error->errorCode() != CommonError::SUCCESS)

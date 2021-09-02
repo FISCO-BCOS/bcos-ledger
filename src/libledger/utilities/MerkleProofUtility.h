@@ -60,7 +60,8 @@ public:
         const Parent2ChildListMap& parent2ChildList, const Child2ParentMap& child2Parent,
         MerkleProof& merkleProof);
 
-    void parseMerkleMap(const std::shared_ptr<Parent2ChildListMap>& parent2ChildList,
+    void parseMerkleMap(
+        std::shared_ptr<Parent2ChildListMap> parent2ChildList,
         Child2ParentMap& child2Parent);
 
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByReceipt(

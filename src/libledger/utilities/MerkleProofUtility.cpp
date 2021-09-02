@@ -86,7 +86,7 @@ void MerkleProofUtility::getMerkleProof(const crypto::HashType& _txHash,
 }
 
 void MerkleProofUtility::parseMerkleMap(
-    const std::shared_ptr<Parent2ChildListMap>& parent2ChildList, Child2ParentMap& child2Parent)
+    std::shared_ptr<Parent2ChildListMap> parent2ChildList, Child2ParentMap& child2Parent)
 {
     // trans parent2ChildList into child2Parent concurrently
     tbb::parallel_for_each(parent2ChildList->begin(), parent2ChildList->end(),
@@ -94,7 +94,7 @@ void MerkleProofUtility::parseMerkleMap(
             auto childList = _childListIterator.second;
             auto parent = _childListIterator.first;
             tbb::parallel_for(tbb::blocked_range<size_t>(0, childList.size()),
-                [&](const tbb::blocked_range<size_t>& range) {
+                [=, &child2Parent](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i < range.end(); i++)
                     {
                         std::string child = childList[i];
@@ -138,7 +138,7 @@ std::shared_ptr<Child2ParentMap> MerkleProofUtility::getChild2ParentCache(Shared
     {
         return _cache.second;
     }
-    std::shared_ptr<Child2ParentMap> child2Parent = std::make_shared<Child2ParentMap>();
+    auto child2Parent = std::make_shared<Child2ParentMap>();
     parseMerkleMap(_parent2Child, *child2Parent);
     _cache = std::make_pair(_blockNumber, child2Parent);
     return child2Parent;
