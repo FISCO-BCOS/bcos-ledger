@@ -208,6 +208,30 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
     }
 }
 
+void Ledger::asyncGetBlockNumber(
+    std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock)
+{
+    //         auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
+//         getStorageGetter()->getCurrentState(SYS_KEY_CURRENT_NUMBER, getMemoryTableFactory(0),
+//             [self, _onGetNumber](Error::Ptr _error, bcos::storage::Entry::Ptr _numberEntry) {
+//                 auto ledger = self.lock();
+//                 if (!ledger || !_numberEntry)
+//                 {
+//                     _onGetNumber(-1);
+//                     return;
+//                 }
+//                 if (!_error)
+//                 {
+//                     try
+//                     {
+//                         // number entry must exist
+//                         auto numberStr = _numberEntry->getField(SYS_VALUE);
+//                         BlockNumber number =
+//                             numberStr.empty() ? -1 : boost::lexical_cast<BlockNumber>(numberStr);
+//                         _onGetNumber(number);
+//                         return;
+}
+
 Error::Ptr Ledger::checkTableValid(bcos::Error::Ptr&& error,
     const std::optional<bcos::storage::Table>& table, const std::string_view& tableName)
 {
