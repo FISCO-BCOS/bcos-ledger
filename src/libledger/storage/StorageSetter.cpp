@@ -251,7 +251,7 @@ bool StorageSetter::setConsensusConfig(
     }
 }
 
-bool StorageSetter::setHashToTx(const bcos::storage::TableStorage::Ptr& _tableFactory,
+bool StorageSetter::setHashToTx(const bcos::storage::StorageInterface::Ptr& _tableFactory,
     const std::string& _txHash, const std::string& _encodeTx)
 {
     return syncTableSetter(_tableFactory, SYS_HASH_2_TX, _txHash, SYS_VALUE, _encodeTx);

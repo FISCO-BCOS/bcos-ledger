@@ -24,12 +24,12 @@
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/libtable/TableStorage.h"
 #include "bcos-framework/libutilities/Common.h"
 #include "bcos-framework/libutilities/Exceptions.h"
 #include "bcos-framework/libutilities/ThreadPool.h"
-#include "storage/StorageGetter.h"
-#include "storage/StorageSetter.h"
+// #include "storage/StorageGetter.h"
+// #include "storage/StorageSetter.h"
+#include "interfaces/protocol/ProtocolTypeDef.h"
 #include "utilities/BlockUtilities.h"
 #include "utilities/Common.h"
 #include "utilities/FIFOCache.h"
@@ -72,43 +72,20 @@ public:
         bcos::storage::StorageInterface::Ptr _storage)
       : m_blockFactory(_blockFactory),
         m_storage(_storage),
-        m_storageGetter(StorageGetter::storageGetterFactory()),
-        m_storageSetter(StorageSetter::storageSetterFactory()),
-        m_merkleProofUtility(std::make_shared<MerkleProofUtility>()),
-        m_commitPool(std::make_shared<bcos::ThreadPool>("commitThreadPool", 1))
+        // m_storageGetter(StorageGetter::storageGetterFactory()),
+        // m_storageSetter(StorageSetter::storageSetterFactory()),
+        m_merkleProofUtility(std::make_shared<MerkleProofUtility>())
     {
         assert(m_blockFactory);
         assert(m_storage);
-        assert(m_commitPool);
-
-        // auto blockDestructorThread = std::make_shared<ThreadPool>("blockCache", 1);
-        // auto headerDestructorThread = std::make_shared<ThreadPool>("headerCache", 1);
-        // auto txsDestructorThread = std::make_shared<ThreadPool>("txsCache", 1);
-        // auto rcptDestructorThread = std::make_shared<ThreadPool>("receiptsCache", 1);
-        // m_blockCache.setDestructorThread(blockDestructorThread);
-        // m_blockHeaderCache.setDestructorThread(headerDestructorThread);
-        // m_transactionsCache.setDestructorThread(txsDestructorThread);
-        // m_receiptCache.setDestructorThread(rcptDestructorThread);
     };
 
-    virtual ~Ledger() { m_commitPool->stop(); }
+    virtual ~Ledger() = default;
 
-    virtual void stop()
-    {
-        // m_blockCache.stop();
+    virtual void stop() {}
 
-        // m_blockHeaderCache.stop();
-
-        // m_transactionsCache.stop();
-
-        // m_receiptCache.stop();
-
-        // m_commitPool->stop();
-    }
-
-    void asyncPrewriteBlock(bcos::storage::TableStorage::Ptr storage,
-        bcos::protocol::Block::ConstPtr block,
-        std::function<void(Error::Ptr&&)> callback) override;
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback) override;
 
     void asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _txToStore,
         crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored) override;
@@ -163,75 +140,96 @@ public:
         size_t _gasLimit, const std::string& _genesisData);
 
 private:
+    Error::Ptr checkTableValid(bcos::Error::Ptr&& error,
+        const std::optional<bcos::storage::Table>& table, const std::string_view& tableName);
+
+    Error::Ptr checkEntryValid(bcos::Error::Ptr&& error,
+        const std::optional<bcos::storage::Entry>& entry, const std::string_view& key);
+
+    void asyncGetBlockHeader(bcos::protocol::Block::Ptr block,
+        bcos::protocol::BlockNumber blockNumber, std::function<void(Error::Ptr&&)> callback);
+
+    void asyncGetBlockTransactionHashes(bcos::protocol::Block::Ptr block,
+        bcos::protocol::BlockNumber blockNumber,
+        std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
+
+    void asyncBatchGetTransactions(bcos::protocol::Block::Ptr block,
+        std::shared_ptr<std::vector<std::string>> hashes,
+        std::function<void(Error::Ptr&&)> callback);
+
+    void asyncBatchGetReceipts(bcos::protocol::Block::Ptr block,
+        std::shared_ptr<std::vector<std::string>> hashes,
+        std::function<void(Error::Ptr&&)> callback);
+
     /****** base block data getter ******/
-    void getBlock(const protocol::BlockNumber& _blockNumber, int32_t _blockFlag,
-        std::function<void(Error::Ptr, BlockFetcher::Ptr)>);
-    void getLatestBlockNumber(std::function<void(protocol::BlockNumber)> _onGetNumber);
-    void getLatestBlockHash(
-        protocol::BlockNumber _number, std::function<void(std::string_view)> _onGetHash);
-    void getBlockHeader(const bcos::protocol::BlockNumber& _blockNumber,
-        std::function<void(Error::Ptr, protocol::BlockHeader::Ptr)> _onGetHeader);
-    void getTxs(const bcos::protocol::BlockNumber& _blockNumber,
-        std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onGetTxs);
-    void getReceipts(const bcos::protocol::BlockNumber& _blockNumber,
-        std::function<void(Error::Ptr, bcos::protocol::ReceiptsPtr)> _onGetReceipts);
-    void getTxProof(const crypto::HashType& _txHash,
-        std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
-    void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
-        std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
-    void asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash,
-        std::function<void(Error::Ptr, WrapperLedgerConfig::Ptr)> _onGetLedgerConfig);
+    // void getBlock(const protocol::BlockNumber& _blockNumber, int32_t _blockFlag,
+    //     std::function<void(Error::Ptr, BlockFetcher::Ptr)>);
+    // void getLatestBlockNumber(std::function<void(protocol::BlockNumber)> _onGetNumber);
+    // void getLatestBlockHash(
+    //     protocol::BlockNumber _number, std::function<void(std::string_view)> _onGetHash);
+    // void getBlockHeader(const bcos::protocol::BlockNumber& _blockNumber,
+    //     std::function<void(Error::Ptr, protocol::BlockHeader::Ptr)> _onGetHeader);
+    // void getTxs(const bcos::protocol::BlockNumber& _blockNumber,
+    //     std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onGetTxs);
+    // void getReceipts(const bcos::protocol::BlockNumber& _blockNumber,
+    //     std::function<void(Error::Ptr, bcos::protocol::ReceiptsPtr)> _onGetReceipts);
+    // void getTxProof(const crypto::HashType& _txHash,
+    //     std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
+    // void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
+    //     std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
+    // void asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash,
+    //     std::function<void(Error::Ptr, WrapperLedgerConfig::Ptr)> _onGetLedgerConfig);
 
     /****** Ledger attribute getter ******/
 
-    // TODO: if storage merge table factory, it can use new tableFactory
-    inline storage::TableStorage::Ptr getMemoryTableFactory(
-        const protocol::BlockNumber& _number)
-    {
-        // if you use this tableFactory to write data, _number should be latest block number;
-        // if you use it read data, _number can be -1
-        return std::make_shared<storage::TableStorage>(
-            m_storage, m_blockFactory->cryptoSuite()->hashImpl(), _number);
-    }
+    // // TODO: if storage merge table factory, it can use new tableFactory
+    // inline storage::TableStorage::Ptr getMemoryTableFactory(const protocol::BlockNumber&
+    // _number)
+    // {
+    //     // if you use this tableFactory to write data, _number should be latest block number;
+    //     // if you use it read data, _number can be -1
+    //     return std::make_shared<storage::TableStorage>(
+    //         m_storage, m_blockFactory->cryptoSuite()->hashImpl(), _number);
+    // }
 
-    inline protocol::TransactionFactory::Ptr getTransactionFactory()
-    {
-        return m_blockFactory->transactionFactory();
-    }
+    // inline protocol::TransactionFactory::Ptr getTransactionFactory()
+    // {
+    //     return m_blockFactory->transactionFactory();
+    // }
 
-    inline protocol::BlockHeaderFactory::Ptr getBlockHeaderFactory()
-    {
-        return m_blockFactory->blockHeaderFactory();
-    }
+    // inline protocol::BlockHeaderFactory::Ptr getBlockHeaderFactory()
+    // {
+    //     return m_blockFactory->blockHeaderFactory();
+    // }
 
-    inline protocol::TransactionReceiptFactory::Ptr getReceiptFactory()
-    {
-        return m_blockFactory->receiptFactory();
-    }
+    // inline protocol::TransactionReceiptFactory::Ptr getReceiptFactory()
+    // {
+    //     return m_blockFactory->receiptFactory();
+    // }
 
-    inline StorageGetter::Ptr getStorageGetter() { return m_storageGetter; }
-    inline StorageSetter::Ptr getStorageSetter() { return m_storageSetter; }
+    // inline StorageGetter::Ptr getStorageGetter() { return m_storageGetter; }
+    // inline StorageSetter::Ptr getStorageSetter() { return m_storageSetter; }
 
-    void checkBlockShouldCommit(const protocol::BlockNumber& _blockNumber,
-        const std::string& _parentHash, std::function<void(bool)> _onGetResult);
+    // void checkBlockShouldCommit(const protocol::BlockNumber& _blockNumber,
+    //     const std::string& _parentHash, std::function<void(bool)> _onGetResult);
 
     /****** data writer ******/
     void writeNumber(const protocol::BlockNumber& _blockNumber,
-        const bcos::storage::TableStorage::Ptr& _tableFactory);
+        const bcos::storage::StorageInterface::Ptr& _tableFactory);
     void writeTotalTransactionCount(const bcos::protocol::Block::Ptr& block,
-        const bcos::storage::TableStorage::Ptr& _tableFactory);
+        const bcos::storage::StorageInterface::Ptr& _tableFactory);
     void writeNumber2Nonces(const bcos::protocol::Block::Ptr& block,
-        const bcos::storage::TableStorage::Ptr& _tableFactory);
+        const bcos::storage::StorageInterface::Ptr& _tableFactory);
     void writeHash2Number(const bcos::protocol::BlockHeader::Ptr& header,
-        const bcos::storage::TableStorage::Ptr& _tableFactory);
+        const bcos::storage::StorageInterface::Ptr& _tableFactory);
     void writeNumber2BlockHeader(const bcos::protocol::BlockHeader::Ptr& _header,
-        const bcos::storage::TableStorage::Ptr& _tableFactory);
+        const bcos::storage::StorageInterface::Ptr& _tableFactory);
     // transaction encoded in block
     void writeNumber2Transactions(const bcos::protocol::Block::Ptr& _block,
-        const storage::TableStorage::Ptr& _tableFactory);
+        const storage::StorageInterface::Ptr& _tableFactory);
     // receipts encoded in block
     void writeHash2Receipt(const bcos::protocol::Block::Ptr& _block,
-        const storage::TableStorage::Ptr& _tableFactory);
+        const storage::StorageInterface::Ptr& _tableFactory);
 
     // notify block commit
     void notifyCommittedBlockNumber(protocol::BlockNumber _blockNumber);
@@ -239,11 +237,11 @@ private:
     std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
         m_committedBlockNotifier;
 
-    size_t m_timeout = 10000;
+    // size_t m_timeout = 10000;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;
-    StorageGetter::Ptr m_storageGetter;
-    StorageSetter::Ptr m_storageSetter;
+    // StorageGetter::Ptr m_storageGetter;
+    // StorageSetter::Ptr m_storageSetter;
     ledger::MerkleProofUtility::Ptr m_merkleProofUtility;
 };
 }  // namespace bcos::ledger

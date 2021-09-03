@@ -30,7 +30,6 @@
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/storage/Common.h>
-#include <bcos-framework/libtable/TableStorage.h>
 
 namespace bcos::ledger
 {
@@ -47,15 +46,15 @@ public:
     }
 
     bool checkTableExist(
-        const std::string& _tableName, const bcos::storage::TableStorage::Ptr& _tableFactory);
+        const std::string& _tableName, const bcos::storage::StorageInterface::Ptr& _tableFactory);
     /**
      * @brief get transactions in SYS_NUMBER_2_TXS table
      * @param _blockNumber the number of block
      * @param _tableFactory
      */
     void getTxsFromStorage(bcos::protocol::BlockNumber _blockNumber,
-        const bcos::storage::TableStorage::Ptr& _tableFactory,
-        std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
+        const bcos::storage::StorageInterface::Ptr& _tableFactory,
+        std::function<void(Error::Ptr&&, Entry&&)> _onGetString);
 
     /**
      * @brief get block header in SYS_NUMBER_2_BLOCK_HEADER table
@@ -63,7 +62,7 @@ public:
      * @param _tableFactory
      */
     void getBlockHeaderFromStorage(bcos::protocol::BlockNumber _blockNumber,
-        const bcos::storage::TableStorage::Ptr& _tableFactory,
+        const bcos::storage::StorageInterface::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     /**
@@ -72,7 +71,7 @@ public:
      * @param _tableFactory
      */
     void getNoncesFromStorage(bcos::protocol::BlockNumber _blockNumber,
-        const bcos::storage::TableStorage::Ptr& _tableFactory,
+        const bcos::storage::StorageInterface::Ptr& _tableFactory,
         std::function<void(Error::Ptr, bcos::storage::Entry::Ptr)> _onGetString);
 
     void getNoncesBatchFromStorage(bcos::protocol::BlockNumber _startNumber,
