@@ -21,6 +21,7 @@
 #include "Ledger.h"
 #include "interfaces/ledger/LedgerTypeDef.h"
 // #include "storage/StorageSetter.h"
+#include "interfaces/protocol/ProtocolTypeDef.h"
 #include "libutilities/BoostLog.h"
 #include "libutilities/Common.h"
 #include "libutilities/DataConvertUtility.h"
@@ -211,25 +212,70 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
 void Ledger::asyncGetBlockNumber(
     std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock)
 {
-    //         auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
-//         getStorageGetter()->getCurrentState(SYS_KEY_CURRENT_NUMBER, getMemoryTableFactory(0),
-//             [self, _onGetNumber](Error::Ptr _error, bcos::storage::Entry::Ptr _numberEntry) {
-//                 auto ledger = self.lock();
-//                 if (!ledger || !_numberEntry)
-//                 {
-//                     _onGetNumber(-1);
-//                     return;
-//                 }
-//                 if (!_error)
-//                 {
-//                     try
-//                     {
-//                         // number entry must exist
-//                         auto numberStr = _numberEntry->getField(SYS_VALUE);
-//                         BlockNumber number =
-//                             numberStr.empty() ? -1 : boost::lexical_cast<BlockNumber>(numberStr);
-//                         _onGetNumber(number);
-//                         return;
+    m_storage->asyncOpenTable(SYS_CURRENT_STATE, [this, callback = std::move(_onGetBlock)](
+                                                     Error::Ptr&& error,
+                                                     std::optional<Table>&& table) {
+        auto tableError = checkTableValid(std::move(error), table, SYS_CURRENT_STATE);
+        if (tableError)
+        {
+            callback(std::move(tableError), 0);
+            return;
+        }
+
+        table->asyncGetRow(SYS_KEY_CURRENT_NUMBER, [this, callback = std::move(callback)](
+                                                       Error::Ptr&& error,
+                                                       std::optional<Entry>&& entry) {
+            auto entryError = checkEntryValid(std::move(error), entry, SYS_KEY_CURRENT_NUMBER);
+            if (entryError)
+            {
+                callback(std::move(entryError), 0);
+                return;
+            }
+
+            bcos::protocol::BlockNumber blockNumber = -1;
+            try
+            {
+                blockNumber =
+                    boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(SYS_VALUE));
+            }
+            catch (boost::bad_lexical_cast& e)
+            {
+                // Ignore the exception
+                LEDGER_LOG(INFO) << "Cast blocknumber failed, may be empty, set to default value -1"
+                                 << LOG_KV("blocknumber str", entry->getField(SYS_VALUE));
+            }
+            callback(nullptr, blockNumber);
+        });
+    });
+}
+
+void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
+    std::function<void(Error::Ptr, const bcos::crypto::HashType&)> _onGetBlock)
+{
+    m_storage->asyncOpenTable(
+        SYS_NUMBER_2_HASH, [this, _blockNumber, callback = std::move(_onGetBlock)](
+                               Error::Ptr&& error, std::optional<Table>&& table) {
+            auto tableError = checkTableValid(std::move(error), table, SYS_NUMBER_2_HASH);
+            if (tableError)
+            {
+                callback(std::move(tableError), bcos::crypto::HashType());
+                return;
+            }
+
+            auto key = boost::lexical_cast<std::string>(_blockNumber);
+            table->asyncGetRow(boost::lexical_cast<std::string>(key),
+                [this, key, callback = std::move(callback)](
+                    Error::Ptr&& error, std::optional<Entry>&& entry) {
+                    auto entryError = checkEntryValid(std::move(error), entry, key);
+                    if (entryError)
+                    {
+                        callback(std::move(entryError), bcos::crypto::HashType());
+                        return;
+                    }
+
+                    auto hash = entry->getField(SYS_VALUE);
+                });
+        });
 }
 
 Error::Ptr Ledger::checkTableValid(bcos::Error::Ptr&& error,
@@ -447,73 +493,45 @@ void Ledger::asyncBatchGetReceipts(bcos::protocol::Block::Ptr block,
         });
 }
 
-// void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t
-// _blockFlag,
-//     std::function<void(Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock)
-// {
-//     if (_blockNumber < 0 || _blockFlag < 0)
-//     {
-//         LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBlockDataByNumber") << LOG_DESC("Error
-//         parameters")
-//                           << LOG_KV("blockNumber", _blockNumber) << LOG_KV("blockFlag",
-//                           _blockFlag);
-//         auto error = BCOS_ERROR_PTR(
-//             LedgerError::ErrorArgument, "asyncGetBlockDataByNumber error parameters");
-//         _onGetBlock(std::move(error), nullptr);
-//         return;
-//     }
-//     auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
-//     getBlock(_blockNumber, _blockFlag,
-//         [self, _blockNumber, _blockFlag, _onGetBlock](
-//             Error::Ptr _error, BlockFetcher::Ptr _blockFetcher) {
-//             auto ledger = self.lock();
-//             if (!ledger)
-//             {
-//                 auto error =
-//                     BCOS_ERROR_PTR(LedgerError::LedgerLockError, "can't not get ledger
-//                     weak_ptr");
-//                 _onGetBlock(std::move(error), nullptr);
-//                 return;
-//             }
-//             if (_error && _error->errorCode() != CommonError::SUCCESS)
-//             {
-//                 LEDGER_LOG(ERROR) << LOG_BADGE("asyncGetBlockDataByNumber")
-//                                   << LOG_DESC("callback error when get block")
-//                                   << LOG_KV("errorCode", _error->errorCode())
-//                                   << LOG_KV("errorMsg", _error->errorMessage())
-//                                   << LOG_KV("blockNumber", _blockNumber);
-//                 _onGetBlock(std::move(_error), nullptr);
-//                 return;
-//             }
-//             _blockFetcher->setFetchFlag(_blockFlag);
-//             if (_blockFetcher->isFetchFinished())
-//             {
-//                 if (!(_blockFlag ^ FULL_BLOCK))
-//                 {
-//                     // get full block data
-//                     LEDGER_LOG(TRACE) << LOG_BADGE("asyncGetBlockDataByNumber")
-//                                       << LOG_DESC("Write block to cache");
-//                     ledger->m_blockCache.add(_blockNumber, _blockFetcher->block());
-//                 }
-//                 _onGetBlock(nullptr, _blockFetcher->block());
-//             }
-//         });
-// }
+void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::string_view& key,
+    std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&& entry)> callback)
+{
+    m_storage->asyncOpenTable(std::string(table), [this, table, callback = std::move(callback)](
+                                                      Error::Ptr&& error,
+                                                      std::optional<Table>&& table) {
+        auto tableError = checkTableValid(std::move(error), table, SYS_CURRENT_STATE);
+        if (tableError)
+        {
+            callback(std::move(tableError), {});
+            return;
+        }
 
-// void Ledger::asyncGetBlockNumber(
-//     std::function<void(Error::Ptr, bcos::protocol::BlockNumber)> _onGetBlock)
-// {
-//     getLatestBlockNumber([_onGetBlock](BlockNumber _number) {
-//         if (_number == -1)
-//         {
-//             auto error = std::make_shared<Error>(
-//                 LedgerError::CallbackError, "getLatestBlock error, callback -1");
-//             _onGetBlock(error, -1);
-//             return;
-//         }
-//         _onGetBlock(nullptr, _number);
-//     });
-// }
+        table->asyncGetRow(SYS_KEY_CURRENT_NUMBER, [this, callback = std::move(callback)](
+                                                       Error::Ptr&& error,
+                                                       std::optional<Entry>&& entry) {
+            auto entryError = checkEntryValid(std::move(error), entry, SYS_KEY_CURRENT_NUMBER);
+            if (entryError)
+            {
+                callback(std::move(entryError), 0);
+                return;
+            }
+
+            bcos::protocol::BlockNumber blockNumber = -1;
+            try
+            {
+                blockNumber =
+                    boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(SYS_VALUE));
+            }
+            catch (boost::bad_lexical_cast& e)
+            {
+                // Ignore the exception
+                LEDGER_LOG(INFO) << "Cast blocknumber failed, may be empty, set to default value -1"
+                                 << LOG_KV("blocknumber str", entry->getField(SYS_VALUE));
+            }
+            callback(nullptr, blockNumber);
+        });
+    });
+}
 
 // void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
 //     std::function<void(Error::Ptr, const bcos::crypto::HashType&)> _onGetBlock)

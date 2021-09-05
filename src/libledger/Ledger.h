@@ -27,8 +27,6 @@
 #include "bcos-framework/libutilities/Common.h"
 #include "bcos-framework/libutilities/Exceptions.h"
 #include "bcos-framework/libutilities/ThreadPool.h"
-// #include "storage/StorageGetter.h"
-// #include "storage/StorageSetter.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
 #include "utilities/BlockUtilities.h"
 #include "utilities/Common.h"
@@ -160,6 +158,9 @@ private:
     void asyncBatchGetReceipts(bcos::protocol::Block::Ptr block,
         std::shared_ptr<std::vector<std::string>> hashes,
         std::function<void(Error::Ptr&&)> callback);
+
+    void asyncGetSystemTableEntry(const std::string_view& table, const std::string_view& key,
+        std::function<void(Error::Ptr&&, bcos::storage::Entry&& entry)> callback);
 
     /****** base block data getter ******/
     // void getBlock(const protocol::BlockNumber& _blockNumber, int32_t _blockFlag,
