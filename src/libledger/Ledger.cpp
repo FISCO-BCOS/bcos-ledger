@@ -1180,10 +1180,9 @@ void Ledger::getTxProof(
                     return;
                 }
                 auto merkleProofPtr = std::make_shared<MerkleProof>();
-                auto parent2ChildList = m_merkleProofUtility->getParent2ChildListByTxsProofCache(
-                    blockNumber, _txs, m_blockFactory->cryptoSuite());
-                auto child2Parent = m_merkleProofUtility->getChild2ParentCacheByTransaction(
-                    parent2ChildList, blockNumber);
+                auto parent2ChildList =
+                    m_merkleProofUtility->getParent2ChildList(m_blockFactory->cryptoSuite(), _txs);
+                auto child2Parent = m_merkleProofUtility->getChild2Parent(parent2ChildList);
                 m_merkleProofUtility->getMerkleProof(
                     _txHash, *parent2ChildList, *child2Parent, *merkleProofPtr);
                 LEDGER_LOG(TRACE) << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
@@ -1254,11 +1253,9 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
                         return;
                     }
                     auto merkleProof = std::make_shared<MerkleProof>();
-                    auto parent2ChildList =
-                        m_merkleProofUtility->getParent2ChildListByReceiptProofCache(
-                            _receipt->blockNumber(), receipts, m_blockFactory->cryptoSuite());
-                    auto child2Parent = m_merkleProofUtility->getChild2ParentCacheByReceipt(
-                        parent2ChildList, _receipt->blockNumber());
+                    auto parent2ChildList = m_merkleProofUtility->getParent2ChildList(
+                        m_blockFactory->cryptoSuite(), receipts);
+                    auto child2Parent = m_merkleProofUtility->getChild2Parent(parent2ChildList);
                     m_merkleProofUtility->getMerkleProof(
                         _receipt->hash(), *parent2ChildList, *child2Parent, *merkleProof);
                     LEDGER_LOG(INFO)
