@@ -28,11 +28,9 @@
 #include "bcos-framework/libutilities/Exceptions.h"
 #include "bcos-framework/libutilities/ThreadPool.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
-#include "utilities/BlockUtilities.h"
 #include "utilities/Common.h"
 #include "utilities/FIFOCache.h"
 #include "utilities/MerkleProofUtility.h"
-
 #include <utility>
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
@@ -68,11 +66,7 @@ class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledge
 public:
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage)
-      : m_blockFactory(_blockFactory),
-        m_storage(_storage),
-        // m_storageGetter(StorageGetter::storageGetterFactory()),
-        // m_storageSetter(StorageSetter::storageSetterFactory()),
-        m_merkleProofUtility(std::make_shared<MerkleProofUtility>())
+      : m_blockFactory(std::move(_blockFactory)), m_storage(std::move(_storage))
     {
         assert(m_blockFactory);
         assert(m_storage);
@@ -151,68 +145,22 @@ private:
         bcos::protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
 
-    void asyncBatchGetTransactions(bcos::protocol::Block::Ptr block,
-        std::shared_ptr<std::vector<std::string>> hashes,
-        std::function<void(Error::Ptr&&)> callback);
+    void asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
+        std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback);
 
-    void asyncBatchGetReceipts(bcos::protocol::Block::Ptr block,
-        std::shared_ptr<std::vector<std::string>> hashes,
-        std::function<void(Error::Ptr&&)> callback);
+    void asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> hashes,
+        std::function<void(Error::Ptr&&, std::vector<protocol::TransactionReceipt::Ptr>&&)>
+            callback);
 
     void asyncGetSystemTableEntry(const std::string_view& table, const std::string_view& key,
-        std::function<void(Error::Ptr&&, bcos::storage::Entry&& entry)> callback);
+        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback);
 
-    /****** base block data getter ******/
-    // void getBlock(const protocol::BlockNumber& _blockNumber, int32_t _blockFlag,
-    //     std::function<void(Error::Ptr, BlockFetcher::Ptr)>);
-    // void getLatestBlockNumber(std::function<void(protocol::BlockNumber)> _onGetNumber);
-    // void getLatestBlockHash(
-    //     protocol::BlockNumber _number, std::function<void(std::string_view)> _onGetHash);
-    // void getBlockHeader(const bcos::protocol::BlockNumber& _blockNumber,
-    //     std::function<void(Error::Ptr, protocol::BlockHeader::Ptr)> _onGetHeader);
-    // void getTxs(const bcos::protocol::BlockNumber& _blockNumber,
-    //     std::function<void(Error::Ptr, bcos::protocol::TransactionsPtr)> _onGetTxs);
-    // void getReceipts(const bcos::protocol::BlockNumber& _blockNumber,
-    //     std::function<void(Error::Ptr, bcos::protocol::ReceiptsPtr)> _onGetReceipts);
-    // void getTxProof(const crypto::HashType& _txHash,
-    //     std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
-    // void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
-    //     std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
-    // void asyncGetLedgerConfig(protocol::BlockNumber _number, const crypto::HashType& _hash,
-    //     std::function<void(Error::Ptr, WrapperLedgerConfig::Ptr)> _onGetLedgerConfig);
+    std::vector<std::string_view> asView(const std::vector<std::string>& list);
 
-    /****** Ledger attribute getter ******/
-
-    // // TODO: if storage merge table factory, it can use new tableFactory
-    // inline storage::TableStorage::Ptr getMemoryTableFactory(const protocol::BlockNumber&
-    // _number)
-    // {
-    //     // if you use this tableFactory to write data, _number should be latest block number;
-    //     // if you use it read data, _number can be -1
-    //     return std::make_shared<storage::TableStorage>(
-    //         m_storage, m_blockFactory->cryptoSuite()->hashImpl(), _number);
-    // }
-
-    // inline protocol::TransactionFactory::Ptr getTransactionFactory()
-    // {
-    //     return m_blockFactory->transactionFactory();
-    // }
-
-    // inline protocol::BlockHeaderFactory::Ptr getBlockHeaderFactory()
-    // {
-    //     return m_blockFactory->blockHeaderFactory();
-    // }
-
-    // inline protocol::TransactionReceiptFactory::Ptr getReceiptFactory()
-    // {
-    //     return m_blockFactory->receiptFactory();
-    // }
-
-    // inline StorageGetter::Ptr getStorageGetter() { return m_storageGetter; }
-    // inline StorageSetter::Ptr getStorageSetter() { return m_storageSetter; }
-
-    // void checkBlockShouldCommit(const protocol::BlockNumber& _blockNumber,
-    //     const std::string& _parentHash, std::function<void(bool)> _onGetResult);
+    void getTxProof(const crypto::HashType& _txHash,
+        std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
+    void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
+        std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
 
     /****** data writer ******/
     void writeNumber(const protocol::BlockNumber& _blockNumber,
@@ -235,14 +183,14 @@ private:
     // notify block commit
     void notifyCommittedBlockNumber(protocol::BlockNumber _blockNumber);
 
+    void createFileSystemTables(const std::string& _groupId);
+    void recursiveBuildDir(const std::string& _absoluteDir);
+
     std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
         m_committedBlockNotifier;
 
-    // size_t m_timeout = 10000;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;
-    // StorageGetter::Ptr m_storageGetter;
-    // StorageSetter::Ptr m_storageSetter;
-    ledger::MerkleProofUtility::Ptr m_merkleProofUtility;
+    MerkleProofUtility m_merkleProofUtility;
 };
 }  // namespace bcos::ledger

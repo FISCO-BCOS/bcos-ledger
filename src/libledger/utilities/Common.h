@@ -32,32 +32,32 @@ using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 // child=>parent
 using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 
-static const std::string SYS_VALUE = "value";
-static const std::string SYS_KEY = "key";
-static const std::string SYS_CONFIG_ENABLE_BLOCK_NUMBER = "enable_number";
+static const char SYS_VALUE[] = "value";
+static const char SYS_KEY[] = "key";
+static const char SYS_CONFIG_ENABLE_BLOCK_NUMBER[] = "enable_number";
 
-static const std::string NODE_TYPE = "type";
-static const std::string NODE_WEIGHT = "weight";
-static const std::string NODE_ENABLE_NUMBER = "enable_number";
+static const char NODE_TYPE[] = "type";
+static const char NODE_WEIGHT[] = "weight";
+static const char NODE_ENABLE_NUMBER[] = "enable_number";
 
 // FileSystem paths
-static const std::string FS_ROOT = "/";
-static const std::string FS_APPS = "/apps";
-static const std::string FS_USER = "/usr";
-static const std::string FS_SYS_BIN = "/sys";
-static const std::string FS_USER_TABLE = "/tables";
+static const char FS_ROOT[] = "/";
+static const char FS_APPS[] = "/apps";
+static const char FS_USER[] = "/usr";
+static const char FS_SYS_BIN[] = "/sys";
+static const char FS_USER_TABLE[] = "/tables";
 // FileSystem keys
-static const std::string FS_KEY_NAME = "name";
-static const std::string FS_FIELD_TYPE = "type";
-static const std::string FS_FIELD_ACCESS = "access";
-static const std::string FS_FIELD_OWNER = "uid";
-static const std::string FS_FIELD_GID = "gid";
-static const std::string FS_FIELD_EXTRA = "extra";
-static const std::string FS_FIELD_COMBINED = "type,access,uid,gid,extra";
+static const char FS_KEY_NAME[] = "name";
+static const char FS_FIELD_TYPE[] = "type";
+static const char FS_FIELD_ACCESS[] = "access";
+static const char FS_FIELD_OWNER[] = "uid";
+static const char FS_FIELD_GID[] = "gid";
+static const char FS_FIELD_EXTRA[] = "extra";
+static const char FS_FIELD_COMBINED[] = "type,access,uid,gid,extra";
 
 // FileSystem file type
-static const std::string FS_TYPE_DIR = "directory";
-static const std::string FS_TYPE_CONTRACT = "contract";
+static const char FS_TYPE_DIR[] = "directory";
+static const char FS_TYPE_CONTRACT[] = "contract";
 
 enum LedgerError : int32_t
 {
@@ -71,4 +71,5 @@ enum LedgerError : int32_t
     LedgerLockError = 3007,
     GetStorageError = 3008
 };
+
 }  // namespace bcos::ledger

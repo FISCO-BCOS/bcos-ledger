@@ -1,6 +1,7 @@
 hunter_config(bcos-framework VERSION 3.0.0-ca941668c0e91635ab3ef0e889574d3812ad78e0
-        URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/f233a4ba7b9361c41f7ac3904d61296e959c3feb.tar.gz
-        SHA1 f3d4d03e76bc8c61279c1b54e66cb4c49b8bd2a7
+        # URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/f233a4ba7b9361c41f7ac3904d61296e959c3feb.tar.gz
+        URL https://${URL_BASE}/morebtcg/bcos-framework/archive/4cdbe504af409245d2fb87dbd0751c33c338b42f.tar.gz
+        SHA1 81701177ec926bd272c949027e9fd1704755676e
         CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON #DEBUG=ON
 )
 
