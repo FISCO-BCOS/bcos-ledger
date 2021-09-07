@@ -61,7 +61,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
 
-    size_t total = 5 + mutableBlock->receiptsSize() + 2;
+    size_t total = 6 + mutableBlock->receiptsSize() + 2;
     auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(total),
                               failed = std::make_shared<bool>(false),
                               callback = std::move(callback)](
@@ -100,6 +100,13 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     Entry numberEntry;
     numberEntry.importFields({blockNumberStr});
     storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
+        [setRowCallback](
+            Error::Ptr&& error, bool success) { setRowCallback(std::move(error), success); });
+
+    // number 2 hash
+    Entry hashEntry;
+    hashEntry.importFields({header->hash().hex()});
+    storage->asyncSetRow(SYS_NUMBER_2_HASH, blockNumberStr, std::move(hashEntry),
         [setRowCallback](
             Error::Ptr&& error, bool success) { setRowCallback(std::move(error), success); });
 
@@ -631,8 +638,8 @@ void Ledger::asyncGetTotalTransactionCount(
                                           std::vector<std::optional<Entry>>&& entries) {
                 if (error)
                 {
-                    LEDGER_LOG(ERROR)
-                        << "GetTotalTransactionCount error" << boost::diagnostic_information(*error);
+                    LEDGER_LOG(ERROR) << "GetTotalTransactionCount error"
+                                      << boost::diagnostic_information(*error);
                     callback(std::move(error), 0, 0, 0);
                     return;
                 }
@@ -1475,8 +1482,8 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
 
     // write consensus config
     std::promise<std::tuple<Error::Ptr, std::optional<Table>>> consensusTablePromise;
-    m_storage->asyncOpenTable(SYS_CONSENSUS,
-        [&consensusTablePromise](Error::Ptr&& error, std::optional<Table>&& table) {
+    m_storage->asyncOpenTable(
+        SYS_CONSENSUS, [&consensusTablePromise](Error::Ptr&& error, std::optional<Table>&& table) {
             consensusTablePromise.set_value({std::move(error), std::move(table)});
         });
 
