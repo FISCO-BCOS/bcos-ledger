@@ -16,12 +16,17 @@
  * @file LedgerTest.cpp
  * @author: kyonRay
  * @date 2021-05-07
+ * @file LedgerTest.cpp
+ * @author: ancelmo
+ * @date 2021-09-07
  */
 #include "bcos-ledger/libledger/Ledger.h"
-#include "bcos-ledger/libledger/utilities/BlockUtilities.h"
 #include "common/FakeBlock.h"
-#include "common/FakeTable.h"
 #include "mock/MockKeyFactor.h"
+#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
+#include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework/libstorage/StateStorage.h>
 #include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <boost/lexical_cast.hpp>
@@ -33,6 +38,27 @@ using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::crypto;
 
+namespace std
+{
+inline ostream& operator<<(ostream& os, const std::optional<Entry>& entry)
+{
+    os << entry.has_value();
+    return os;
+}
+
+inline ostream& operator<<(ostream& os, const std::optional<Table>& table)
+{
+    os << table.has_value();
+    return os;
+}
+
+inline ostream& operator<<(ostream& os, const std::unique_ptr<Error>& error)
+{
+    os << error->what();
+    return os;
+}
+}  // namespace std
+
 namespace bcos::test
 {
 class LedgerFixture : public TestPromptFixture
@@ -40,8 +66,6 @@ class LedgerFixture : public TestPromptFixture
 public:
     LedgerFixture() : TestPromptFixture()
     {
-        m_storageGetter = StorageGetter::storageGetterFactory();
-        m_storageSetter = StorageSetter::storageSetterFactory();
         m_blockFactory = createBlockFactory(createCryptoSuite());
         auto keyFactor = std::make_shared<MockKeyFactory>();
         m_blockFactory->cryptoSuite()->setKeyFactory(keyFactor);
@@ -51,18 +75,12 @@ public:
         BOOST_CHECK(m_blockFactory->transactionFactory() != nullptr);
         initStorage();
     }
-    ~LedgerFixture()
-    {
-        if (m_ledger)
-        {
-            m_ledger->stop();
-        }
-    }
+    ~LedgerFixture() {}
 
     inline void initStorage()
     {
         auto hashImpl = std::make_shared<Keccak256Hash>();
-        m_storage = std::make_shared<TableStorage>(nullptr, hashImpl, 0);
+        m_storage = std::make_shared<StateStorage>(nullptr, hashImpl, 0);
         BOOST_TEST(m_storage != nullptr);
         m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage);
         BOOST_CHECK(m_ledger != nullptr);
@@ -70,7 +88,7 @@ public:
 
     inline void initErrorStorage()
     {
-        m_storage = std::make_shared<TableStorage>();
+        m_storage = std::make_shared<StateStorage>(nullptr, nullptr, 0);
         BOOST_TEST(m_storage != nullptr);
         m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage);
         BOOST_CHECK(m_ledger != nullptr);
@@ -100,8 +118,6 @@ public:
         m_param->setConsensusNodeList(consensusNodeList);
         m_param->setObserverNodeList(observerNodeList);
 
-        auto tableFactory = getTableFactory(0);
-        // m_storage->addStateCache(0, tableFactory);
         auto result = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
         BOOST_CHECK(result);
         auto result2 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
@@ -116,8 +132,6 @@ public:
         m_param->setBlockTxCountLimit(0);
         m_param->setConsensusTimeout(-1);
 
-        auto tableFactory = getTableFactory(0);
-        // m_storage->addStateCache(0, tableFactory);
         auto result1 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
         BOOST_CHECK(!result1);
         m_param->setConsensusTimeout(10);
@@ -156,11 +170,8 @@ public:
     inline void initChain(int _number)
     {
         initBlocks(_number);
-        auto negativeTable = getTableFactory(-1);
-        // m_storage->addStateCache(-1, negativeTable);
         for (int i = 0; i < _number; ++i)
         {
-            auto table = getTableFactory(i + 1);
             auto txDataList = std::make_shared<std::vector<bytesPointer>>();
             auto txHashList = std::make_shared<protocol::HashList>();
             for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
@@ -212,8 +223,6 @@ public:
         initEmptyBlocks(_number);
         for (int i = 0; i < _number; ++i)
         {
-            auto table = getTableFactory(i + 1);
-
             // std::promise<bool> p2;
             // auto f2 = p2.get_future();
             // m_ledger->asyncStoreReceipts(table, m_fakeBlocks->at(i), [=, &p2](Error::Ptr _error)
@@ -238,26 +247,7 @@ public:
         }
     }
 
-    // inline TableStorage::Ptr getStateTable(const BlockNumber& _number)
-    // {
-    //     (void)_number;
-    //     auto hashImpl = std::make_shared<Keccak256Hash>();
-    // auto table = m_storage->getStateCache(_number);
-    // BOOST_CHECK(table != nullptr);
-    // return table;
-    // }
-
-    inline TableStorage::Ptr getTableFactory(const BlockNumber& _number)
-    {
-        auto hashImpl = std::make_shared<Keccak256Hash>();
-        auto table = std::make_shared<TableStorage>(m_storage, hashImpl, _number);
-        BOOST_CHECK(table != nullptr);
-        return table;
-    }
-
     storage::StorageInterface::Ptr m_storage = nullptr;
-    StorageSetter::Ptr m_storageSetter = nullptr;
-    StorageGetter::Ptr m_storageGetter = nullptr;
     BlockFactory::Ptr m_blockFactory = nullptr;
     std::shared_ptr<Ledger> m_ledger = nullptr;
     LedgerConfig::Ptr m_param;
@@ -339,12 +329,6 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
 
 BOOST_AUTO_TEST_CASE(getBlockNumber)
 {
-    auto tableFactory = getTableFactory(0);
-    m_storageSetter->createTables(tableFactory, "test");
-
-    // m_storage->addStateCache(0, tableFactory);
-    // m_storageSetter->setCurrentState(getStateTable(0), SYS_KEY_CURRENT_NUMBER, "-1");
-
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, BlockNumber _number) {
@@ -419,8 +403,8 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
     //     0, getStateTable(0), [&](Error::Ptr _error, bcos::storage::Entry::Ptr _hashEntry) {
     //         BOOST_CHECK_EQUAL(_error, nullptr);
     //         auto table = getStateTable(0);
-    //         m_storageSetter->setHash2Number(getStateTable(0), _hashEntry->getField(SYS_VALUE), "");
-    //         table->commit();
+    //         m_storageSetter->setHash2Number(getStateTable(0), _hashEntry->getField(SYS_VALUE),
+    //         ""); table->commit();
     //         m_ledger->asyncGetBlockNumberByHash(HashType(_hashEntry->getField(SYS_VALUE)),
     //             [&](Error::Ptr _error, BlockNumber _number) {
     //                 BOOST_CHECK(_error != nullptr);
@@ -435,13 +419,6 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
 
 BOOST_AUTO_TEST_CASE(getTotalTransactionCount)
 {
-    auto tableFactory = getTableFactory(0);
-    m_storageSetter->createTables(tableFactory, "test");
-    // m_storage->addStateCache(0, tableFactory);
-    // m_storageSetter->setCurrentState(getStateTable(0), SYS_KEY_TOTAL_TRANSACTION_COUNT, "");
-    // m_storageSetter->setCurrentState(getStateTable(0), SYS_KEY_TOTAL_FAILED_TRANSACTION, "");
-    // tableFactory->commit();
-
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetTotalTransactionCount(
@@ -512,9 +489,6 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
     auto node =
         std::make_shared<consensus::ConsensusNode>(signImpl->generateKeyPair()->publicKey(), 10);
     consensusNodeList.emplace_back(node);
-    auto tableFactory = getTableFactory(0);
-    m_storageSetter->setConsensusConfig(tableFactory, CONSENSUS_SEALER, consensusNodeList, "5");
-    // tableFactory->commit();
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
@@ -572,7 +546,6 @@ BOOST_AUTO_TEST_CASE(parallelCommitSameBlock)
     initBlocks(5);
 
     // test parallel commit
-    auto table = getTableFactory(1);
     auto txDataList = std::make_shared<std::vector<bytesPointer>>();
     auto txHashList = std::make_shared<protocol::HashList>();
     for (size_t j = 0; j < m_fakeBlocks->at(0)->transactionsSize(); ++j)
@@ -632,11 +605,8 @@ BOOST_AUTO_TEST_CASE(parallelCommit)
     initBlocks(blockNumber);
 
     // test parallel commit 20 blocks
-    auto negativeTable = getTableFactory(-1);
-    // m_storage->addStateCache(-1, negativeTable);
     for (int i = 0; i < blockNumber; ++i)
     {
-        auto table = getTableFactory(i + 1);
         auto txDataList = std::make_shared<std::vector<bytesPointer>>();
         auto txHashList = std::make_shared<protocol::HashList>();
         for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
@@ -694,8 +664,8 @@ BOOST_AUTO_TEST_CASE(parallelCommit)
                     //                               Error::Ptr _error, LedgerConfig::Ptr _config) {
                     //         if (_error)
                     //         {
-                    //             BOOST_CHECK(_error->errorCode() == LedgerError::ErrorCommitBlock);
-                    //             BCOS_LOG(INFO)
+                    //             BOOST_CHECK(_error->errorCode() ==
+                    //             LedgerError::ErrorCommitBlock); BCOS_LOG(INFO)
                     //                 << LOG_BADGE("TEST") << LOG_DESC(_error->errorMessage());
                     //             blockQueue->push(block);
                     //         }
@@ -1120,10 +1090,6 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
 
-    auto tableFactory = getTableFactory(0);
-    m_storageSetter->setSysConfig(tableFactory, SYSTEM_KEY_TX_COUNT_LIMIT, "2000", "5");
-    // tableFactory->commit();
-
     std::promise<bool> pp1;
     m_ledger->asyncGetSystemConfigByKey(
         SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
@@ -1161,10 +1127,10 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
 
 BOOST_AUTO_TEST_CASE(testDecode)
 {
-    auto block = decodeBlock(m_blockFactory, "");
-    auto tx = decodeTransaction(m_blockFactory->transactionFactory(), "");
-    auto header = decodeBlockHeader(m_blockFactory->blockHeaderFactory(), "");
-    auto receipt = decodeReceipt(m_blockFactory->receiptFactory(), "");
+    // auto block = decodeBlock(m_blockFactory, "");
+    // auto tx = decodeTransaction(m_blockFactory->transactionFactory(), "");
+    // auto header = decodeBlockHeader(m_blockFactory->blockHeaderFactory(), "");
+    // auto receipt = decodeReceipt(m_blockFactory->receiptFactory(), "");
 }
 
 BOOST_AUTO_TEST_CASE(testEmptyBlock)

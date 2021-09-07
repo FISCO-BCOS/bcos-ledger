@@ -22,7 +22,6 @@
  */
 
 #include "Ledger.h"
-#include "BatchWriter.h"
 #include "bcos-framework/interfaces/consensus/ConsensusNode.h"
 #include "interfaces/crypto/CommonType.h"
 #include "interfaces/ledger/LedgerTypeDef.h"
@@ -38,6 +37,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <future>
 #include <memory>
 
 using namespace bcos;
@@ -59,18 +59,158 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     auto mutableBlock = std::const_pointer_cast<bcos::protocol::Block>(block);
     auto header = mutableBlock->blockHeader();
 
-    auto headerBuffer = std::make_shared<bytes>();
-    header->encode(*headerBuffer);
+    auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
 
-    writeNumber(header->number(), storage);
-    writeHash2Number(header, storage);
-    writeNumber2BlockHeader(header, storage);
-    writeTotalTransactionCount(mutableBlock, storage);
-    writeNumber2Nonces(mutableBlock, storage);
-    writeNumber2Transactions(mutableBlock, storage);
-    writeHash2Receipt(mutableBlock, storage);
+    size_t total = 5 + mutableBlock->receiptsSize() + 2;
+    auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(total),
+                              failed = std::make_shared<bool>(false),
+                              callback = std::move(callback)](
+                              Error::Ptr&& error, bool success, size_t count = 1) {
+        LEDGER_LOG(TRACE) << "Current total:" << *total << " count: " << count;
+        *total -= count;
+        if (error)
+        {
+            LEDGER_LOG(ERROR) << "Prewrite block error!" << boost::diagnostic_information(*error);
+            *failed = true;
+        }
 
-    callback(nullptr);
+        if (!success)
+        {
+            LEDGER_LOG(ERROR) << "Failed request!";
+            *failed = true;
+        }
+
+        if (*total == 0)
+        {
+            // all finished
+            if (*failed)
+            {
+                LEDGER_LOG(ERROR) << "PrewriteBlock error";
+                callback(
+                    BCOS_ERROR_PTR(LedgerError::CollectAsyncCallbackError, "PrewriteBlock error"));
+                return;
+            }
+
+            LEDGER_LOG(INFO) << "PrewriteBlock success";
+            callback(nullptr);
+        }
+    };
+
+    // number 2 entry
+    Entry numberEntry;
+    numberEntry.importFields({blockNumberStr});
+    storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
+        [setRowCallback](
+            Error::Ptr&& error, bool success) { setRowCallback(std::move(error), success); });
+
+    // hash 2 number
+    Entry hash2NumberEntry;
+    hash2NumberEntry.importFields({blockNumberStr});
+    storage->asyncSetRow(SYS_CURRENT_STATE, header->hash().hex(), std::move(hash2NumberEntry),
+        [setRowCallback](
+            Error::Ptr&& error, bool success) { setRowCallback(std::move(error), success); });
+
+    // number 2 header
+    bytes headerBuffer;
+    header->encode(headerBuffer);
+
+    Entry number2HeaderEntry;
+    number2HeaderEntry.importFields({std::string((char*)headerBuffer.data(), headerBuffer.size())});
+    storage->asyncSetRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr, std::move(number2HeaderEntry),
+        [setRowCallback](
+            Error::Ptr&& error, bool success) { setRowCallback(std::move(error), success); });
+
+    // number 2 nonce
+    auto nonceBlock = m_blockFactory->createBlock();
+    nonceBlock->setNonceList(mutableBlock->nonceList());
+    bytes nonceBuffer;
+    header->encode(nonceBuffer);
+
+    Entry number2NonceEntry;
+    number2NonceEntry.importFields({std::string((char*)nonceBuffer.data(), nonceBuffer.size())});
+    storage->asyncSetRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr, std::move(number2NonceEntry),
+        [setRowCallback](
+            Error::Ptr&& error, bool success) { setRowCallback(std::move(error), success); });
+
+    // number 2 transactions
+    auto transactionsBlock = m_blockFactory->createBlock();
+    for (size_t i = 0; i < block->transactionsHashSize(); ++i)
+    {
+        transactionsBlock->appendTransactionHash(block->transactionHash(i));
+    }
+    bytes transactionsBuffer;
+    transactionsBlock->encode(transactionsBuffer);
+
+    Entry number2TransactonHashesEntry;
+    number2TransactonHashesEntry.importFields(
+        {std::string((char*)transactionsBuffer.data(), transactionsBuffer.size())});
+    storage->asyncSetRow(SYS_NUMBER_2_TXS, blockNumberStr, std::move(number2TransactonHashesEntry),
+        [setRowCallback](
+            Error::Ptr&& error, bool success) { setRowCallback(std::move(error), success); });
+
+    // hash 2 receipts
+    bytes receiptBuffer;
+    for (size_t i = 0; i < mutableBlock->receiptsSize(); ++i)
+    {
+        auto hash = mutableBlock->transactionHash(i);
+        auto receipt = mutableBlock->receipt(i);
+
+        receiptBuffer.clear();
+        receipt->encode(receiptBuffer);
+
+        Entry receiptEntry;
+        receiptEntry.importFields({std::string((char*)receiptBuffer.data(), receiptBuffer.size())});
+        storage->asyncSetRow(SYS_HASH_2_RECEIPT, hash.hex(), std::move(receiptEntry),
+            [setRowCallback](
+                Error::Ptr&& error, bool success) { setRowCallback(std::move(error), success); });
+    }
+
+    // total transaction count
+    asyncGetTotalTransactionCount([storage, mutableBlock, setRowCallback](Error::Ptr error,
+                                      int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
+        if (error)
+        {
+            setRowCallback(std::move(error), false, 2);
+            return;
+        }
+
+        bool hasFailed = false;
+        for (size_t i = 0; i < mutableBlock->receiptsSize(); ++i)
+        {
+            auto receipt = mutableBlock->receipt(i);
+
+            if (receipt->status() != 0)
+            {
+                hasFailed = true;
+                ++failed;
+            }
+            else
+            {
+                ++total;
+            }
+        }
+
+        Entry totalEntry;
+        totalEntry.importFields({boost::lexical_cast<std::string>(total)});
+        storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
+            std::move(totalEntry), [setRowCallback](Error::Ptr&& error, bool success) {
+                setRowCallback(std::move(error), success);
+            });
+
+        if (hasFailed)
+        {
+            Entry failedEntry;
+            failedEntry.importFields({boost::lexical_cast<std::string>(failed)});
+            storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
+                std::move(failedEntry), [setRowCallback](Error::Ptr&& error, bool success) {
+                    setRowCallback(std::move(error), success);
+                });
+        }
+        else
+        {
+            setRowCallback(nullptr, true);
+        }
+    });
 }
 
 void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _txToStore,
@@ -103,8 +243,7 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
                 entry.setField(SYS_VALUE, asString(*((*txList)[i])));  // TODO: avoid copy the
                                                                        // transaction data
 
-                // TODO: using batch set row
-                storage->asyncSetRow(*table->tableInfo(), (*hashList)[i].hex(), std::move(entry),
+                table->asyncSetRow((*hashList)[i].hex(), std::move(entry),
                     [total, count, callback](Error::Ptr&& error, bool success) {
                         if (error)
                         {
@@ -483,7 +622,7 @@ void Ledger::asyncGetTotalTransactionCount(
             if (tableError)
             {
                 LEDGER_LOG(ERROR) << "GetTotalTransactionCount error"
-                                  << boost::diagnostic_information(tableError);
+                                  << boost::diagnostic_information(*tableError);
                 callback(std::move(tableError), 0, 0, 0);
                 return;
             }
@@ -493,12 +632,12 @@ void Ledger::asyncGetTotalTransactionCount(
                 if (error)
                 {
                     LEDGER_LOG(ERROR)
-                        << "GetTotalTransactionCount error" << boost::diagnostic_information(error);
+                        << "GetTotalTransactionCount error" << boost::diagnostic_information(*error);
                     callback(std::move(error), 0, 0, 0);
                     return;
                 }
 
-                int64_t totalCount, failedCount, blockNumber;
+                int64_t totalCount = 0, failedCount = 0, blockNumber = 0;
                 size_t i = 0;
                 for (auto& entry : entries)
                 {
@@ -763,7 +902,7 @@ Error::Ptr Ledger::checkTableValid(bcos::Error::Ptr&& error,
     {
         std::stringstream ss;
         ss << "Open table: " << tableName << " failed!";
-        LEDGER_LOG(ERROR) << ss << boost::diagnostic_information(*error);
+        LEDGER_LOG(ERROR) << ss.str() << boost::diagnostic_information(*error);
 
         return BCOS_ERROR_WITH_PREV_PTR(LedgerError::OpenTableFailed, ss.str(), std::move(error));
     }
@@ -772,21 +911,21 @@ Error::Ptr Ledger::checkTableValid(bcos::Error::Ptr&& error,
     {
         std::stringstream ss;
         ss << "Table: " << tableName << " does not exists!";
-        LEDGER_LOG(ERROR) << ss;
+        LEDGER_LOG(ERROR) << ss.str();
         return BCOS_ERROR_PTR(LedgerError::OpenTableFailed, ss.str());
     }
 
     return nullptr;
 }
 
-Error::Ptr checkEntryValid(bcos::Error::Ptr&& error,
+Error::Ptr Ledger::checkEntryValid(bcos::Error::Ptr&& error,
     const std::optional<bcos::storage::Entry>& entry, const std::string_view& key)
 {
     if (error)
     {
         std::stringstream ss;
         ss << "Get row: " << key << " failed!";
-        LEDGER_LOG(ERROR) << ss << boost::diagnostic_information(*error);
+        LEDGER_LOG(ERROR) << ss.str() << boost::diagnostic_information(*error);
 
         return BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, ss.str(), std::move(error));
     }
@@ -795,7 +934,7 @@ Error::Ptr checkEntryValid(bcos::Error::Ptr&& error,
     {
         std::stringstream ss;
         ss << "Entry: " << key << " does not exists!";
-        LEDGER_LOG(ERROR) << ss;
+        LEDGER_LOG(ERROR) << ss.str();
 
         return BCOS_ERROR_PTR(LedgerError::GetStorageError, ss.str());
     }
@@ -1033,6 +1172,8 @@ std::vector<std::string_view> Ledger::asView(const std::vector<std::string>& lis
 void Ledger::getTxProof(
     const HashType& _txHash, std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof)
 {
+    (void)_txHash;
+    _onGetProof(BCOS_ERROR_PTR(-1, "Unimplemented method"), nullptr);
     // get receipt to get block number
     // getStorageGetter()->getReceiptByTxHash(_txHash.hex(), getMemoryTableFactory(0),
     //     [this, _txHash, _onGetProof](Error::Ptr _error, bcos::storage::Entry::Ptr _receiptEntry)
@@ -1085,7 +1226,9 @@ void Ledger::getTxProof(
     //                     << LOG_BADGE("getTxProof") << LOG_DESC("get txs error")
     //                     << LOG_KV("blockNumber", blockNumber) << LOG_KV("txHash", _txHash.hex());
     //                     auto error = std::make_shared<Error>( LedgerError::CallbackError, "getTxs
-    // callback empty txs"); _onGetProof(error, nullptr); return;
+    // callback empty txs");
+    // _onGetProof(error, nullptr);
+    // return;
     //             }
     //             auto merkleProofPtr = std::make_shared<MerkleProof>();
     //             auto parent2ChildList = m_merkleProofUtility->getParent2ChildListByTxsProofCache(
@@ -1106,6 +1249,8 @@ void Ledger::getTxProof(
 void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
     std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof)
 {
+    (void)_receipt;
+    _onGetProof(BCOS_ERROR_PTR(-1, "Unimplemented method"), nullptr);
     // if (!_receipt)
     // {
     //     _onGetProof(nullptr, nullptr);
@@ -1225,7 +1370,8 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
     });
 
     auto getBlockResult = getBlockPromise.get_future().get();
-    if (std::get<0>(getBlockResult))
+    if (std::get<0>(getBlockResult) &&
+        std::get<0>(getBlockResult)->errorCode() != LedgerError::GetStorageError)
     {
         BOOST_THROW_EXCEPTION(*(std::get<0>(getBlockResult)));
     }
@@ -1233,6 +1379,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
     if (std::get<1>(getBlockResult))
     {
         // genesis block exists, quit
+        LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock] success, block exists");
         return true;
     }
 
@@ -1249,109 +1396,168 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE
     };
+    // clang-format on
     size_t total = sizeof(tables) / sizeof(std::string_view);
 
     for (size_t i = 0; i < total; i += 2)
     {
         std::promise<std::tuple<Error::Ptr, bool>> createTablePromise;
         m_storage->asyncCreateTable(std::string(tables[i]), std::string(tables[i + 1]),
-            [&createTablePromise](
-                Error::Ptr&& error, bool success) { createTablePromise.set_value({std::move(error), success}); });
+            [&createTablePromise](Error::Ptr&& error, bool success) {
+                createTablePromise.set_value({std::move(error), success});
+            });
         auto createTableResult = createTablePromise.get_future().get();
-        if(std::get<0>(createTableResult)) {
+        if (std::get<0>(createTableResult))
+        {
             BOOST_THROW_EXCEPTION(*(std::get<0>(createTableResult)));
         }
     }
 
     createFileSystemTables(_groupId);
 
-        auto txLimit = _ledgerConfig->blockTxCountLimit();
-        LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit);
-        // build a block
-        auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
-        header->setNumber(0);
-        header->setExtraData(asBytes(_genesisData));
-        try
-        {
- writeHash2Number(header, tableFactory);
-               
-                    getStorageSetter()->setSysConfig(tableFactory, SYSTEM_KEY_TX_COUNT_LIMIT,
-                        boost::lexical_cast<std::string>(_ledgerConfig->blockTxCountLimit()), "0");
+    auto txLimit = _ledgerConfig->blockTxCountLimit();
+    LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit);
+    // build a block
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(0);
+    header->setExtraData(asBytes(_genesisData));
 
-                [this, tableFactory, _gasLimit]() {
-                    getStorageSetter()->setSysConfig(tableFactory, SYSTEM_KEY_TX_GAS_LIMIT,
-                        boost::lexical_cast<std::string>(_gasLimit), "0");
-                },
-                [this, tableFactory, _ledgerConfig]() {
-                    getStorageSetter()->setSysConfig(tableFactory,
-                        SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
-                        boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), "0");
-                },
-                [this, tableFactory, _ledgerConfig]() {
-                    getStorageSetter()->setSysConfig(tableFactory, SYSTEM_KEY_CONSENSUS_TIMEOUT,
-                        boost::lexical_cast<std::string>(_ledgerConfig->consensusTimeout()), "0");
-                });
-            tbb::parallel_invoke(
-                [this, tableFactory, _ledgerConfig]() {
-                    getStorageSetter()->setConsensusConfig(
-                        tableFactory, CONSENSUS_SEALER, _ledgerConfig->consensusNodeList(), "0");
-                },
-                [this, tableFactory, _ledgerConfig]() {
-                    getStorageSetter()->setConsensusConfig(
-                        tableFactory, CONSENSUS_OBSERVER, _ledgerConfig->observerNodeList(), "0");
-                },
-                [this, tableFactory, header]() { writeNumber2BlockHeader(header, tableFactory); },
-                [this, tableFactory]() {
-                    getStorageSetter()->setCurrentState(tableFactory, SYS_KEY_CURRENT_NUMBER, "0");
-                },
-                [this, tableFactory]() {
-                    getStorageSetter()->setCurrentState(
-                        tableFactory, SYS_KEY_TOTAL_TRANSACTION_COUNT, "0");
-                },
-                [this, tableFactory]() {
-                    getStorageSetter()->setCurrentState(
-                        tableFactory, SYS_KEY_TOTAL_FAILED_TRANSACTION, "0");
-                });
-        }
-        catch (OpenSysTableFailed const& e)
-        {
-            LEDGER_LOG(FATAL) << LOG_DESC(
-                                     "[#buildGenesisBlock]System meets error when try to
-                                     write " "block to storage")
-                              << LOG_KV("EINFO", boost::diagnostic_information(e));
-            raise(SIGTERM);
-            BOOST_THROW_EXCEPTION(
-                OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
-        }
+    auto block = m_blockFactory->createBlock();
+    block->setBlockHeader(header);
+
+    std::promise<Error::Ptr> genesisBlockPromise;
+    asyncPrewriteBlock(m_storage, block, [&genesisBlockPromise](Error::Ptr&& error) {
+        genesisBlockPromise.set_value(std::move(error));
+    });
+
+    auto error = genesisBlockPromise.get_future().get();
+    if (error)
+    {
+        BOOST_THROW_EXCEPTION(*error);
+    }
+
+    // write sys config
+    std::promise<std::tuple<Error::Ptr, std::optional<Table>>> sysTablePromise;
+    m_storage->asyncOpenTable(
+        SYS_CONFIG, [&sysTablePromise](Error::Ptr&& error, std::optional<Table>&& table) {
+            sysTablePromise.set_value({std::move(error), std::move(table)});
+        });
+
+    auto [tableError, sysTable] = sysTablePromise.get_future().get();
+    if (tableError)
+    {
+        BOOST_THROW_EXCEPTION(*tableError);
+    }
+
+    if (!sysTable)
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONFIG failed!"));
+    }
+
+    Entry txLimitEntry;
+    txLimitEntry.importFields(
+        {boost::lexical_cast<std::string>(_ledgerConfig->blockTxCountLimit()), "0"});
+    sysTable->setRow(SYSTEM_KEY_TX_COUNT_LIMIT, std::move(txLimitEntry));
+
+    Entry gasLimitEntry;
+    gasLimitEntry.importFields({boost::lexical_cast<std::string>(_gasLimit), "0"});
+    sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
+
+    Entry leaderPeriodEntry;
+    leaderPeriodEntry.importFields(
+        {boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), "0"});
+    sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
+
+    Entry consensusTimeout;
+    consensusTimeout.importFields(
+        {boost::lexical_cast<std::string>(_ledgerConfig->consensusTimeout()), "0"});
+    sysTable->setRow(SYSTEM_KEY_CONSENSUS_TIMEOUT, std::move(consensusTimeout));
+
+    // write consensus config
+    std::promise<std::tuple<Error::Ptr, std::optional<Table>>> consensusTablePromise;
+    m_storage->asyncOpenTable(SYS_CONSENSUS,
+        [&consensusTablePromise](Error::Ptr&& error, std::optional<Table>&& table) {
+            consensusTablePromise.set_value({std::move(error), std::move(table)});
+        });
+
+    auto [consensusError, consensusTable] = consensusTablePromise.get_future().get();
+    if (consensusError)
+    {
+        BOOST_THROW_EXCEPTION(*consensusError);
+    }
+
+    if (!consensusTable)
+    {
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONSENSUS failed!"));
+    }
+
+    for (auto& node : _ledgerConfig->consensusNodeList())
+    {
+        Entry consensusNodeEntry;
+        consensusNodeEntry.importFields({
+            CONSENSUS_SEALER,
+            boost::lexical_cast<std::string>(node->weight()),
+            "0",
+        });
+        consensusTable->setRow(node->nodeID()->hex(), std::move(consensusNodeEntry));
+    }
+
+    for (auto& node : _ledgerConfig->observerNodeList())
+    {
+        Entry observerNodeEntry;
+        observerNodeEntry.importFields({
+            CONSENSUS_OBSERVER,
+            boost::lexical_cast<std::string>(node->weight()),
+            "0",
+        });
+        consensusTable->setRow(node->nodeID()->hex(), std::move(observerNodeEntry));
+    }
+
     return true;
 }
 
-void Ledger::createFileSystemTables(
-    const std::string& _groupId)
+void Ledger::createFileSystemTables(const std::string& _groupId)
 {
     // create / dir
-    _tableFactory->createTable(FS_ROOT, FS_KEY_NAME, FS_FIELD_COMBINED);
-    auto table = _tableFactory->openTable(FS_ROOT);
+    std::promise<std::tuple<Error::Ptr, bool>> createPromise;
+    m_storage->asyncCreateTable(
+        FS_ROOT, FS_FIELD_COMBINED, [&createPromise](Error::Ptr&& error, bool success) {
+            createPromise.set_value({std::move(error), success});
+        });
+    auto [createError, createSuccess] = createPromise.get_future().get();
+    if (createError)
+    {
+        BOOST_THROW_EXCEPTION(*createError);
+    }
+
+    std::promise<std::tuple<Error::Ptr, std::optional<Table>>> openPromise;
+    m_storage->asyncOpenTable(
+        FS_ROOT, [&openPromise](Error::Ptr&& error, std::optional<Table>&& table) {
+            openPromise.set_value({std::move(error), std::move(table)});
+        });
+
+    auto [openError, table] = openPromise.get_future().get();
+
     assert(table);
     auto rootEntry = table->newEntry();
-    rootEntry->setField(FS_FIELD_TYPE, FS_TYPE_DIR);
+    rootEntry.setField(FS_FIELD_TYPE, FS_TYPE_DIR);
     // TODO: set root default permission?
-    rootEntry->setField(FS_FIELD_ACCESS, "");
-    rootEntry->setField(FS_FIELD_OWNER, "root");
-    rootEntry->setField(FS_FIELD_GID, "/usr");
-    rootEntry->setField(FS_FIELD_EXTRA, "");
+    rootEntry.setField(FS_FIELD_ACCESS, "");
+    rootEntry.setField(FS_FIELD_OWNER, "root");
+    rootEntry.setField(FS_FIELD_GID, "/usr");
+    rootEntry.setField(FS_FIELD_EXTRA, "");
     table->setRow(FS_ROOT, rootEntry);
 
     std::string appsDir = "/" + _groupId + FS_APPS;
     std::string tableDir = "/" + _groupId + FS_USER_TABLE;
 
-    recursiveBuildDir(_tableFactory, FS_USER);
-    recursiveBuildDir(_tableFactory, FS_SYS_BIN);
-    recursiveBuildDir(_tableFactory, appsDir);
-    recursiveBuildDir(_tableFactory, tableDir);
+    recursiveBuildDir(FS_USER);
+    recursiveBuildDir(FS_SYS_BIN);
+    recursiveBuildDir(appsDir);
+    recursiveBuildDir(tableDir);
 }
-void Ledger::recursiveBuildDir(
-    const std::string& _absoluteDir)
+void Ledger::recursiveBuildDir(const std::string& _absoluteDir)
 {
     if (_absoluteDir.empty())
     {
@@ -1372,7 +1578,19 @@ void Ledger::recursiveBuildDir(
     std::string root = "/";
     for (auto& dir : *dirList)
     {
-        auto table = _tableFactory->openTable(root);
+        std::promise<std::tuple<Error::Ptr, std::optional<Table>>> openPromise;
+        m_storage->asyncOpenTable(
+            root, [&openPromise](Error::Ptr&& error, std::optional<Table>&& table) {
+                openPromise.set_value({std::move(error), std::move(table)});
+            });
+
+        auto [openError, table] = openPromise.get_future().get();
+
+        if (openError)
+        {
+            BOOST_THROW_EXCEPTION(*openError);
+        }
+
         if (!table)
         {
             LEDGER_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
@@ -1394,15 +1612,26 @@ void Ledger::recursiveBuildDir(
         }
         // not exist, then create table and write in parent dir
         auto newFileEntry = table->newEntry();
-        newFileEntry->setField(FS_FIELD_TYPE, FS_TYPE_DIR);
+        newFileEntry.setField(FS_FIELD_TYPE, FS_TYPE_DIR);
         // FIXME: consider permission inheritance
-        newFileEntry->setField(FS_FIELD_ACCESS, "");
-        newFileEntry->setField(FS_FIELD_OWNER, "root");
-        newFileEntry->setField(FS_FIELD_GID, "/usr");
-        newFileEntry->setField(FS_FIELD_EXTRA, "");
+        newFileEntry.setField(FS_FIELD_ACCESS, "");
+        newFileEntry.setField(FS_FIELD_OWNER, "root");
+        newFileEntry.setField(FS_FIELD_GID, "/usr");
+        newFileEntry.setField(FS_FIELD_EXTRA, "");
         table->setRow(dir, newFileEntry);
 
-        _tableFactory->createTable(root + dir, FS_KEY_NAME, FS_FIELD_COMBINED);
+        std::promise<std::tuple<Error::Ptr, bool>> createPromise;
+        m_storage->asyncCreateTable(
+            root + dir, FS_FIELD_COMBINED, [&createPromise](Error::Ptr&& error, bool success) {
+                createPromise.set_value({std::move(error), success});
+            });
+
+        auto [createError, createSuccess] = createPromise.get_future().get();
+        if (createError)
+        {
+            BOOST_THROW_EXCEPTION(*createError);
+        }
+
         root += dir;
     }
 }

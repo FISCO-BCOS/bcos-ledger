@@ -29,7 +29,6 @@
 #include "bcos-framework/libutilities/ThreadPool.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
 #include "utilities/Common.h"
-#include "utilities/FIFOCache.h"
 #include "utilities/MerkleProofUtility.h"
 #include <utility>
 
@@ -37,29 +36,6 @@
 
 namespace bcos::ledger
 {
-class WrapperLedgerConfig
-{
-public:
-    using Ptr = std::shared_ptr<WrapperLedgerConfig>;
-    explicit WrapperLedgerConfig(LedgerConfig::Ptr _ledgerConfig)
-    {
-        m_ledgerConfig = _ledgerConfig;
-    }
-
-    void setSysConfigFetched(bool _fetched) { m_sysConfigFetched = _fetched; }
-    void setConsensusConfigFetched(bool _fetched) { m_consensusConfigFetched = _fetched; }
-    LedgerConfig::Ptr ledgerConfig() { return m_ledgerConfig; }
-
-    bool sysConfigFetched() const { return m_sysConfigFetched; }
-    bool consensusConfigFetched() const { return m_consensusConfigFetched; }
-    Mutex& mutex() { return m_mutex; }
-
-private:
-    mutable Mutex m_mutex;
-    LedgerConfig::Ptr m_ledgerConfig;
-    std::atomic_bool m_sysConfigFetched = {false};
-    std::atomic_bool m_consensusConfigFetched = {false};
-};
 
 class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledger>
 {
@@ -73,8 +49,6 @@ public:
     };
 
     virtual ~Ledger() = default;
-
-    virtual void stop() {}
 
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         bcos::protocol::Block::ConstPtr block, std::function<void(Error::Ptr&&)> callback) override;
@@ -161,24 +135,6 @@ private:
         std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
     void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
-
-    /****** data writer ******/
-    void writeNumber(const protocol::BlockNumber& _blockNumber,
-        const bcos::storage::StorageInterface::Ptr& _tableFactory);
-    void writeTotalTransactionCount(const bcos::protocol::Block::Ptr& block,
-        const bcos::storage::StorageInterface::Ptr& _tableFactory);
-    void writeNumber2Nonces(const bcos::protocol::Block::Ptr& block,
-        const bcos::storage::StorageInterface::Ptr& _tableFactory);
-    void writeHash2Number(const bcos::protocol::BlockHeader::Ptr& header,
-        const bcos::storage::StorageInterface::Ptr& _tableFactory);
-    void writeNumber2BlockHeader(const bcos::protocol::BlockHeader::Ptr& _header,
-        const bcos::storage::StorageInterface::Ptr& _tableFactory);
-    // transaction encoded in block
-    void writeNumber2Transactions(const bcos::protocol::Block::Ptr& _block,
-        const storage::StorageInterface::Ptr& _tableFactory);
-    // receipts encoded in block
-    void writeHash2Receipt(const bcos::protocol::Block::Ptr& _block,
-        const storage::StorageInterface::Ptr& _tableFactory);
 
     // notify block commit
     void notifyCommittedBlockNumber(protocol::BlockNumber _blockNumber);
