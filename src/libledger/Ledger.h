@@ -34,9 +34,12 @@
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 
+#define BCOS_ERROR_PTR(code, message) std::make_shared<Error>(BCOS_ERROR(code, message))
+#define BCOS_ERROR_WITH_PREV_PTR(code, message, prev) \
+    std::make_shared<Error>(BCOS_ERROR_WITH_PREV(code, message, prev))
+
 namespace bcos::ledger
 {
-
 class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledger>
 {
 public:
@@ -106,10 +109,10 @@ public:
         size_t _gasLimit, const std::string& _genesisData);
 
 private:
-    Error::Ptr checkTableValid(bcos::Error::Ptr&& error,
+    Error::Ptr checkTableValid(std::optional<Error>&& error,
         const std::optional<bcos::storage::Table>& table, const std::string_view& tableName);
 
-    Error::Ptr checkEntryValid(bcos::Error::Ptr&& error,
+    Error::Ptr checkEntryValid(std::optional<Error>&& error,
         const std::optional<bcos::storage::Entry>& entry, const std::string_view& key);
 
     void asyncGetBlockHeader(bcos::protocol::Block::Ptr block,

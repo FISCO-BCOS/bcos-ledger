@@ -22,6 +22,7 @@
 #include "FakeBlockHeader.h"
 #include "FakeReceipt.h"
 #include "FakeTransaction.h"
+#include "interfaces/protocol/TransactionMetaData.h"
 #include "libprotocol/protobuf/PBBlock.h"
 #include "libprotocol/protobuf/PBBlockFactory.h"
 #include <bcos-framework/testutils/crypto/HashImpl.h>
@@ -72,7 +73,9 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
     // fake txsHash
     for (size_t i = 0; i < _txsNum; i++)
     {
-        block->appendTransactionHash(block->transaction(i)->hash());
+        auto transactionMetaData = _blockFactory->createTransactionMetaData();
+        transactionMetaData->setHash(std::move(block->transaction(i)->hash()));
+        block->appendTransactionMetaData(transactionMetaData);
     }
     NonceList nonceList;
     for (size_t i = 0; i < _txsNum; i++)

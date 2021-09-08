@@ -335,7 +335,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumber)
     auto f1 = p1.get_future();
     m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, BlockNumber _number) {
         BOOST_CHECK(_error != nullptr);
-        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::CallbackError);
+        BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
         BOOST_CHECK_EQUAL(_number, -1);
         p1.set_value(true);
     });
@@ -361,9 +361,29 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
         p2.set_value(true);
     });
 
-    // auto table = getStateTable(0);
-    // m_storageSetter->setNumber2Hash(getStateTable(0), "0", "");
-    // table->commit();
+    std::promise<Entry> getRowPromise;
+    m_storage->asyncGetRow(SYS_NUMBER_2_HASH, "0",
+        [&getRowPromise](std::optional<Error>&& error, std::optional<Entry>&& entry) {
+            BOOST_CHECK(!error);
+            getRowPromise.set_value(std::move(*entry));
+        });
+
+    auto oldHashEntry = getRowPromise.get_future().get();
+
+    Entry hashEntry;
+    hashEntry.importFields({""});
+    hashEntry.setVersion(oldHashEntry.version() + 1);
+
+    // deal with version conflict
+    std::promise<std::optional<Error>> setRowPromise;
+    m_storage->asyncSetRow(SYS_NUMBER_2_HASH, "0", std::move(std::move(hashEntry)),
+        [&setRowPromise](std::optional<Error>&& error, bool success) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK_EQUAL(success, true);
+
+            setRowPromise.set_value(std::move(error));
+        });
+    setRowPromise.get_future().get();
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
