@@ -73,9 +73,9 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory::Ptr _bl
     // fake txsHash
     for (size_t i = 0; i < _txsNum; i++)
     {
-        auto transactionMetaData = _blockFactory->createTransactionMetaData();
-        transactionMetaData->setHash(std::move(block->transaction(i)->hash()));
-        block->appendTransactionMetaData(transactionMetaData);
+        auto transactionMetaData =
+            _blockFactory->createTransactionMetaData(block->transaction(i)->hash(), "/abc");
+        block->appendTransactionMetaData(std::move(transactionMetaData));
     }
     NonceList nonceList;
     for (size_t i = 0; i < _txsNum; i++)
