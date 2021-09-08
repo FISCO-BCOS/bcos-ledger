@@ -118,8 +118,10 @@ public:
         m_param->setConsensusNodeList(consensusNodeList);
         m_param->setObserverNodeList(observerNodeList);
 
+        LEDGER_LOG(TRACE) << "build genesis for first time";
         auto result = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
         BOOST_CHECK(result);
+        LEDGER_LOG(TRACE) << "build genesis for second time";
         auto result2 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
         BOOST_CHECK(result2);
     }
