@@ -21,8 +21,10 @@
  * @date 2021-09-07
  */
 #include "bcos-ledger/libledger/Ledger.h"
+#include "bcos-ledger/libledger/utilities/Common.h"
 #include "common/FakeBlock.h"
 #include "interfaces/crypto/CommonType.h"
+#include "interfaces/ledger/LedgerTypeDef.h"
 #include "mock/MockKeyFactor.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
@@ -212,26 +214,6 @@ public:
             std::dynamic_pointer_cast<StateStorage>(m_storage)->setCheckVersion(true);
 
             prewritePromise.get_future().get();
-
-            // for (size_t i = 0; i < block->receiptsSize(); ++i)
-            // {
-            //     auto hash = block->transactionHash(i);
-            //     auto receipt = block->receipt(i);
-            //     bytes buffer;
-            //     receipt->encode(buffer);
-
-            //     std::promise<bool> setRowPromise;
-            //     Entry receiptEntry;
-            //     receiptEntry.importFields({std::string((char*)buffer.data(), buffer.size())});
-            //     m_storage->asyncSetRow(SYS_HASH_2_RECEIPT, hash.hex(), std::move(receiptEntry),
-            //         [&](std::optional<Error>&& error, bool success) {
-            //             BOOST_CHECK(!error);
-            //             BOOST_CHECK_EQUAL(success, true);
-            //             setRowPromise.set_value(success);
-            //         });
-
-            //     setRowPromise.get_future().get();
-            // }
         }
     }
 
@@ -261,6 +243,14 @@ public:
             //     });
 
             // BOOST_CHECK_EQUAL(f3.get(), true);
+
+            std::dynamic_pointer_cast<StateStorage>(m_storage)->setCheckVersion(false);
+            std::promise<bool> p3;
+            m_ledger->asyncPrewriteBlock(m_storage, m_fakeBlocks->at(i), [&](Error::Ptr&& error) {
+                BOOST_CHECK(!error);
+                p3.set_value(true);
+            });
+            BOOST_CHECK_EQUAL(p3.get_future().get(), true);
         }
     }
 
@@ -953,17 +943,39 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
 
-    std::promise<bool> pp1;
-    m_ledger->asyncGetSystemConfigByKey(
-        SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber _number) {
-            BOOST_CHECK(_error != nullptr);
-            BOOST_CHECK_EQUAL(_value, "");
-            BOOST_CHECK_EQUAL(_number, -1);
-            pp1.set_value(true);
-        });
-    BOOST_CHECK_EQUAL(pp1.get_future().get(), true);
+    // TODO: how & why?
+    // std::promise<bool> pp1;
+    // m_ledger->asyncGetSystemConfigByKey(
+    //     SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber
+    //     _number) {
+    //         BOOST_CHECK(_error != nullptr);
+    //         BOOST_CHECK_EQUAL(_value, "");
+    //         BOOST_CHECK_EQUAL(_number, -1);
+    //         pp1.set_value(true);
+    //     });
+    // BOOST_CHECK_EQUAL(pp1.get_future().get(), true);
 
     initChain(5);
+
+    std::promise<Table> tablePromise;
+    m_storage->asyncOpenTable(
+        SYS_CONFIG, [&](std::optional<Error>&& error, std::optional<Table>&& table) {
+            BOOST_CHECK(!error);
+
+            tablePromise.set_value(std::move(*table));
+        });
+
+    auto table = tablePromise.get_future().get();
+
+    auto oldEntry = table.getRow(SYSTEM_KEY_TX_COUNT_LIMIT);
+    BOOST_CHECK_EQUAL(oldEntry->getField(SYS_VALUE), "1000");
+
+    Entry newEntry = table.newEntry();
+    newEntry.setField(SYS_VALUE, "2000");
+    newEntry.setField(SYS_CONFIG_ENABLE_BLOCK_NUMBER, "5");
+    newEntry.setVersion(oldEntry->version() + 1);
+
+    table.setRow(SYSTEM_KEY_TX_COUNT_LIMIT, newEntry);
 
     std::promise<bool> pp2;
     m_ledger->asyncGetSystemConfigByKey(
@@ -986,14 +998,6 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);
-}
-
-BOOST_AUTO_TEST_CASE(testDecode)
-{
-    // auto block = decodeBlock(m_blockFactory, "");
-    // auto tx = decodeTransaction(m_blockFactory->transactionFactory(), "");
-    // auto header = decodeBlockHeader(m_blockFactory->blockHeaderFactory(), "");
-    // auto receipt = decodeReceipt(m_blockFactory->receiptFactory(), "");
 }
 
 BOOST_AUTO_TEST_CASE(testEmptyBlock)

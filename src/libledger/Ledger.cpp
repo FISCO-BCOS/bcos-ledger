@@ -135,7 +135,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     auto nonceBlock = m_blockFactory->createBlock();
     nonceBlock->setNonceList(mutableBlock->nonceList());
     bytes nonceBuffer;
-    header->encode(nonceBuffer);
+    nonceBlock->encode(nonceBuffer);
 
     Entry number2NonceEntry;
     number2NonceEntry.importFields({std::string((char*)nonceBuffer.data(), nonceBuffer.size())});
@@ -235,8 +235,6 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _txToStore,
     crypto::HashListPtr _txHashList, std::function<void(Error::Ptr)> _onTxStored)
 {
-    LEDGER_LOG(INFO) << "StoreTransactions request" << LOG_KV("tx count", _txToStore->size())
-                     << LOG_KV("hash count", _txHashList->size());
     if (!_txToStore || !_txHashList || _txToStore->size() != _txHashList->size())
     {
         LEDGER_LOG(INFO) << "StoreTransactions error";
@@ -244,6 +242,9 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesPointer>> _
             BCOS_ERROR_PTR(LedgerError::ErrorArgument, "asyncStoreTransactions argument error!"));
         return;
     }
+
+    LEDGER_LOG(INFO) << "StoreTransactions request" << LOG_KV("tx count", _txToStore->size())
+                     << LOG_KV("hash count", _txHashList->size());
 
     m_storage->asyncOpenTable(
         SYS_HASH_2_TX, [this, storage = m_storage, hashList = std::move(_txHashList),
@@ -530,6 +531,13 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
         std::shared_ptr<std::map<std::string, MerkleProofPtr>>)>
         _onGetTx)
 {
+    if (!_txHashList)
+    {
+        LEDGER_LOG(ERROR) << "GetBatchTxsByHashList error, wrong argument";
+        _onGetTx(BCOS_ERROR_PTR(LedgerError::ErrorArgument, "Wrong argument"), nullptr, nullptr);
+        return;
+    }
+
     LEDGER_LOG(INFO) << "GetBatchTxsByHashList request" << LOG_KV("hashes", _txHashList->size())
                      << LOG_KV("withProof", _withProof);
 
@@ -732,9 +740,9 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                             Error::Ptr error, bcos::protocol::BlockNumber blockNumber) {
         if (error)
         {
-            LEDGER_LOG(ERROR) << "GetSystemConfigByKey error"
+            LEDGER_LOG(ERROR) << "GetSystemConfigByKey error, "
                               << boost::diagnostic_information(*error);
-            callback(std::move(error), "", 0);
+            callback(std::move(error), "", -1);
             return;
         }
 
@@ -745,9 +753,9 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                 {
                     if (error)
                     {
-                        LEDGER_LOG(ERROR) << "GetSystemConfigByKey error"
+                        LEDGER_LOG(ERROR) << "GetSystemConfigByKey error, "
                                           << boost::diagnostic_information(*error);
-                        callback(std::move(error), "", 0);
+                        callback(std::move(error), "", -1);
                         return;
                     }
 
@@ -772,9 +780,9 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                 catch (std::exception& e)
                 {
                     LEDGER_LOG(ERROR)
-                        << "GetSystemConfigByKey error" << boost::diagnostic_information(e);
+                        << "GetSystemConfigByKey error, " << boost::diagnostic_information(e);
                     callback(
-                        BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "error", e), "", 0);
+                        BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "error", e), "", -1);
                 }
             });
     });
@@ -787,6 +795,14 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
 {
     LEDGER_LOG(INFO) << "GetNonceList request" << LOG_KV("startNumber", _startNumber)
                      << LOG_KV("offset", _offset);
+
+    if (_startNumber < 0 || _offset < 0 || _startNumber > _offset)
+    {
+        LEDGER_LOG(ERROR) << "GetNonceList error";
+        _onGetList(BCOS_ERROR_PTR(LedgerError::ErrorArgument, "Wrong argument"), nullptr);
+        return;
+    }
+
     m_storage->asyncOpenTable(SYS_BLOCK_NUMBER_2_NONCES, [this, callback = std::move(_onGetList),
                                                              _startNumber,
                                                              _offset](std::optional<Error>&& error,
@@ -799,14 +815,14 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
         }
 
         auto numberList = std::vector<std::string>();
-        for (BlockNumber i = _startNumber; i <= _startNumber + _offset; ++i)
+        for (BlockNumber i = _startNumber; i <= _offset; ++i)
         {
             numberList.push_back(boost::lexical_cast<std::string>(i));
         }
 
-        table->asyncGetRows(asView(numberList), [this, numberList, callback = std::move(callback)](
-                                                    std::optional<Error>&& error,
-                                                    std::vector<std::optional<Entry>>&& entries) {
+        table->asyncGetRows(numberList, [this, numberList, callback = std::move(callback)](
+                                            std::optional<Error>&& error,
+                                            std::vector<std::optional<Entry>>&& entries) {
             if (error)
             {
                 LEDGER_LOG(ERROR) << "GetNonceList error" << boost::diagnostic_information(*error);
@@ -832,7 +848,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
 
                     auto value = entry->getField(SYS_VALUE);
                     auto block = m_blockFactory->createBlock(
-                        bcos::bytesConstRef((bcos::byte*)value.data(), value.size()));
+                        bcos::bytesConstRef((bcos::byte*)value.data(), value.size()), false, false);
 
                     auto nonceList = std::make_shared<protocol::NonceList>(block->nonceList());
                     retMap->emplace(
@@ -1106,7 +1122,8 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                 return;
             }
 
-            std::vector<protocol::Transaction::Ptr> transactions(hashes->size());
+            // std::vector<protocol::Transaction::Ptr> transactions(hashes->size());
+            std::vector<protocol::Transaction::Ptr> transactions;
             size_t i = 0;
             for (auto& entry : entries)
             {
@@ -1117,14 +1134,16 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                     //              LedgerError::GetStorageError, "Batch get transaction error!"),
                     //     std::vector<protocol::Transaction::Ptr>());
                     // return;
-                    transactions[i] = nullptr;
+                    // transactions[i] = nullptr;
+                    // transactions.push_back(nullptr);
                 }
                 else
                 {
                     auto field = entry->getField(SYS_VALUE);
                     auto transaction = m_blockFactory->transactionFactory()->createTransaction(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
-                    transactions[i] = transaction;
+                    // transactions[i] = transaction;
+                    transactions.push_back(std::move(transaction));
                 }
 
                 ++i;
