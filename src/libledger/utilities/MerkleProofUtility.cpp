@@ -27,26 +27,6 @@ namespace bcos
 {
 namespace ledger
 {
-std::shared_ptr<Parent2ChildListMap> MerkleProofUtility::getTransactionProof(
-    crypto::CryptoSuite::Ptr _crypto, protocol::TransactionsPtr _txs)
-{
-    auto merklePath = std::make_shared<Parent2ChildListMap>();
-    std::vector<bytes> transactionList;
-    encodeToCalculateMerkle(transactionList, _txs);
-    protocol::calculateMerkleProof(_crypto, transactionList, merklePath);
-    return merklePath;
-}
-
-std::shared_ptr<Parent2ChildListMap> MerkleProofUtility::getReceiptProof(
-    crypto::CryptoSuite::Ptr _crypto, protocol::ReceiptsPtr _receipts)
-{
-    auto merklePath = std::make_shared<Parent2ChildListMap>();
-    std::vector<bytes> receiptList;
-    encodeToCalculateMerkle(receiptList, _receipts);
-    protocol::calculateMerkleProof(_crypto, receiptList, merklePath);
-    return merklePath;
-}
-
 void MerkleProofUtility::getMerkleProof(const crypto::HashType& _txHash,
     const Parent2ChildListMap& parent2ChildList, const Child2ParentMap& child2Parent,
     MerkleProof& merkleProof)
@@ -85,109 +65,28 @@ void MerkleProofUtility::getMerkleProof(const crypto::HashType& _txHash,
     }
 }
 
-void MerkleProofUtility::parseMerkleMap(
-    const std::shared_ptr<Parent2ChildListMap>& parent2ChildList, Child2ParentMap& child2Parent)
+std::shared_ptr<Child2ParentMap> MerkleProofUtility::getChild2Parent(
+    std::shared_ptr<Parent2ChildListMap> _parent2Child)
 {
+    auto child2Parent = std::make_shared<Child2ParentMap>();
+
     // trans parent2ChildList into child2Parent concurrently
-    tbb::parallel_for_each(parent2ChildList->begin(), parent2ChildList->end(),
-        [&](std::pair<const std::string, std::vector<std::string>>& _childListIterator) {
-            auto childList = _childListIterator.second;
-            auto parent = _childListIterator.first;
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, childList.size()),
+    tbb::parallel_for_each(
+        _parent2Child->begin(), _parent2Child->end(), [&](auto const& _childListIterator) {
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, _childListIterator.second.size()),
                 [&](const tbb::blocked_range<size_t>& range) {
                     for (size_t i = range.begin(); i < range.end(); i++)
                     {
-                        std::string child = childList[i];
+                        std::string child = _childListIterator.second[i];
                         if (!child.empty())
                         {
-                            child2Parent[child] = parent;
+                            child2Parent->insert({child, _childListIterator.first});
                         }
                     }
                 });
         });
-}
 
-
-std::shared_ptr<Child2ParentMap> MerkleProofUtility::getChild2ParentCacheByReceipt(
-    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, protocol::BlockNumber _blockNumber)
-{
-    return getChild2ParentCache(
-        x_receiptChild2ParentCache, m_receiptChild2ParentCache, _parent2ChildList, _blockNumber);
-}
-
-std::shared_ptr<Child2ParentMap> MerkleProofUtility::getChild2ParentCacheByTransaction(
-    std::shared_ptr<Parent2ChildListMap> _parent2Child, protocol::BlockNumber _blockNumber)
-{
-    return getChild2ParentCache(
-        x_txsChild2ParentCache, m_txsChild2ParentCache, _parent2Child, _blockNumber);
-}
-
-std::shared_ptr<Child2ParentMap> MerkleProofUtility::getChild2ParentCache(SharedMutex& _mutex,
-    std::pair<protocol::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
-    std::shared_ptr<Parent2ChildListMap> _parent2Child, protocol::BlockNumber _blockNumber)
-{
-    UpgradableGuard l(_mutex);
-    if (_cache.second && _cache.first == _blockNumber)
-    {
-        return _cache.second;
-    }
-    UpgradeGuard ul(l);
-    // After preempting the write lock, judge again whether m_receiptWithProof has been updated
-    // to prevent lock competition
-    if (_cache.second && _cache.first == _blockNumber)
-    {
-        return _cache.second;
-    }
-    std::shared_ptr<Child2ParentMap> child2Parent = std::make_shared<Child2ParentMap>();
-    parseMerkleMap(_parent2Child, *child2Parent);
-    _cache = std::make_pair(_blockNumber, child2Parent);
     return child2Parent;
-}
-
-std::shared_ptr<Parent2ChildListMap> MerkleProofUtility::getParent2ChildListByReceiptProofCache(
-    protocol::BlockNumber _blockNumber, protocol::ReceiptsPtr _receipts,
-    crypto::CryptoSuite::Ptr _crypto)
-{
-    UpgradableGuard l(m_receiptWithProofMutex);
-    // cache for the block parent2ChildList
-    if (m_receiptWithProof.second && m_receiptWithProof.first == _blockNumber)
-    {
-        return m_receiptWithProof.second;
-    }
-
-    UpgradeGuard ul(l);
-    // After preempting the write lock, judge again whether m_receiptWithProof has been updated
-    // to prevent lock competition
-    if (m_receiptWithProof.second && m_receiptWithProof.first == _blockNumber)
-    {
-        return m_receiptWithProof.second;
-    }
-
-    auto parent2ChildList = getReceiptProof(_crypto, _receipts);
-    m_receiptWithProof = std::make_pair(_blockNumber, parent2ChildList);
-    return parent2ChildList;
-}
-
-std::shared_ptr<Parent2ChildListMap> MerkleProofUtility::getParent2ChildListByTxsProofCache(
-    protocol::BlockNumber _blockNumber, protocol::TransactionsPtr _txs,
-    crypto::CryptoSuite::Ptr _crypto)
-{
-    UpgradableGuard l(m_transactionWithProofMutex);
-    // cache for the block parent2ChildList
-    if (m_transactionWithProof.second && m_transactionWithProof.first == _blockNumber)
-    {
-        return m_transactionWithProof.second;
-    }
-    UpgradeGuard ul(l);
-    // After preempting the write lock, judge again whether m_transactionWithProof has been
-    // updated to prevent lock competition
-    if (m_transactionWithProof.second && m_transactionWithProof.first == _blockNumber)
-    {
-        return m_transactionWithProof.second;
-    }
-    auto parent2ChildList = getTransactionProof(_crypto, _txs);
-    m_transactionWithProof = std::make_pair(_blockNumber, parent2ChildList);
-    return parent2ChildList;
 }
 
 }  // namespace ledger

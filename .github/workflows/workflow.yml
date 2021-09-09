@@ -124,11 +124,12 @@ jobs:
       - name: generate coverage
         run: make ledger-coverage
       - name: upload code coverage to Codecov
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v2
         with:
-          file: ./coverage.info
+          files: ./coverage.info
           name: bcos-ledger coverage
           fail_ci_if_error: true
+          verbose: true
   build_with_centos:
     name: build_with_centos
     runs-on: ubuntu-latest
