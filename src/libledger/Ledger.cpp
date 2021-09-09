@@ -815,7 +815,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
         }
 
         auto numberList = std::vector<std::string>();
-        for (BlockNumber i = _startNumber; i <= _offset; ++i)
+        for (BlockNumber i = _startNumber; i <= _startNumber + _offset; ++i)
         {
             numberList.push_back(boost::lexical_cast<std::string>(i));
         }
@@ -913,7 +913,7 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
                     }
 
                     tablePtr->asyncGetRows(
-                        asView(keys), [this, callback = std::move(callback), type = std::move(type),
+                        keys, [this, callback = std::move(callback), type = std::move(type),
                                           keys, blockNumber](std::optional<Error>&& error,
                                           std::vector<std::optional<Entry>>&& entries) {
                             if (error)
@@ -1129,7 +1129,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
             {
                 if (!entry.has_value())
                 {
-                    LEDGER_LOG(INFO) << "Get transaction error: " << (*hashes)[i] << " not found";
+                    LEDGER_LOG(INFO) << "Get transaction failed: " << (*hashes)[i] << " not found";
                     // callback(BCOS_ERROR_PTR(
                     //              LedgerError::GetStorageError, "Batch get transaction error!"),
                     //     std::vector<protocol::Transaction::Ptr>());
@@ -1231,17 +1231,6 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
             callback(nullptr, std::move(entry));
         });
     });
-}
-
-std::vector<std::string_view> Ledger::asView(const std::vector<std::string>& list)
-{
-    std::vector<std::string_view> result;
-    for (auto& it : list)
-    {
-        result.push_back(it);
-    }
-
-    return result;
 }
 
 void Ledger::getTxProof(
