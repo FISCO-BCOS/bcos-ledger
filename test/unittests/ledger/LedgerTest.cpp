@@ -178,7 +178,7 @@ public:
         initBlocks(_number);
         for (int i = 0; i < _number; ++i)
         {
-            auto txDataList = std::make_shared<std::vector<bytesPointer>>();
+            auto txDataList = std::make_shared<std::vector<bytesConstPtr>>();
             auto txHashList = std::make_shared<protocol::HashList>();
             for (size_t j = 0; j < m_fakeBlocks->at(i)->transactionsSize(); ++j)
             {
@@ -367,8 +367,8 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
     });
 
     std::promise<Entry> getRowPromise;
-    m_storage->asyncGetRow(SYS_NUMBER_2_HASH, "0",
-        [&getRowPromise](std::optional<Error>&& error, std::optional<Entry>&& entry) {
+    m_storage->asyncGetRow(
+        SYS_NUMBER_2_HASH, "0", [&getRowPromise](auto&& error, std::optional<Entry>&& entry) {
             BOOST_CHECK(!error);
             getRowPromise.set_value(std::move(*entry));
         });
@@ -380,9 +380,9 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
     hashEntry.setVersion(oldHashEntry.version() + 1);
 
     // deal with version conflict
-    std::promise<std::optional<Error>> setRowPromise;
+    std::promise<Error::UniquePtr> setRowPromise;
     m_storage->asyncSetRow(SYS_NUMBER_2_HASH, "0", std::move(std::move(hashEntry)),
-        [&setRowPromise](std::optional<Error>&& error, bool success) {
+        [&setRowPromise](auto&& error, bool success) {
             BOOST_CHECK(!error);
             BOOST_CHECK_EQUAL(success, true);
 
@@ -426,8 +426,8 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
-    m_storage->asyncGetRow(SYS_NUMBER_2_HASH, "0",
-        [&](std::optional<Error>&& error, std::optional<Entry>&& hashEntry) {
+    m_storage->asyncGetRow(
+        SYS_NUMBER_2_HASH, "0", [&](auto&& error, std::optional<Entry>&& hashEntry) {
             BOOST_CHECK(!error);
             BOOST_CHECK(hashEntry);
             auto hash = bcos::crypto::HashType(
@@ -436,7 +436,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
             Entry numberEntry;
             numberEntry.setVersion(hashEntry->version() + 1);
             m_storage->asyncSetRow(SYS_HASH_2_NUMBER, hash.hex(), std::move(numberEntry),
-                [&](std::optional<Error>&& error, bool success) {
+                [&](auto&& error, bool success) {
                     BOOST_CHECK(!error);
                     BOOST_CHECK_EQUAL(success, true);
 
@@ -877,7 +877,7 @@ BOOST_AUTO_TEST_CASE(preStoreTransaction)
 {
     initFixture();
     initBlocks(5);
-    auto txBytesList = std::make_shared<std::vector<bytesPointer>>();
+    auto txBytesList = std::make_shared<std::vector<bytesConstPtr>>();
     auto hashList = std::make_shared<crypto::HashList>();
     for (size_t i = 0; i < m_fakeBlocks->at(3)->transactionsSize(); ++i)
     {
@@ -958,12 +958,11 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     initChain(5);
 
     std::promise<Table> tablePromise;
-    m_storage->asyncOpenTable(
-        SYS_CONFIG, [&](std::optional<Error>&& error, std::optional<Table>&& table) {
-            BOOST_CHECK(!error);
+    m_storage->asyncOpenTable(SYS_CONFIG, [&](auto&& error, std::optional<Table>&& table) {
+        BOOST_CHECK(!error);
 
-            tablePromise.set_value(std::move(*table));
-        });
+        tablePromise.set_value(std::move(*table));
+    });
 
     auto table = tablePromise.get_future().get();
 
