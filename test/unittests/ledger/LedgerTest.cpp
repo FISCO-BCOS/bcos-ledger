@@ -133,7 +133,7 @@ public:
         m_ledger->asyncGetBlockHashByNumber(
             0, [=, &fakeBlockPromise](Error::Ptr, const HashType& _hash) {
                 m_fakeBlocks = fakeBlocks(
-                    m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number, _hash.hex());
+                    m_blockFactory->cryptoSuite(), m_blockFactory, 20, 20, _number, _hash.hex());
                 fakeBlockPromise.set_value(true);
             });
         future.get();
@@ -562,20 +562,28 @@ BOOST_AUTO_TEST_CASE(commit)
 BOOST_AUTO_TEST_CASE(parallelCommitSameBlock)
 {
     initFixture();
-    initBlocks(5);
+    initChain(1);
+    auto block = fakeBlock(m_blockFactory->cryptoSuite(), m_blockFactory, 20, 20, 2);
+    ParentInfo parentInfo;
+    parentInfo.blockNumber = 1;
+    parentInfo.blockHash = m_fakeBlocks->at(0)->blockHeader()->hash();
+    ParentInfoList parentInfoList;
+    parentInfoList.emplace_back(parentInfo);
+    block->blockHeader()->setNumber(2);
+    block->blockHeader()->setParentInfo(parentInfoList);
 
     // test parallel commit
-    auto table = getTableFactory(1);
+    auto table = getTableFactory(2);
     auto txDataList = std::make_shared<std::vector<bytesPointer>>();
     auto txHashList = std::make_shared<protocol::HashList>();
-    for (size_t j = 0; j < m_fakeBlocks->at(0)->transactionsSize(); ++j)
+    for (size_t j = 0; j < block->transactionsSize(); ++j)
     {
-        auto txData = m_fakeBlocks->at(0)->transaction(j)->encode(false);
+        auto txData = block->transaction(j)->encode(false);
         auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
         txDataList->emplace_back(txPointer);
-        txHashList->emplace_back(m_fakeBlocks->at(0)->transaction(j)->hash());
+        txHashList->emplace_back(block->transaction(j)->hash());
     }
-    m_storage->addStateCache(1, table);
+    m_storage->addStateCache(2, table);
 
     std::promise<bool> p1;
     auto f1 = p1.get_future();
@@ -587,35 +595,50 @@ BOOST_AUTO_TEST_CASE(parallelCommitSameBlock)
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
-    m_ledger->asyncStoreReceipts(table, m_fakeBlocks->at(0), [=, &p2](Error::Ptr _error) {
+    m_ledger->asyncStoreReceipts(table, block, [=, &p2](Error::Ptr _error) {
         BOOST_CHECK_EQUAL(_error, nullptr);
         p2.set_value(true);
     });
     BOOST_CHECK_EQUAL(f2.get(), true);
 
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, 2), [&](const tbb::blocked_range<size_t>& _r) {
-        for (auto i = _r.begin(); i < _r.end(); ++i)
+    BCOS_LOG(INFO) << LOG_BADGE("TEST") << LOG_DESC("==============Commit==============");
+    int testTimes = 10;
+
+    auto success_count = std::make_shared<std::atomic_int>();
+    auto count = std::make_shared<std::atomic_int>();
+    *success_count = 0;
+    *count = 0;
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, testTimes), [&](const tbb::blocked_range<size_t>& _r) {
+            for (auto i = _r.begin(); i < _r.end(); ++i)
+            {
+                m_ledger->asyncCommitBlock(
+                    block->blockHeader(), [&](Error::Ptr _error, LedgerConfig::Ptr _config) {
+                        if (_error)
+                        {
+                            BOOST_CHECK(_error->errorCode() == LedgerError::ErrorCommitBlock);
+                            BCOS_LOG(INFO) << LOG_BADGE("TEST") << LOG_DESC(_error->errorMessage());
+                        }
+                        if (_config)
+                        {
+                            BOOST_CHECK_EQUAL(_config->blockNumber(), 2);
+                            BOOST_CHECK(!_config->consensusNodeList().empty());
+                            BOOST_CHECK(!_config->observerNodeList().empty());
+                            success_count->fetch_add(1);
+                        }
+                        count->fetch_add(1);
+                    });
+            }
+        });
+    while (true)
+    {
+        if (count->load() == testTimes)
         {
-            std::promise<bool> p3;
-            auto f3 = p3.get_future();
-            m_ledger->asyncCommitBlock(m_fakeBlocks->at(0)->blockHeader(),
-                [&](Error::Ptr _error, LedgerConfig::Ptr _config) {
-                    if (_error)
-                    {
-                        BOOST_CHECK(_error->errorCode() == LedgerError::ErrorCommitBlock);
-                        BCOS_LOG(INFO) << LOG_BADGE("TEST") << LOG_DESC(_error->errorMessage());
-                    }
-                    if (_config)
-                    {
-                        BOOST_CHECK_EQUAL(_config->blockNumber(), 1);
-                        BOOST_CHECK(!_config->consensusNodeList().empty());
-                        BOOST_CHECK(!_config->observerNodeList().empty());
-                    }
-                    p3.set_value(true);
-                });
-            BOOST_CHECK_EQUAL(f3.get(), true);
+            break;
         }
-    });
+    }
+    // only success once
+    BOOST_CHECK(success_count->load() == 1);
 }
 
 BOOST_AUTO_TEST_CASE(parallelCommit)

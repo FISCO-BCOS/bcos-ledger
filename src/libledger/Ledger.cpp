@@ -59,9 +59,10 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
         auto commitPromise = std::make_shared<std::promise<bool>>();
         // default parent block hash located in parentInfo[0]
         ledger->checkBlockShouldCommit(_header->number(),
-            _header->parentInfo().at(0).blockHash.hex(), [commitPromise](bool _isCommit) {
+            _header->parentInfo().at(0).blockHash.hex(), [commitPromise, _header](bool _isCommit) {
                 LEDGER_LOG(DEBUG) << LOG_BADGE("checkBlockShouldCommit")
-                                  << LOG_KV("isCommit", _isCommit);
+                                  << LOG_KV("isCommit", _isCommit)
+                                  << LOG_KV("number", _header->number());
                 commitPromise->set_value(_isCommit);
             });
 
@@ -94,26 +95,30 @@ void Ledger::asyncCommitBlock(bcos::protocol::BlockHeader::Ptr _header,
                                           << LOG_KV("number", _header->number())
                                           << LOG_KV("blockHash", _header->hash().abridged())
                                           << LOG_KV("commitSize", _commitSize);
+                        {
+                            // revert blockNumber
+                            WriteGuard ll(ledger->m_blockNumberMutex);
+                            ledger->m_blockNumber = _header->number() - 1;
+                        }
                         _onCommitBlock(_error, nullptr);
                         return;
                     }
-                    auto blockNumber = _header->number();
                     LEDGER_LOG(INFO)
                         << LOG_BADGE("asyncCommitBlock") << LOG_DESC("commit block success")
-                        << LOG_KV("blockNumber", blockNumber)
+                        << LOG_KV("blockNumber", _header->number())
                         << LOG_KV("blockHash", _header->hash().abridged());
                     {
                         WriteGuard ll(ledger->m_blockNumberMutex);
-                        ledger->m_blockNumber = blockNumber;
+                        ledger->m_blockNumber = _header->number();
                     }
                     {
                         WriteGuard ll(ledger->m_blockHashMutex);
                         ledger->m_blockHash = _header->hash();
                     }
-                    ledger->m_blockHeaderCache.add(blockNumber, _header);
-                    ledger->notifyCommittedBlockNumber(blockNumber);
+                    ledger->m_blockHeaderCache.add(_header->number(), _header);
+                    ledger->notifyCommittedBlockNumber(_header->number());
                     auto callbackNotified = std::make_shared<bool>(false);
-                    ledger->asyncGetLedgerConfig(blockNumber, _header->hash(),
+                    ledger->asyncGetLedgerConfig(_header->number(), _header->hash(),
                         [_header, _onCommitBlock, callbackNotified](
                             Error::Ptr _error, WrapperLedgerConfig::Ptr _wrapperLedgerConfig) {
                             Guard l(_wrapperLedgerConfig->mutex());
@@ -450,9 +455,9 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
                         auto proofMap = std::make_shared<std::map<std::string, MerkleProofPtr>>(
                             con_proofMap->begin(), con_proofMap->end());
                         LEDGER_LOG(DEBUG) << LOG_BADGE("asyncGetBatchTxsByHashList")
-                                         << LOG_DESC("get tx list and proofMap complete")
-                                         << LOG_KV("txHashListSize", _txHashList->size())
-                                         << LOG_KV("proofMapSize", proofMap->size());
+                                          << LOG_DESC("get tx list and proofMap complete")
+                                          << LOG_KV("txHashListSize", _txHashList->size())
+                                          << LOG_KV("proofMapSize", proofMap->size());
                         _onGetTx(nullptr, _txList, proofMap);
                     }
                 };
@@ -475,9 +480,9 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
             else
             {
                 LEDGER_LOG(DEBUG) << LOG_BADGE("asyncGetBatchTxsByHashList")
-                                 << LOG_DESC("get tx list complete")
-                                 << LOG_KV("txHashListSize", _txHashList->size())
-                                 << LOG_KV("withProof", _withProof);
+                                  << LOG_DESC("get tx list complete")
+                                  << LOG_KV("txHashListSize", _txHashList->size())
+                                  << LOG_KV("withProof", _withProof);
                 _onGetTx(nullptr, _txList, nullptr);
             }
         });
@@ -1158,38 +1163,38 @@ void Ledger::getTxProof(
                 return;
             }
             auto blockNumber = receipt->blockNumber();
-            getTxs(blockNumber, [this, blockNumber, _onGetProof, _txHash](
-                                    Error::Ptr _error, TransactionsPtr _txs) {
-                if (_error && _error->errorCode() != CommonError::SUCCESS)
-                {
-                    LEDGER_LOG(ERROR)
-                        << LOG_BADGE("getTxProof") << LOG_DESC("getTxs callback error")
-                        << LOG_KV("errorCode", _error->errorCode())
-                        << LOG_KV("errorMsg", _error->errorMessage());
-                    _onGetProof(_error, nullptr);
-                    return;
-                }
-                if (!_txs)
-                {
-                    LEDGER_LOG(ERROR)
-                        << LOG_BADGE("getTxProof") << LOG_DESC("get txs error")
+            getTxs(blockNumber,
+                [this, blockNumber, _onGetProof, _txHash](Error::Ptr _error, TransactionsPtr _txs) {
+                    if (_error && _error->errorCode() != CommonError::SUCCESS)
+                    {
+                        LEDGER_LOG(ERROR)
+                            << LOG_BADGE("getTxProof") << LOG_DESC("getTxs callback error")
+                            << LOG_KV("errorCode", _error->errorCode())
+                            << LOG_KV("errorMsg", _error->errorMessage());
+                        _onGetProof(_error, nullptr);
+                        return;
+                    }
+                    if (!_txs)
+                    {
+                        LEDGER_LOG(ERROR) << LOG_BADGE("getTxProof") << LOG_DESC("get txs error")
+                                          << LOG_KV("blockNumber", blockNumber)
+                                          << LOG_KV("txHash", _txHash.hex());
+                        auto error = std::make_shared<Error>(
+                            LedgerError::CallbackError, "getTxs callback empty txs");
+                        _onGetProof(error, nullptr);
+                        return;
+                    }
+                    auto merkleProofPtr = std::make_shared<MerkleProof>();
+                    auto parent2ChildList = m_merkleProofUtility->getParent2ChildList(
+                        m_blockFactory->cryptoSuite(), _txs);
+                    auto child2Parent = m_merkleProofUtility->getChild2Parent(parent2ChildList);
+                    m_merkleProofUtility->getMerkleProof(
+                        _txHash, *parent2ChildList, *child2Parent, *merkleProofPtr);
+                    LEDGER_LOG(TRACE)
+                        << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
                         << LOG_KV("blockNumber", blockNumber) << LOG_KV("txHash", _txHash.hex());
-                    auto error = std::make_shared<Error>(
-                        LedgerError::CallbackError, "getTxs callback empty txs");
-                    _onGetProof(error, nullptr);
-                    return;
-                }
-                auto merkleProofPtr = std::make_shared<MerkleProof>();
-                auto parent2ChildList =
-                    m_merkleProofUtility->getParent2ChildList(m_blockFactory->cryptoSuite(), _txs);
-                auto child2Parent = m_merkleProofUtility->getChild2Parent(parent2ChildList);
-                m_merkleProofUtility->getMerkleProof(
-                    _txHash, *parent2ChildList, *child2Parent, *merkleProofPtr);
-                LEDGER_LOG(TRACE) << LOG_BADGE("getTxProof") << LOG_DESC("get merkle proof success")
-                                  << LOG_KV("blockNumber", blockNumber)
-                                  << LOG_KV("txHash", _txHash.hex());
-                _onGetProof(nullptr, merkleProofPtr);
-            });
+                    _onGetProof(nullptr, merkleProofPtr);
+                });
         });
 }
 
@@ -1410,10 +1415,15 @@ void Ledger::checkBlockShouldCommit(const BlockNumber& _blockNumber, const std::
                 _onGetResult(false);
                 return;
             }
-            ledger->getLatestBlockHash(_number, [_number, _parentHash, _blockNumber, _onGetResult](
-                                                    std::string_view _hashStr) {
+            ledger->getLatestBlockHash(_number, [_number, _parentHash, _blockNumber, _onGetResult,
+                                                    ledger](std::string_view _hashStr) {
                 if (_blockNumber == _number + 1 && _parentHash == std::string(_hashStr))
                 {
+                    {
+                        // on commit step, remember revert if error occur
+                        WriteGuard ll(ledger->m_blockNumberMutex);
+                        ledger->m_blockNumber = _number + 1;
+                    }
                     _onGetResult(true);
                     return;
                 }
@@ -1502,8 +1512,8 @@ void Ledger::writeTotalTransactionCount(
     if (block->transactionsSize() == 0 && block->receiptsSize() == 0)
     {
         LEDGER_LOG(WARNING) << LOG_BADGE("writeTotalTransactionCount")
-                          << LOG_DESC("Empty block, stop update total tx count")
-                          << LOG_KV("blockNumber", block->blockHeader()->number());
+                            << LOG_DESC("Empty block, stop update total tx count")
+                            << LOG_KV("blockNumber", block->blockHeader()->number());
         return;
     }
     auto self = std::weak_ptr<Ledger>(std::dynamic_pointer_cast<Ledger>(shared_from_this()));
@@ -1659,8 +1669,8 @@ bool Ledger::buildGenesisBlock(
     if (!getStorageGetter()->checkTableExist(SYS_NUMBER_2_BLOCK_HEADER, getMemoryTableFactory(0)))
     {
         LEDGER_LOG(INFO) << LOG_BADGE("buildGenesisBlock")
-                         << LOG_DESC(
-                                std::string(SYS_NUMBER_2_BLOCK_HEADER) + " table does not exist, create system tables");
+                         << LOG_DESC(std::string(SYS_NUMBER_2_BLOCK_HEADER) +
+                                     " table does not exist, create system tables");
         getStorageSetter()->createTables(getMemoryTableFactory(0));
     };
     Block::Ptr block = nullptr;
