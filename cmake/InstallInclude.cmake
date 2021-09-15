@@ -5,9 +5,3 @@ install(
         DESTINATION "${DESTINATION_INCLUDE_DIR}"
         FILES_MATCHING PATTERN "*.h"
 )
-
-install(
-        DIRECTORY "src/libeventfilter"
-        DESTINATION "${DESTINATION_INCLUDE_DIR}"
-        FILES_MATCHING PATTERN "*.h"
-)

@@ -257,5 +257,6 @@ private:
     StorageSetter::Ptr m_storageSetter;
     ledger::MerkleProofUtility::Ptr m_merkleProofUtility;
     bcos::ThreadPool::Ptr m_commitPool = nullptr;
+    Mutex m_commitMutex;
 };
 }  // namespace bcos::ledger
