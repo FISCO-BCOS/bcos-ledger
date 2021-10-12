@@ -84,7 +84,8 @@ public:
     inline void initStorage()
     {
         auto hashImpl = std::make_shared<Keccak256Hash>();
-        m_storage = std::make_shared<StateStorage>(nullptr, hashImpl, 0);
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr);
+        m_storage = std::make_shared<StateStorage>(memoryStorage);
         BOOST_TEST(m_storage != nullptr);
         m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage);
         BOOST_CHECK(m_ledger != nullptr);
@@ -92,7 +93,8 @@ public:
 
     inline void initErrorStorage()
     {
-        m_storage = std::make_shared<StateStorage>(nullptr, nullptr, 0);
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr);
+        m_storage = std::make_shared<StateStorage>(memoryStorage);
         BOOST_TEST(m_storage != nullptr);
         m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage);
         BOOST_CHECK(m_ledger != nullptr);
@@ -104,7 +106,7 @@ public:
         m_param->setBlockNumber(0);
         m_param->setHash(HashType(""));
         m_param->setBlockTxCountLimit(1000);
-        m_param->setConsensusTimeout(1000);
+        m_param->setConsensusTimeout(3000);
 
         auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
         consensus::ConsensusNodeList consensusNodeList;
@@ -140,7 +142,7 @@ public:
 
         auto result1 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
         BOOST_CHECK(!result1);
-        m_param->setConsensusTimeout(10);
+        m_param->setConsensusTimeout(3000);
         auto result2 = m_ledger->buildGenesisBlock(m_param, "test", 30, "");
         BOOST_CHECK(!result2);
         auto result3 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
@@ -197,7 +199,6 @@ public:
             BOOST_CHECK_EQUAL(f1.get(), true);
 
             auto& block = m_fakeBlocks->at(i);
-            std::dynamic_pointer_cast<StateStorage>(m_storage)->setCheckVersion(false);
 
             // write transactions
             std::promise<bool> writeTransactions;
@@ -211,7 +212,6 @@ public:
             std::promise<bool> prewritePromise;
             m_ledger->asyncPrewriteBlock(
                 m_storage, block, [&](Error::Ptr&&) { prewritePromise.set_value(true); });
-            std::dynamic_pointer_cast<StateStorage>(m_storage)->setCheckVersion(true);
 
             prewritePromise.get_future().get();
         }
@@ -244,7 +244,6 @@ public:
 
             // BOOST_CHECK_EQUAL(f3.get(), true);
 
-            std::dynamic_pointer_cast<StateStorage>(m_storage)->setCheckVersion(false);
             std::promise<bool> p3;
             m_ledger->asyncPrewriteBlock(m_storage, m_fakeBlocks->at(i), [&](Error::Ptr&& error) {
                 BOOST_CHECK(!error);
@@ -377,14 +376,12 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
 
     Entry hashEntry;
     hashEntry.importFields({""});
-    hashEntry.setVersion(oldHashEntry.version() + 1);
 
     // deal with version conflict
     std::promise<Error::UniquePtr> setRowPromise;
     m_storage->asyncSetRow(SYS_NUMBER_2_HASH, "0", std::move(std::move(hashEntry)),
-        [&setRowPromise](auto&& error, bool success) {
+        [&setRowPromise](auto&& error) {
             BOOST_CHECK(!error);
-            BOOST_CHECK_EQUAL(success, true);
 
             setRowPromise.set_value(std::move(error));
         });
@@ -434,11 +431,9 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
                 std::string(hashEntry->getField(SYS_VALUE)), bcos::crypto::HashType::FromHex);
 
             Entry numberEntry;
-            numberEntry.setVersion(hashEntry->version() + 1);
             m_storage->asyncSetRow(SYS_HASH_2_NUMBER, hash.hex(), std::move(numberEntry),
-                [&](auto&& error, bool success) {
+                [&](auto&& error) {
                     BOOST_CHECK(!error);
-                    BOOST_CHECK_EQUAL(success, true);
 
                     m_ledger->asyncGetBlockNumberByHash(
                         hash, [&](Error::Ptr error, BlockNumber number) {
@@ -544,9 +539,8 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
     Entry consensusEntry1;
     consensusEntry1.importFields({CONSENSUS_SEALER, "100", "5"});
     m_storage->asyncSetRow(SYS_CONSENSUS, bcos::crypto::HashType("56789").hex(),
-        std::move(consensusEntry1), [&](auto&& error, bool success) {
+        std::move(consensusEntry1), [&](auto&& error) {
             BOOST_CHECK(!error);
-            BOOST_CHECK_EQUAL(success, true);
             setSealer1.set_value(true);
         });
     setSealer1.get_future().get();
@@ -555,9 +549,8 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
     Entry consensusEntry2;
     consensusEntry2.importFields({CONSENSUS_SEALER, "99", "6"});
     m_storage->asyncSetRow(SYS_CONSENSUS, bcos::crypto::HashType("567892222").hex(),
-        std::move(consensusEntry2), [&](auto&& error, bool success) {
+        std::move(consensusEntry2), [&](auto&& error) {
             BOOST_CHECK(!error);
-            BOOST_CHECK_EQUAL(success, true);
             setSealer2.set_value(true);
         });
     setSealer2.get_future().get();
@@ -577,11 +570,9 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
     std::promise<bool> setSealer3;
     Entry numberEntry;
     numberEntry.importFields({"5"});
-    numberEntry.setVersion(outEntry.version() + 1);
     m_storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
-        [&](auto&& error, bool success) {
+        [&](auto&& error) {
             BOOST_CHECK(!error);
-            BOOST_CHECK_EQUAL(success, true);
             setSealer3.set_value(true);
         });
     setSealer3.get_future().get();
@@ -972,7 +963,6 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     Entry newEntry = table.newEntry();
     newEntry.setField(SYS_VALUE, "2000");
     newEntry.setField(SYS_CONFIG_ENABLE_BLOCK_NUMBER, "5");
-    newEntry.setVersion(oldEntry->version() + 1);
 
     table.setRow(SYSTEM_KEY_TX_COUNT_LIMIT, newEntry);
 

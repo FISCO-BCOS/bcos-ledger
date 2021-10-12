@@ -66,17 +66,11 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(total),
                               failed = std::make_shared<bool>(false),
                               callback = std::move(callback)](
-                              Error::UniquePtr&& error, bool success, size_t count = 1) {
+                              Error::UniquePtr&& error, size_t count = 1) {
         *total -= count;
         if (error)
         {
             LEDGER_LOG(ERROR) << "Prewrite block error!" << boost::diagnostic_information(*error);
-            *failed = true;
-        }
-
-        if (!success)
-        {
-            LEDGER_LOG(ERROR) << "Failed request!";
             *failed = true;
         }
 
@@ -100,22 +94,19 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     Entry numberEntry;
     numberEntry.importFields({blockNumberStr});
     storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
-        [setRowCallback](
-            auto&& error, bool success) { setRowCallback(std::move(error), success); });
+        [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
     // number 2 hash
     Entry hashEntry;
     hashEntry.importFields({header->hash().hex()});
     storage->asyncSetRow(SYS_NUMBER_2_HASH, blockNumberStr, std::move(hashEntry),
-        [setRowCallback](
-            auto&& error, bool success) { setRowCallback(std::move(error), success); });
+        [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
     // hash 2 number
     Entry hash2NumberEntry;
     hash2NumberEntry.importFields({blockNumberStr});
     storage->asyncSetRow(SYS_HASH_2_NUMBER, header->hash().hex(), std::move(hash2NumberEntry),
-        [setRowCallback](
-            auto&& error, bool success) { setRowCallback(std::move(error), success); });
+        [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
     // number 2 header
     bytes headerBuffer;
@@ -124,8 +115,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     Entry number2HeaderEntry;
     number2HeaderEntry.importFields({std::move(headerBuffer)});
     storage->asyncSetRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr, std::move(number2HeaderEntry),
-        [setRowCallback](
-            auto&& error, bool success) { setRowCallback(std::move(error), success); });
+        [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
     // number 2 nonce
     auto nonceBlock = m_blockFactory->createBlock();
@@ -136,8 +126,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     Entry number2NonceEntry;
     number2NonceEntry.importFields({std::move(nonceBuffer)});
     storage->asyncSetRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr, std::move(number2NonceEntry),
-        [setRowCallback](
-            auto&& error, bool success) { setRowCallback(std::move(error), success); });
+        [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
     // number 2 transactions
     auto transactionsBlock = m_blockFactory->createBlock();
@@ -154,8 +143,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     Entry number2TransactonHashesEntry;
     number2TransactonHashesEntry.importFields({std::move(transactionsBuffer)});
     storage->asyncSetRow(SYS_NUMBER_2_TXS, blockNumberStr, std::move(number2TransactonHashesEntry),
-        [setRowCallback](
-            auto&& error, bool success) { setRowCallback(std::move(error), success); });
+        [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
     // hash 2 receipts
     bytes receiptBuffer;
@@ -170,8 +158,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         Entry receiptEntry;
         receiptEntry.importFields({std::move(receiptBuffer)});
         storage->asyncSetRow(SYS_HASH_2_RECEIPT, hash.hex(), std::move(receiptEntry),
-            [setRowCallback](
-                auto&& error, bool success) { setRowCallback(std::move(error), success); });
+            [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
     }
 
     // total transaction count
@@ -180,7 +167,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         if (error)
         {
             LEDGER_LOG(INFO) << "No total transaction count entry, add new one";
-            setRowCallback(std::make_unique<Error>(*error), false, 2);
+            setRowCallback(std::make_unique<Error>(*error), 2);
             return;
         }
 
@@ -203,18 +190,15 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         Entry totalEntry;
         totalEntry.importFields({boost::lexical_cast<std::string>(total)});
         storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
-            std::move(totalEntry), [setRowCallback](auto&& error, bool success) {
-                setRowCallback(std::move(error), success);
-            });
+            std::move(totalEntry),
+            [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
         if (hasFailed)
         {
             Entry failedEntry;
             failedEntry.importFields({boost::lexical_cast<std::string>(failed)});
             storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
-                std::move(failedEntry), [setRowCallback](auto&& error, bool success) {
-                    setRowCallback(std::move(error), success);
-                });
+                std::move(failedEntry), [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
         }
         else
         {
@@ -260,16 +244,11 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
 
                 LEDGER_LOG(TRACE) << "Write transaction" << LOG_KV("hash", (*hashList)[i].hex());
                 table->asyncSetRow((*hashList)[i].hex(), std::move(entry),
-                    [total, count, callback](auto&& error, bool success) {
+                    [total, count, callback](auto&& error) {
                         if (error)
                         {
                             ++std::get<1>(*count);
                             LEDGER_LOG(ERROR) << "Set row failed!" << error->what();
-                        }
-                        else if (!success)
-                        {
-                            ++std::get<1>(*count);
-                            LEDGER_LOG(ERROR) << "Transaction already exists!";
                         }
                         else
                         {
@@ -1192,7 +1171,7 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
 {
     m_storage->asyncOpenTable(table, [this, key = std::string(key), callback = std::move(callback)](
                                          auto&& error, std::optional<Table>&& table) {
-        auto tableError = checkTableValid(std::move(error), table, SYS_CURRENT_STATE);
+        auto tableError = checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
         if (tableError)
         {
             callback(std::move(tableError), {});
@@ -1445,10 +1424,10 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
 
     for (size_t i = 0; i < total; i += 2)
     {
-        std::promise<std::tuple<Error::UniquePtr, bool>> createTablePromise;
+        std::promise<std::tuple<Error::UniquePtr>> createTablePromise;
         m_storage->asyncCreateTable(std::string(tables[i]), std::string(tables[i + 1]),
-            [&createTablePromise](auto&& error, bool success) {
-                createTablePromise.set_value({std::move(error), success});
+            [&createTablePromise](auto&& error, std::optional<Table>&&) {
+                createTablePromise.set_value({std::move(error)});
             });
         auto createTableResult = createTablePromise.get_future().get();
         if (std::get<0>(createTableResult))
@@ -1564,12 +1543,12 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
 void Ledger::createFileSystemTables(const std::string& _groupId)
 {
     // create / dir
-    std::promise<std::tuple<Error::UniquePtr, bool>> createPromise;
+    std::promise<Error::UniquePtr> createPromise;
     m_storage->asyncCreateTable(
-        FS_ROOT, FS_FIELD_COMBINED, [&createPromise](auto&& error, bool success) {
-            createPromise.set_value({std::move(error), success});
+        FS_ROOT, FS_FIELD_COMBINED, [&createPromise](auto&& error, std::optional<Table>&&) {
+            createPromise.set_value({std::move(error)});
         });
-    auto [createError, createSuccess] = createPromise.get_future().get();
+    auto createError= createPromise.get_future().get();
     if (createError)
     {
         BOOST_THROW_EXCEPTION(*createError);
@@ -1662,13 +1641,13 @@ void Ledger::recursiveBuildDir(const std::string& _absoluteDir)
         newFileEntry.setField(FS_FIELD_EXTRA, "");
         table->setRow(dir, newFileEntry);
 
-        std::promise<std::tuple<Error::UniquePtr, bool>> createPromise;
+        std::promise<Error::UniquePtr> createPromise;
         m_storage->asyncCreateTable(
-            root + dir, FS_FIELD_COMBINED, [&createPromise](auto&& error, bool success) {
-                createPromise.set_value({std::move(error), success});
+            root + dir, FS_FIELD_COMBINED, [&createPromise](auto&& error, std::optional<Table>&&) {
+                createPromise.set_value({std::move(error)});
             });
 
-        auto [createError, createSuccess] = createPromise.get_future().get();
+        auto createError = createPromise.get_future().get();
         if (createError)
         {
             BOOST_THROW_EXCEPTION(*createError);
