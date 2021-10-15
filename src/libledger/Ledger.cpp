@@ -198,7 +198,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             Entry failedEntry;
             failedEntry.importFields({boost::lexical_cast<std::string>(failed)});
             storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
-                std::move(failedEntry), [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
+                std::move(failedEntry),
+                [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
         }
         else
         {
@@ -243,8 +244,8 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
                 entry.setField(SYS_VALUE, *((*txList)[i]));  // copy the bytes entry
 
                 LEDGER_LOG(TRACE) << "Write transaction" << LOG_KV("hash", (*hashList)[i].hex());
-                table->asyncSetRow((*hashList)[i].hex(), std::move(entry),
-                    [total, count, callback](auto&& error) {
+                table->asyncSetRow(
+                    (*hashList)[i].hex(), std::move(entry), [total, count, callback](auto&& error) {
                         if (error)
                         {
                             ++std::get<1>(*count);
@@ -667,24 +668,27 @@ void Ledger::asyncGetTotalTransactionCount(
             size_t i = 0;
             for (auto& entry : entries)
             {
+                int64_t value = 0;
                 if (!entry)
                 {
-                    LEDGER_LOG(INFO)
+                    LEDGER_LOG(WARNING)
                         << "GetTotalTransactionCount error" << LOG_KV("index", i) << " empty";
-                    callback(nullptr, 0, 0, 0);
-                    return;
+                }
+                else
+                {
+                    value = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
                 }
 
                 switch (i)
                 {
                 case 0:
-                    totalCount = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+                    totalCount = value;
                     break;
                 case 1:
-                    failedCount = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+                    failedCount = value;
                     break;
                 case 2:
-                    blockNumber = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+                    blockNumber = value;
                     break;
                 }
             }
@@ -917,8 +921,10 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
                                         std::make_shared<consensus::ConsensusNode>(nodeID, weight));
                                 }
                             }
-                            catch (...)
+                            catch (std::exception& e)
                             {
+                                LEDGER_LOG(WARNING)
+                                    << "Exception: " << boost::diagnostic_information(e);
                                 continue;
                             }
                         }
@@ -1171,7 +1177,8 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
 {
     m_storage->asyncOpenTable(table, [this, key = std::string(key), callback = std::move(callback)](
                                          auto&& error, std::optional<Table>&& table) {
-        auto tableError = checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
+        auto tableError =
+            checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
         if (tableError)
         {
             callback(std::move(tableError), {});
@@ -1548,7 +1555,7 @@ void Ledger::createFileSystemTables(const std::string& _groupId)
         FS_ROOT, FS_FIELD_COMBINED, [&createPromise](auto&& error, std::optional<Table>&&) {
             createPromise.set_value({std::move(error)});
         });
-    auto createError= createPromise.get_future().get();
+    auto createError = createPromise.get_future().get();
     if (createError)
     {
         BOOST_THROW_EXCEPTION(*createError);
