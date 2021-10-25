@@ -140,9 +140,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     bytes transactionsBuffer;
     transactionsBlock->encode(transactionsBuffer);
 
-    Entry number2TransactonHashesEntry;
-    number2TransactonHashesEntry.importFields({std::move(transactionsBuffer)});
-    storage->asyncSetRow(SYS_NUMBER_2_TXS, blockNumberStr, std::move(number2TransactonHashesEntry),
+    Entry number2TransactionHashesEntry;
+    number2TransactionHashesEntry.importFields({std::move(transactionsBuffer)});
+    storage->asyncSetRow(SYS_NUMBER_2_TXS, blockNumberStr, std::move(number2TransactionHashesEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
     // hash 2 receipts
@@ -323,7 +323,7 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
     if ((_blockFlag & TRANSACTIONS) || (_blockFlag & RECEIPTS))
     {
         fetchers.push_back([this, block, _blockNumber, finally, _blockFlag]() {
-            asyncGetBlockTransactionHashes(block, _blockNumber,
+            asyncGetBlockTransactionHashes(_blockNumber,
                 [this, _blockFlag, block, finally](
                     Error::Ptr&& error, std::vector<std::string>&& hashes) {
                     if (error)
@@ -1017,12 +1017,11 @@ void Ledger::asyncGetBlockHeader(bcos::protocol::Block::Ptr block,
         });
 }
 
-void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::Block::Ptr block,
-    bcos::protocol::BlockNumber blockNumber,
+void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
     std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback)
 {
     m_storage->asyncOpenTable(SYS_NUMBER_2_TXS,
-        [this, blockNumber, block, callback](auto&& error, std::optional<Table>&& table) {
+        [this, blockNumber, callback](auto&& error, std::optional<Table>&& table) {
             auto validError = checkTableValid(std::move(error), table, SYS_NUMBER_2_BLOCK_HEADER);
             if (validError)
             {
@@ -1031,7 +1030,7 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::Block::Ptr block,
             }
 
             table->asyncGetRow(boost::lexical_cast<std::string>(blockNumber),
-                [this, blockNumber, callback, block](auto&& error, std::optional<Entry>&& entry) {
+                [this, blockNumber, callback](auto&& error, std::optional<Entry>&& entry) {
                     auto validError = checkEntryValid(
                         std::move(error), entry, boost::lexical_cast<std::string>(blockNumber));
                     if (validError)
@@ -1047,7 +1046,7 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::Block::Ptr block,
                     std::vector<std::string> hashList(blockWithTxs->transactionsHashSize());
                     for (size_t i = 0; i < blockWithTxs->transactionsHashSize(); ++i)
                     {
-                        auto& hash = blockWithTxs->transactionHash(i);
+                        auto hash = blockWithTxs->transactionHash(i);
                         hashList[i] = hash.hex();
                     }
 
@@ -1088,7 +1087,6 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                 return;
             }
 
-            // std::vector<protocol::Transaction::Ptr> transactions(hashes->size());
             std::vector<protocol::Transaction::Ptr> transactions;
             size_t i = 0;
             for (auto& entry : entries)
@@ -1096,19 +1094,12 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                 if (!entry.has_value())
                 {
                     LEDGER_LOG(INFO) << "Get transaction failed: " << (*hashes)[i] << " not found";
-                    // callback(BCOS_ERROR_PTR(
-                    //              LedgerError::GetStorageError, "Batch get transaction error!"),
-                    //     std::vector<protocol::Transaction::Ptr>());
-                    // return;
-                    // transactions[i] = nullptr;
-                    // transactions.push_back(nullptr);
                 }
                 else
                 {
                     auto field = entry->getField(SYS_VALUE);
                     auto transaction = m_blockFactory->transactionFactory()->createTransaction(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
-                    // transactions[i] = transaction;
                     transactions.push_back(std::move(transaction));
                 }
 
