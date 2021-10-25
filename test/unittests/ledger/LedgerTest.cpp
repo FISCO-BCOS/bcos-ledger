@@ -517,11 +517,15 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
 
-    consensus::ConsensusNodeList consensusNodeList;
-    auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
-    auto node =
-        std::make_shared<consensus::ConsensusNode>(signImpl->generateKeyPair()->publicKey(), 10);
-    consensusNodeList.emplace_back(node);
+    std::promise<bool> setSealer1;
+    Entry consensusEntry1;
+    consensusEntry1.importFields({CONSENSUS_SEALER, "100", "5"});
+    m_storage->asyncSetRow(SYS_CONSENSUS, bcos::crypto::HashType("56789").hex(),
+        std::move(consensusEntry1), [&](auto&& error) {
+            BOOST_CHECK(!error);
+            setSealer1.set_value(true);
+        });
+    setSealer1.get_future().get();
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
@@ -533,49 +537,8 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
         });
     BOOST_CHECK_EQUAL(f2.get(), true);
 
-    initChain(5);
-
-    std::promise<bool> setSealer1;
-    Entry consensusEntry1;
-    consensusEntry1.importFields({CONSENSUS_SEALER, "100", "5"});
-    m_storage->asyncSetRow(SYS_CONSENSUS, bcos::crypto::HashType("56789").hex(),
-        std::move(consensusEntry1), [&](auto&& error) {
-            BOOST_CHECK(!error);
-            setSealer1.set_value(true);
-        });
-    setSealer1.get_future().get();
-
-    std::promise<bool> setSealer2;
-    Entry consensusEntry2;
-    consensusEntry2.importFields({CONSENSUS_SEALER, "99", "6"});
-    m_storage->asyncSetRow(SYS_CONSENSUS, bcos::crypto::HashType("567892222").hex(),
-        std::move(consensusEntry2), [&](auto&& error) {
-            BOOST_CHECK(!error);
-            setSealer2.set_value(true);
-        });
-    setSealer2.get_future().get();
-
     // set block number to 5
-    std::promise<bool> get1;
-    Entry outEntry;
-    m_storage->asyncGetRow(
-        SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, [&](auto&& error, auto&& entry) {
-            BOOST_CHECK(!error);
-            outEntry = std::move(*entry);
-            get1.set_value(true);
-        });
-
-    get1.get_future().get();
-
-    std::promise<bool> setSealer3;
-    Entry numberEntry;
-    numberEntry.importFields({"5"});
-    m_storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
-        [&](auto&& error) {
-            BOOST_CHECK(!error);
-            setSealer3.set_value(true);
-        });
-    setSealer3.get_future().get();
+    initChain(5);
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();

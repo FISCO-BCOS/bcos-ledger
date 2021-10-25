@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-18.04, macos-latest]
+        os: [macos-latest]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -114,7 +114,7 @@ jobs:
             hunter-ubuntu-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
             hunter-ubuntu-v3-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
-        run: sudo apt-get install -y software-properties-common python-software-properties && sudo add-apt-repository ppa:ubuntu-toolchain-r/test && sudo apt-get update && sudo apt install -y git curl build-essential cmake ccache gcc-7 g++-7 lcov&& sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 60 --slave /usr/bin/g++ g++ /usr/bin/g++-7 && sudo update-alternatives --config gcc
+        run: sudo apt install -y git curl build-essential cmake ccache
       - name: configure
         run: cmake . -DTESTS=ON -DCOVERAGE=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
