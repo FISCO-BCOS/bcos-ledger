@@ -730,10 +730,13 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                     auto number = boost::lexical_cast<bcos::protocol::BlockNumber>(
                         entry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
 
-                    if (number > blockNumber)
+                    // The param was reset at height getLatestBlockNumber(), and takes effect in next
+                    // block. So we query the status of getLatestBlockNumber() + 1.
+                    auto effectNumber = blockNumber + 1;
+                    if (number > effectNumber)
                     {
                         LEDGER_LOG(ERROR) << "GetSystemConfigByKey error, config not available"
-                                          << LOG_KV("currentBlockNumber", blockNumber)
+                                          << LOG_KV("currentBlockNumber", effectNumber)
                                           << LOG_KV("available number", number);
                         callback(BCOS_ERROR_PTR(LedgerError::ErrorArgument, "Config not available"),
                             "", -1);
@@ -902,12 +905,15 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
                             }
                             try
                             {
+                                // The param was reset at height getLatestBlockNumber(), and takes effect in next
+                                // block. So we query the status of getLatestBlockNumber() + 1.
+                                auto effectNumber = blockNumber + 1;
                                 auto nodeType = entry->getField(NODE_TYPE);
                                 auto enableNum = boost::lexical_cast<BlockNumber>(
                                     entry->getField(NODE_ENABLE_NUMBER));
                                 auto weight =
                                     boost::lexical_cast<uint64_t>(entry->getField(NODE_WEIGHT));
-                                if ((nodeType == type) && enableNum <= blockNumber)
+                                if ((nodeType == type) && enableNum <= effectNumber)
                                 {
                                     crypto::NodeIDPtr nodeID =
                                         m_blockFactory->cryptoSuite()->keyFactory()->createKey(
