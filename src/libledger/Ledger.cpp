@@ -668,24 +668,27 @@ void Ledger::asyncGetTotalTransactionCount(
             size_t i = 0;
             for (auto& entry : entries)
             {
+                int64_t value = 0;
                 if (!entry)
                 {
-                    LEDGER_LOG(INFO)
+                    LEDGER_LOG(WARNING)
                         << "GetTotalTransactionCount error" << LOG_KV("index", i) << " empty";
-                    callback(nullptr, 0, 0, 0);
-                    return;
+                }
+                else
+                {
+                    value = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
                 }
 
                 switch (i)
                 {
                 case 0:
-                    totalCount = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+                    totalCount = value;
                     break;
                 case 1:
-                    failedCount = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+                    failedCount = value;
                     break;
                 case 2:
-                    blockNumber = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+                    blockNumber = value;
                     break;
                 }
             }
@@ -918,8 +921,10 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
                                         std::make_shared<consensus::ConsensusNode>(nodeID, weight));
                                 }
                             }
-                            catch (...)
+                            catch (std::exception& e)
                             {
+                                LEDGER_LOG(WARNING)
+                                    << "Exception: " << boost::diagnostic_information(e);
                                 continue;
                             }
                         }
