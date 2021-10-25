@@ -1537,6 +1537,37 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
         consensusTable->setRow(node->nodeID()->hex(), std::move(observerNodeEntry));
     }
 
+    // write current state
+    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> stateTablePromise;
+    m_storage->asyncOpenTable(
+        SYS_CURRENT_STATE, [&stateTablePromise](auto&& error, std::optional<Table>&& table) {
+            stateTablePromise.set_value({std::move(error), std::move(table)});
+        });
+
+    auto [stateError, stateTable] = stateTablePromise.get_future().get();
+    if (stateError)
+    {
+        BOOST_THROW_EXCEPTION(*stateError);
+    }
+
+    if (!stateTable)
+    {
+        BOOST_THROW_EXCEPTION(
+            BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CURRENT_STATE failed!"));
+    }
+
+    Entry currentNumber;
+    currentNumber.importFields({"0"});
+    stateTable->setRow(SYS_KEY_CURRENT_NUMBER, std::move(currentNumber));
+
+    Entry txNumber;
+    txNumber.importFields({"0"});
+    stateTable->setRow(SYS_KEY_TOTAL_TRANSACTION_COUNT, std::move(txNumber));
+
+    Entry txFailedNumber;
+    txFailedNumber.importFields({"0"});
+    stateTable->setRow(SYS_KEY_TOTAL_FAILED_TRANSACTION, std::move(txFailedNumber));
+
     return true;
 }
 
