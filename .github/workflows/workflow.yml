@@ -21,8 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # os: [ubuntu-18.04, macos-latest]
-        os: [macos-latest]
+        os: [ubuntu-18.04, macos-latest]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -77,11 +76,11 @@ jobs:
             /home/runner/.hunter
             /home/runner/.hunter/_Base/Download/
             ccache
-          key: hunter-gcc-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-gcc-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-gcc-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-gcc-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-gcc-v2-notest-${{ runner.temp }}-
+            hunter-gcc-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-gcc-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-gcc-v3-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
         run: sudo apt install -y git curl build-essential cmake ccache
       - name: configure
@@ -90,12 +89,12 @@ jobs:
         run: make -j2
       - name: run test
         run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
-  ubuntu16_04_build_with_gcc:
-    name: ubuntu16_04_build_with_gcc
+  ubuntu18_04_build_with_gcc:
+    name: ubuntu18_04_build_with_gcc
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-16.04]
+        os: [ubuntu-18.04]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -109,11 +108,11 @@ jobs:
             /home/runner/.hunter
             /home/runner/.hunter/_Base/Download/
             ccache
-          key: hunter-ubuntu-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-ubuntu-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-ubuntu-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-ubuntu-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-ubuntu-v2-notest-${{ runner.temp }}-
+            hunter-ubuntu-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-ubuntu-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-ubuntu-v3-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
         run: sudo apt-get install -y software-properties-common python-software-properties && sudo add-apt-repository ppa:ubuntu-toolchain-r/test && sudo apt-get update && sudo apt install -y git curl build-essential cmake ccache gcc-7 g++-7 lcov&& sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 60 --slave /usr/bin/g++ g++ /usr/bin/g++-7 && sudo update-alternatives --config gcc
       - name: configure
@@ -156,11 +155,11 @@ jobs:
             /github/home/.hunter
             /github/home/.hunter/_Base/Download/
             ccache
-          key: hunter-centos-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-centos-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-centos-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-centos-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-centos-v2-notest-${{ runner.temp }}-
+            hunter-centos-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-centos-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-centos-v3-notest-${{ runner.temp }}-
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
