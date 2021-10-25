@@ -114,7 +114,7 @@ jobs:
             hunter-ubuntu-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
             hunter-ubuntu-v3-notest-${{ runner.temp }}-
       - name: install Ubuntu dependencies
-        run: sudo apt install -y git curl build-essential cmake ccache
+        run: sudo apt install -y git curl build-essential cmake ccache lcov
       - name: configure
         run: cmake . -DTESTS=ON -DCOVERAGE=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
