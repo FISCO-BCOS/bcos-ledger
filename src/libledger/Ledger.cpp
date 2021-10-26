@@ -62,8 +62,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
 
-    size_t total = 6 + mutableBlock->receiptsSize() + 2;
-    auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(total),
+    // 8 storage callbacks and write hash=>receipt
+    size_t TOTAL_CALLBACK = 8 + mutableBlock->receiptsSize();
+    auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(TOTAL_CALLBACK),
                               failed = std::make_shared<bool>(false),
                               callback = std::move(callback)](
                               Error::UniquePtr&& error, size_t count = 1) {
@@ -147,10 +148,17 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     // hash 2 receipts
     bytes receiptBuffer;
+    int64_t totalCount = 0;
+    int64_t failedCount = 0;
     for (size_t i = 0; i < mutableBlock->receiptsSize(); ++i)
     {
         auto hash = mutableBlock->transactionHash(i);
         auto receipt = mutableBlock->receipt(i);
+        if (receipt->status() != 0)
+        {
+            failedCount++;
+        }
+        totalCount++;
 
         receiptBuffer.clear();
         receipt->encode(receiptBuffer);
@@ -162,49 +170,36 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     }
 
     // total transaction count
-    asyncGetTotalTransactionCount([storage, mutableBlock, setRowCallback](Error::Ptr error,
-                                      int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
-        if (error)
-        {
-            LEDGER_LOG(INFO) << "No total transaction count entry, add new one";
-            setRowCallback(std::make_unique<Error>(*error), 2);
-            return;
-        }
-
-        bool hasFailed = false;
-        for (size_t i = 0; i < mutableBlock->receiptsSize(); ++i)
-        {
-            auto receipt = mutableBlock->receipt(i);
-
-            if (receipt->status() != 0)
+    asyncGetTotalTransactionCount(
+        [storage, mutableBlock, setRowCallback, totalCount = std::move(totalCount),
+            failedCount = std::move(failedCount)](
+            Error::Ptr error, int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
+            if (error)
             {
-                hasFailed = true;
-                ++failed;
+                LEDGER_LOG(INFO) << "No total transaction count entry, add new one";
+                setRowCallback(std::make_unique<Error>(*error), 2);
+                return;
+            }
+
+            Entry totalEntry;
+            totalEntry.importFields({boost::lexical_cast<std::string>(total + totalCount)});
+            storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
+                std::move(totalEntry),
+                [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
+
+            if (failedCount != 0)
+            {
+                Entry failedEntry;
+                failedEntry.importFields({boost::lexical_cast<std::string>(failed + failedCount)});
+                storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
+                    std::move(failedEntry),
+                    [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
             }
             else
             {
-                ++total;
+                setRowCallback({}, true);
             }
-        }
-
-        Entry totalEntry;
-        totalEntry.importFields({boost::lexical_cast<std::string>(total)});
-        storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
-            std::move(totalEntry),
-            [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
-
-        if (hasFailed)
-        {
-            Entry failedEntry;
-            failedEntry.importFields({boost::lexical_cast<std::string>(failed)});
-            storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
-                std::move(failedEntry), [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
-        }
-        else
-        {
-            setRowCallback({}, true);
-        }
-    });
+        });
 }
 
 void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> _txToStore,
@@ -243,8 +238,8 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
                 entry.setField(SYS_VALUE, *((*txList)[i]));  // copy the bytes entry
 
                 LEDGER_LOG(TRACE) << "Write transaction" << LOG_KV("hash", (*hashList)[i].hex());
-                table->asyncSetRow((*hashList)[i].hex(), std::move(entry),
-                    [total, count, callback](auto&& error) {
+                table->asyncSetRow(
+                    (*hashList)[i].hex(), std::move(entry), [total, count, callback](auto&& error) {
                         if (error)
                         {
                             ++std::get<1>(*count);
@@ -323,9 +318,9 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
     if ((_blockFlag & TRANSACTIONS) || (_blockFlag & RECEIPTS))
     {
         fetchers.push_back([this, block, _blockNumber, finally, _blockFlag]() {
-            asyncGetBlockTransactionHashes(_blockNumber,
-                [this, _blockFlag, block, finally](
-                    Error::Ptr&& error, std::vector<std::string>&& hashes) {
+            asyncGetBlockTransactionHashes(
+                _blockNumber, [this, _blockFlag, block, finally](
+                                  Error::Ptr&& error, std::vector<std::string>&& hashes) {
                     if (error)
                     {
                         if (_blockFlag & TRANSACTIONS)
@@ -674,8 +669,7 @@ void Ledger::asyncGetTotalTransactionCount(
                     callback(nullptr, 0, 0, 0);
                     return;
                 }
-
-                switch (i)
+                switch (i++)
                 {
                 case 0:
                     totalCount = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
@@ -730,8 +724,8 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                     auto number = boost::lexical_cast<bcos::protocol::BlockNumber>(
                         entry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
 
-                    // The param was reset at height getLatestBlockNumber(), and takes effect in next
-                    // block. So we query the status of getLatestBlockNumber() + 1.
+                    // The param was reset at height getLatestBlockNumber(), and takes effect in
+                    // next block. So we query the status of getLatestBlockNumber() + 1.
                     auto effectNumber = blockNumber + 1;
                     if (number > effectNumber)
                     {
@@ -905,8 +899,9 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
                             }
                             try
                             {
-                                // The param was reset at height getLatestBlockNumber(), and takes effect in next
-                                // block. So we query the status of getLatestBlockNumber() + 1.
+                                // The param was reset at height getLatestBlockNumber(), and takes
+                                // effect in next block. So we query the status of
+                                // getLatestBlockNumber() + 1.
                                 auto effectNumber = blockNumber + 1;
                                 auto nodeType = entry->getField(NODE_TYPE);
                                 auto enableNum = boost::lexical_cast<BlockNumber>(
@@ -1168,7 +1163,8 @@ void Ledger::asyncGetSystemTableEntry(const std::string_view& table, const std::
 {
     m_storage->asyncOpenTable(table, [this, key = std::string(key), callback = std::move(callback)](
                                          auto&& error, std::optional<Table>&& table) {
-        auto tableError = checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
+        auto tableError =
+            checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
         if (tableError)
         {
             callback(std::move(tableError), {});
@@ -1576,7 +1572,7 @@ void Ledger::createFileSystemTables(const std::string& _groupId)
         FS_ROOT, FS_FIELD_COMBINED, [&createPromise](auto&& error, std::optional<Table>&&) {
             createPromise.set_value({std::move(error)});
         });
-    auto createError= createPromise.get_future().get();
+    auto createError = createPromise.get_future().get();
     if (createError)
     {
         BOOST_THROW_EXCEPTION(*createError);
