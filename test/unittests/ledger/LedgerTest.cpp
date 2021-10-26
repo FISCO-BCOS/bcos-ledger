@@ -379,8 +379,8 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
 
     // deal with version conflict
     std::promise<Error::UniquePtr> setRowPromise;
-    m_storage->asyncSetRow(SYS_NUMBER_2_HASH, "0", std::move(std::move(hashEntry)),
-        [&setRowPromise](auto&& error) {
+    m_storage->asyncSetRow(
+        SYS_NUMBER_2_HASH, "0", std::move(std::move(hashEntry)), [&setRowPromise](auto&& error) {
             BOOST_CHECK(!error);
 
             setRowPromise.set_value(std::move(error));
@@ -431,8 +431,8 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
                 std::string(hashEntry->getField(SYS_VALUE)), bcos::crypto::HashType::FromHex);
 
             Entry numberEntry;
-            m_storage->asyncSetRow(SYS_HASH_2_NUMBER, hash.hex(), std::move(numberEntry),
-                [&](auto&& error) {
+            m_storage->asyncSetRow(
+                SYS_HASH_2_NUMBER, hash.hex(), std::move(numberEntry), [&](auto&& error) {
                     BOOST_CHECK(!error);
 
                     m_ledger->asyncGetBlockNumberByHash(
@@ -464,6 +464,20 @@ BOOST_AUTO_TEST_CASE(getTotalTransactionCount)
             p1.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
+
+    initFixture();
+    initChain(5);
+    std::promise<bool> p2;
+    m_ledger->asyncGetTotalTransactionCount(
+        [&](Error::Ptr _error, int64_t totalCount, int64_t totalFailed,
+            bcos::protocol::BlockNumber _number) {
+            BOOST_CHECK(_error == nullptr);
+            BOOST_CHECK(totalCount > 0);
+            BOOST_CHECK(totalFailed >= 0);
+            BOOST_CHECK_EQUAL(_number, 5);
+            p2.set_value(true);
+        });
+    BOOST_CHECK_EQUAL(p2.get_future().get(), true);
 }
 
 BOOST_AUTO_TEST_CASE(getNodeListByType)
