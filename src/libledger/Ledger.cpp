@@ -207,14 +207,14 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
 {
     if (!_txToStore || !_txHashList || _txToStore->size() != _txHashList->size())
     {
-        LEDGER_LOG(INFO) << "StoreTransactions error";
+        LEDGER_LOG(ERROR) << "StoreTransactions error";
         _onTxStored(
             BCOS_ERROR_PTR(LedgerError::ErrorArgument, "asyncStoreTransactions argument error!"));
         return;
     }
 
-    LEDGER_LOG(INFO) << "StoreTransactions request" << LOG_KV("tx count", _txToStore->size())
-                     << LOG_KV("hash count", _txHashList->size());
+    LEDGER_LOG(TRACE) << "StoreTransactions request" << LOG_KV("tx count", _txToStore->size())
+                      << LOG_KV("hash count", _txHashList->size());
 
     m_storage->asyncOpenTable(SYS_HASH_2_TX,
         [this, storage = m_storage, hashList = std::move(_txHashList),
@@ -253,7 +253,7 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
                         if (std::get<0>(*count) + std::get<1>(*count) == total)
                         {
                             // All finished
-                            LEDGER_LOG(INFO) << "StoreTransactions success";
+                            LEDGER_LOG(TRACE) << "StoreTransactions success";
                             callback(nullptr);
                         }
                     });
@@ -502,7 +502,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
         return;
     }
 
-    LEDGER_LOG(INFO) << "GetBatchTxsByHashList request" << LOG_KV("hashes", _txHashList->size())
+    LEDGER_LOG(TRACE) << "GetBatchTxsByHashList request" << LOG_KV("hashes", _txHashList->size())
                      << LOG_KV("withProof", _withProof);
 
     auto hexList = std::make_shared<std::vector<std::string>>();
@@ -568,7 +568,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
             }
             else
             {
-                LEDGER_LOG(INFO) << LOG_BADGE("GetBatchTxsByHashList success")
+                LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
                                  << LOG_KV("txHashListSize", _txHashList->size())
                                  << LOG_KV("withProof", _withProof);
                 callback(nullptr, results, nullptr);
@@ -582,7 +582,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
 {
     auto key = _txHash.hex();
 
-    LEDGER_LOG(INFO) << "GetTransactionReceiptByHash" << LOG_KV("hash", key);
+    LEDGER_LOG(TRACE) << "GetTransactionReceiptByHash" << LOG_KV("hash", key);
 
     asyncGetSystemTableEntry(SYS_HASH_2_RECEIPT, key,
         [this, callback = std::move(_onGetTx), key](
@@ -622,7 +622,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
             }
             else
             {
-                LEDGER_LOG(DEBUG) << "GetTransactionReceiptByHash success" << LOG_KV("hash", key);
+                LEDGER_LOG(TRACE) << "GetTransactionReceiptByHash success" << LOG_KV("hash", key);
                 callback(nullptr, receipt, nullptr);
             }
         });
@@ -662,23 +662,26 @@ void Ledger::asyncGetTotalTransactionCount(
             size_t i = 0;
             for (auto& entry : entries)
             {
+                int64_t value = 0;
                 if (!entry)
                 {
-                    LEDGER_LOG(INFO)
+                    LEDGER_LOG(WARNING)
                         << "GetTotalTransactionCount error" << LOG_KV("index", i) << " empty";
-                    callback(nullptr, 0, 0, 0);
-                    return;
+                }
+                else
+                {
+                    value = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
                 }
                 switch (i++)
                 {
                 case 0:
-                    totalCount = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+                    totalCount = value;
                     break;
                 case 1:
-                    failedCount = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+                    failedCount = value;
                     break;
                 case 2:
-                    blockNumber = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+                    blockNumber = value;
                     break;
                 }
             }
@@ -918,8 +921,10 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
                                         std::make_shared<consensus::ConsensusNode>(nodeID, weight));
                                 }
                             }
-                            catch (...)
+                            catch (std::exception& e)
                             {
+                                LEDGER_LOG(WARNING)
+                                    << "Exception: " << boost::diagnostic_information(e);
                                 continue;
                             }
                         }
