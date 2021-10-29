@@ -93,16 +93,9 @@ public:
     void asyncGetNodeListByType(const std::string& _type,
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override;
 
-    void registerCommittedBlockNotifier(
-        std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
-            _committedBlockNotifier)
-    {
-        m_committedBlockNotifier = _committedBlockNotifier;
-    }
-
     /****** init ledger ******/
-    bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::string& _groupId,
-        size_t _gasLimit, const std::string& _genesisData);
+    bool buildGenesisBlock(
+        LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit, const std::string& _genesisData);
 
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
@@ -127,21 +120,13 @@ private:
     void asyncGetSystemTableEntry(const std::string_view& table, const std::string_view& key,
         std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback);
 
-    std::vector<std::string_view> asView(const std::vector<std::string>& list);
-
     void getTxProof(const crypto::HashType& _txHash,
         std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
     void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         std::function<void(Error::Ptr, MerkleProofPtr)> _onGetProof);
 
-    // notify block commit
-    void notifyCommittedBlockNumber(protocol::BlockNumber _blockNumber);
-
-    void createFileSystemTables(const std::string& _groupId);
+    void createFileSystemTables();
     void recursiveBuildDir(const std::string& _absoluteDir);
-
-    std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
-        m_committedBlockNotifier;
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;

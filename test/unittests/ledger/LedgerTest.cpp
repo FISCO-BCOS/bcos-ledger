@@ -125,10 +125,10 @@ public:
         m_param->setObserverNodeList(observerNodeList);
 
         LEDGER_LOG(TRACE) << "build genesis for first time";
-        auto result = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
+        auto result = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
         BOOST_CHECK(result);
         LEDGER_LOG(TRACE) << "build genesis for second time";
-        auto result2 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
+        auto result2 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
         BOOST_CHECK(result2);
     }
 
@@ -140,12 +140,12 @@ public:
         m_param->setBlockTxCountLimit(0);
         m_param->setConsensusTimeout(-1);
 
-        auto result1 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
+        auto result1 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
         BOOST_CHECK(!result1);
         m_param->setConsensusTimeout(3000);
-        auto result2 = m_ledger->buildGenesisBlock(m_param, "test", 30, "");
+        auto result2 = m_ledger->buildGenesisBlock(m_param, 30, "");
         BOOST_CHECK(!result2);
-        auto result3 = m_ledger->buildGenesisBlock(m_param, "test", 3000000000, "");
+        auto result3 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
         BOOST_CHECK(result3);
     }
 
@@ -325,6 +325,19 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
                 m_param->observerNodeList().at(0)->nodeID()->hex());
             p6.set_value(true);
         });
+
+    std::promise<bool> p7;
+    std::vector<std::string_view> v = {"apps", "usr", "sys", "tables"};
+    m_storage->asyncGetRows(
+        FS_ROOT, v, [&](Error::UniquePtr _error, std::vector<std::optional<Entry>> _entries) {
+            BOOST_CHECK(!_error);
+            for (auto& entry : _entries)
+            {
+                BOOST_CHECK(entry != std::nullopt);
+            }
+            p7.set_value(true);
+        });
+    p7.get_future().get();
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
     BOOST_CHECK_EQUAL(f3.get(), true);

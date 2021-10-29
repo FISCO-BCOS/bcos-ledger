@@ -136,6 +136,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         auto originTransactionMetaData = block->transactionMetaData(i);
         auto transactionMetaData = m_blockFactory->createTransactionMetaData(
             originTransactionMetaData->hash(), std::string(originTransactionMetaData->to()));
+        transactionMetaData->setSource("");
         transactionsBlock->appendTransactionMetaData(transactionMetaData);
     }
     bytes transactionsBuffer;
@@ -503,7 +504,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
     }
 
     LEDGER_LOG(TRACE) << "GetBatchTxsByHashList request" << LOG_KV("hashes", _txHashList->size())
-                     << LOG_KV("withProof", _withProof);
+                      << LOG_KV("withProof", _withProof);
 
     auto hexList = std::make_shared<std::vector<std::string>>();
     hexList->reserve(_txHashList->size());
@@ -569,8 +570,8 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
             else
             {
                 LEDGER_LOG(TRACE) << LOG_BADGE("GetBatchTxsByHashList success")
-                                 << LOG_KV("txHashListSize", _txHashList->size())
-                                 << LOG_KV("withProof", _withProof);
+                                  << LOG_KV("txHashListSize", _txHashList->size())
+                                  << LOG_KV("withProof", _withProof);
                 callback(nullptr, results, nullptr);
             }
         });
@@ -1347,24 +1348,9 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
     //     });
 }
 
-void Ledger::notifyCommittedBlockNumber(protocol::BlockNumber _blockNumber)
-{
-    if (!m_committedBlockNotifier)
-        return;
-    m_committedBlockNotifier(_blockNumber, [_blockNumber](Error::Ptr _error) {
-        if (!_error)
-        {
-            return;
-        }
-        LEDGER_LOG(WARNING) << LOG_BADGE("notifyCommittedBlockNumber")
-                            << LOG_DESC("notify the block number failed")
-                            << LOG_KV("blockNumber", _blockNumber);
-    });
-}
-
-// sync methed
-bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::string& _groupId,
-    size_t _gasLimit, const std::string& _genesisData)
+// sync method
+bool Ledger::buildGenesisBlock(
+    LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit, const std::string& _genesisData)
 {
     LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
     if (_ledgerConfig->consensusTimeout() > SYSTEM_CONSENSUS_TIMEOUT_MAX ||
@@ -1434,7 +1420,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
         }
     }
 
-    createFileSystemTables(_groupId);
+    createFileSystemTables();
 
     auto txLimit = _ledgerConfig->blockTxCountLimit();
     LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit);
@@ -1569,7 +1555,7 @@ bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, const std::strin
     return true;
 }
 
-void Ledger::createFileSystemTables(const std::string& _groupId)
+void Ledger::createFileSystemTables()
 {
     // create / dir
     std::promise<Error::UniquePtr> createPromise;
@@ -1593,20 +1579,16 @@ void Ledger::createFileSystemTables(const std::string& _groupId)
     assert(table);
     auto rootEntry = table->newEntry();
     rootEntry.setField(FS_FIELD_TYPE, FS_TYPE_DIR);
-    // TODO: set root default permission?
     rootEntry.setField(FS_FIELD_ACCESS, "");
     rootEntry.setField(FS_FIELD_OWNER, "root");
     rootEntry.setField(FS_FIELD_GID, "/usr");
     rootEntry.setField(FS_FIELD_EXTRA, "");
     table->setRow(FS_ROOT, rootEntry);
 
-    std::string appsDir = "/" + _groupId + FS_APPS;
-    std::string tableDir = "/" + _groupId + FS_USER_TABLE;
-
     recursiveBuildDir(FS_USER);
     recursiveBuildDir(FS_SYS_BIN);
-    recursiveBuildDir(appsDir);
-    recursiveBuildDir(tableDir);
+    recursiveBuildDir(FS_APPS);
+    recursiveBuildDir(FS_USER_TABLE);
 }
 void Ledger::recursiveBuildDir(const std::string& _absoluteDir)
 {
@@ -1663,7 +1645,6 @@ void Ledger::recursiveBuildDir(const std::string& _absoluteDir)
         // not exist, then create table and write in parent dir
         auto newFileEntry = table->newEntry();
         newFileEntry.setField(FS_FIELD_TYPE, FS_TYPE_DIR);
-        // FIXME: consider permission inheritance
         newFileEntry.setField(FS_FIELD_ACCESS, "");
         newFileEntry.setField(FS_FIELD_OWNER, "root");
         newFileEntry.setField(FS_FIELD_GID, "/usr");
