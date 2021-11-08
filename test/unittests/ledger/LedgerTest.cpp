@@ -85,7 +85,10 @@ public:
     {
         auto hashImpl = std::make_shared<Keccak256Hash>();
         auto memoryStorage = std::make_shared<StateStorage>(nullptr);
-        m_storage = std::make_shared<StateStorage>(memoryStorage);
+        memoryStorage->setEnableTraverse(true);
+        auto storage = std::make_shared<StateStorage>(memoryStorage);
+        storage->setEnableTraverse(true);
+        m_storage = storage;
         BOOST_TEST(m_storage != nullptr);
         m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage);
         BOOST_CHECK(m_ledger != nullptr);
@@ -94,7 +97,10 @@ public:
     inline void initErrorStorage()
     {
         auto memoryStorage = std::make_shared<StateStorage>(nullptr);
-        m_storage = std::make_shared<StateStorage>(memoryStorage);
+        memoryStorage->setEnableTraverse(true);
+        auto storage = std::make_shared<StateStorage>(memoryStorage);
+        storage->setEnableTraverse(true);
+        m_storage = storage;
         BOOST_TEST(m_storage != nullptr);
         m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage);
         BOOST_CHECK(m_ledger != nullptr);
@@ -106,7 +112,6 @@ public:
         m_param->setBlockNumber(0);
         m_param->setHash(HashType(""));
         m_param->setBlockTxCountLimit(1000);
-        m_param->setConsensusTimeout(3000);
 
         auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
         consensus::ConsensusNodeList consensusNodeList;
@@ -138,11 +143,9 @@ public:
         m_param->setBlockNumber(0);
         m_param->setHash(HashType(""));
         m_param->setBlockTxCountLimit(0);
-        m_param->setConsensusTimeout(-1);
 
         auto result1 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
-        BOOST_CHECK(!result1);
-        m_param->setConsensusTimeout(3000);
+        BOOST_CHECK(result1);
         auto result2 = m_ledger->buildGenesisBlock(m_param, 30, "");
         BOOST_CHECK(!result2);
         auto result3 = m_ledger->buildGenesisBlock(m_param, 3000000000, "");
