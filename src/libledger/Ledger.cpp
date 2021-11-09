@@ -33,6 +33,7 @@
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-framework/libprotocol/ParallelMerkleProof.h>
+#include <bcos-framework/libtool/ConsensusNode.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -853,89 +854,37 @@ void Ledger::asyncGetNodeListByType(const std::string& _type,
 
         LEDGER_LOG(DEBUG) << "Get nodeList from" << LOG_KV("blockNumber", blockNumber);
 
-        m_storage->asyncOpenTable(SYS_CONSENSUS, [this, type = std::move(type),
-                                                     callback = std::move(callback), blockNumber](
-                                                     auto&& error, std::optional<Table>&& table) {
-            auto tableError = checkTableValid(std::move(error), table, SYS_CONSENSUS);
-            if (tableError)
-            {
-                callback(std::move(tableError), nullptr);
-                return;
-            }
-
-            auto tablePtr = std::make_shared<Table>(std::move(*table));
-
-            tablePtr->asyncGetPrimaryKeys({}, [this, type = std::move(type),
-                                                  callback = std::move(callback), tablePtr,
-                                                  blockNumber](
-                                                  auto&& error, std::vector<std::string>&& keys) {
+        m_storage->asyncGetRow(SYS_CONSENSUS, "key",
+            [callback = std::move(callback), type = type, this, blockNumber](
+                Error::UniquePtr error, std::optional<Entry> entry) {
                 if (error)
                 {
-                    LEDGER_LOG(ERROR)
-                        << "GetNodeListByType error" << boost::diagnostic_information(*error);
-                    callback(BCOS_ERROR_WITH_PREV_PTR(
-                                 LedgerError::GetStorageError, "GetNodeListByType error", *error),
-                        nullptr);
+                    callback(std::move(error), nullptr);
                     return;
                 }
 
-                tablePtr->asyncGetRows(keys,
-                    [this, callback = std::move(callback), type = std::move(type), keys,
-                        blockNumber](auto&& error, std::vector<std::optional<Entry>>&& entries) {
-                        if (error)
-                        {
-                            LEDGER_LOG(ERROR) << "GetNodeListByType error"
-                                              << boost::diagnostic_information(*error);
-                            callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError,
-                                         "GetNodeListByType error", *error),
-                                nullptr);
-                            return;
-                        }
+                auto nodeList = decodeConsensusList(entry->getField(0));
+                auto nodes = std::make_shared<consensus::ConsensusNodeList>();
 
-                        auto nodes = std::make_shared<consensus::ConsensusNodeList>();
-                        for (size_t i = 0; i < entries.size(); ++i)
-                        {
-                            auto& entry = entries[i];
+                auto effectNumber = blockNumber + 1;
+                for (auto& it : nodeList)
+                {
+                    if (it.type == type &&
+                        boost::lexical_cast<long>(it.enableNumber) <= effectNumber)
+                    {
+                        crypto::NodeIDPtr nodeID =
+                            m_blockFactory->cryptoSuite()->keyFactory()->createKey(
+                                fromHex(it.nodeID));
+                        // Note: use try-catch to handle the exception case
+                        nodes->emplace_back(std::make_shared<consensus::ConsensusNode>(
+                            nodeID, it.weight.convert_to<uint64_t>()));
+                    }
+                }
 
-                            if (!entry)
-                            {
-                                continue;
-                            }
-                            try
-                            {
-                                // The param was reset at height getLatestBlockNumber(), and takes
-                                // effect in next block. So we query the status of
-                                // getLatestBlockNumber() + 1.
-                                auto effectNumber = blockNumber + 1;
-                                auto nodeType = entry->getField(NODE_TYPE);
-                                auto enableNum = boost::lexical_cast<BlockNumber>(
-                                    entry->getField(NODE_ENABLE_NUMBER));
-                                auto weight =
-                                    boost::lexical_cast<uint64_t>(entry->getField(NODE_WEIGHT));
-                                if ((nodeType == type) && enableNum <= effectNumber)
-                                {
-                                    crypto::NodeIDPtr nodeID =
-                                        m_blockFactory->cryptoSuite()->keyFactory()->createKey(
-                                            *fromHexString(keys[i]));
-                                    // Note: use try-catch to handle the exception case
-                                    nodes->emplace_back(
-                                        std::make_shared<consensus::ConsensusNode>(nodeID, weight));
-                                }
-                            }
-                            catch (std::exception& e)
-                            {
-                                LEDGER_LOG(WARNING)
-                                    << "Exception: " << boost::diagnostic_information(e);
-                                continue;
-                            }
-                        }
-
-                        LEDGER_LOG(INFO)
-                            << "GetNodeListByType success" << LOG_KV("nodes size", nodes->size());
-                        callback(nullptr, std::move(nodes));
-                    });
+                LEDGER_LOG(INFO) << "GetNodeListByType success"
+                                 << LOG_KV("nodes size", nodes->size());
+                callback(nullptr, std::move(nodes));
             });
-        });
     });
 }
 
@@ -1465,6 +1414,7 @@ bool Ledger::buildGenesisBlock(
     leaderPeriodEntry.importFields(
         {boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), "0"});
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
+
     // write consensus config
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> consensusTablePromise;
     m_storage->asyncOpenTable(
@@ -1484,26 +1434,33 @@ bool Ledger::buildGenesisBlock(
             BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONSENSUS failed!"));
     }
 
+    ConsensusNodeList consensusNodeList;
+
     for (auto& node : _ledgerConfig->consensusNodeList())
     {
-        Entry consensusNodeEntry;
-        consensusNodeEntry.importFields({
-            CONSENSUS_SEALER,
-            boost::lexical_cast<std::string>(node->weight()),
-            "0",
-        });
-        consensusTable->setRow(node->nodeID()->hex(), std::move(consensusNodeEntry));
+        consensusNodeList.emplace_back(
+            node->nodeID()->hex(), node->weight(), CONSENSUS_SEALER, "0");
     }
 
     for (auto& node : _ledgerConfig->observerNodeList())
     {
-        Entry observerNodeEntry;
-        observerNodeEntry.importFields({
-            CONSENSUS_OBSERVER,
-            boost::lexical_cast<std::string>(node->weight()),
-            "0",
-        });
-        consensusTable->setRow(node->nodeID()->hex(), std::move(observerNodeEntry));
+        consensusNodeList.emplace_back(
+            node->nodeID()->hex(), node->weight(), CONSENSUS_OBSERVER, "0");
+    }
+
+    Entry consensusNodeListEntry;
+    consensusNodeListEntry.importFields({encodeConsensusList(consensusNodeList)});
+
+    std::promise<Error::UniquePtr> setConsensusNodeListPromise;
+    consensusTable->asyncSetRow("key", std::move(consensusNodeListEntry),
+        [&setConsensusNodeListPromise](
+            Error::UniquePtr&& error) { setConsensusNodeListPromise.set_value(std::move(error)); });
+
+    auto setConsensusNodeListError = setConsensusNodeListPromise.get_future().get();
+    if (setConsensusNodeListError)
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR_WITH_PREV(
+            LedgerError::CallbackError, "Write genesis consensus node list error!", *error));
     }
 
     // write current state

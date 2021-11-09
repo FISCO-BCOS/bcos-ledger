@@ -25,6 +25,7 @@
 #include "common/FakeBlock.h"
 #include "interfaces/crypto/CommonType.h"
 #include "interfaces/ledger/LedgerTypeDef.h"
+#include "libtool/ConsensusNode.h"
 #include "mock/MockKeyFactor.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
@@ -548,12 +549,20 @@ BOOST_AUTO_TEST_CASE(testNodeListByType)
     BOOST_CHECK_EQUAL(f1.get(), true);
 
     std::promise<bool> setSealer1;
-    Entry consensusEntry1;
-    consensusEntry1.importFields({CONSENSUS_SEALER, "100", "5"});
-    m_storage->asyncSetRow(SYS_CONSENSUS, bcos::crypto::HashType("56789").hex(),
-        std::move(consensusEntry1), [&](auto&& error) {
+    m_storage->asyncGetRow(
+        SYS_CONSENSUS, "key", [&](Error::UniquePtr error, std::optional<Entry> entry) {
             BOOST_CHECK(!error);
-            setSealer1.set_value(true);
+            BOOST_CHECK(entry);
+
+            auto list = decodeConsensusList(entry->getField(0));
+            list.emplace_back(bcos::crypto::HashType("56789").hex(), 100, CONSENSUS_SEALER, "5");
+
+            entry->setField(0, encodeConsensusList(list));
+            m_storage->asyncSetRow(
+                SYS_CONSENSUS, "key", std::move(*entry), [&](Error::UniquePtr error) {
+                    BOOST_CHECK(!error);
+                    setSealer1.set_value(true);
+                });
         });
     setSealer1.get_future().get();
 
