@@ -1353,15 +1353,6 @@ bool Ledger::buildGenesisBlock(
     LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit, const std::string& _genesisData)
 {
     LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
-    if (_ledgerConfig->consensusTimeout() > SYSTEM_CONSENSUS_TIMEOUT_MAX ||
-        _ledgerConfig->consensusTimeout() < SYSTEM_CONSENSUS_TIMEOUT_MIN)
-    {
-        LEDGER_LOG(ERROR) << LOG_BADGE("buildGenesisBlock")
-                          << LOG_DESC("consensus timeout set error, return false")
-                          << LOG_KV("consensusTimeout", _ledgerConfig->consensusTimeout());
-        return false;
-    }
-
     if (_gasLimit < TX_GAS_LIMIT_MIN)
     {
         LEDGER_LOG(ERROR) << LOG_BADGE("buildGenesisBlock")
@@ -1474,12 +1465,6 @@ bool Ledger::buildGenesisBlock(
     leaderPeriodEntry.importFields(
         {boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), "0"});
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
-
-    Entry consensusTimeout;
-    consensusTimeout.importFields(
-        {boost::lexical_cast<std::string>(_ledgerConfig->consensusTimeout()), "0"});
-    sysTable->setRow(SYSTEM_KEY_CONSENSUS_TIMEOUT, std::move(consensusTimeout));
-
     // write consensus config
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> consensusTablePromise;
     m_storage->asyncOpenTable(
