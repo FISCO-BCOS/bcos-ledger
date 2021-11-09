@@ -1333,7 +1333,7 @@ bool Ledger::buildGenesisBlock(
     // clang-format off
     std::string_view tables[] = {
         SYS_CONFIG, "value,enable_number",
-        SYS_CONSENSUS, "type,weight,enable_number",
+        SYS_CONSENSUS, "value",
         SYS_CURRENT_STATE, SYS_VALUE,
         SYS_HASH_2_TX, SYS_VALUE,
         SYS_HASH_2_NUMBER, SYS_VALUE,
