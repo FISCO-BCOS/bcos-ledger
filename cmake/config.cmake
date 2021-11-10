@@ -1,7 +1,7 @@
-hunter_config(bcos-framework VERSION 3.0.0-local
-	URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/125363ba92ea75117ff3fefd57842d470105a82d.tar.gz
-    SHA1 2de0ea3d308cbf75a80ca588976eeebb1ef1e4b6
-	CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
+hunter_config(bcos-framework VERSION 3.0.1-local
+        URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/e4b2da37e26d269c7ab64f2896ef81d85c1a04bf.tar.gz
+        SHA1 4f895c96da870e127962dd34ebef6c90afc6d29e
+        CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON HUNTER_KEEP_PACKAGE_SOURCES=ON #DEBUG=ON
 )
 
 hunter_config(wedpr-crypto VERSION 1.1.0-10f314de

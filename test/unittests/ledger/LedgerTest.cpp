@@ -157,12 +157,11 @@ public:
     {
         std::promise<bool> fakeBlockPromise;
         auto future = fakeBlockPromise.get_future();
-        m_ledger->asyncGetBlockHashByNumber(
-            0, [=, &fakeBlockPromise](Error::Ptr, const HashType& _hash) {
-                m_fakeBlocks = fakeBlocks(
-                    m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number, _hash.hex());
-                fakeBlockPromise.set_value(true);
-            });
+        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise](Error::Ptr, HashType _hash) {
+            m_fakeBlocks = fakeBlocks(
+                m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number, _hash.hex());
+            fakeBlockPromise.set_value(true);
+        });
         future.get();
     }
 
@@ -170,12 +169,11 @@ public:
     {
         std::promise<bool> fakeBlockPromise;
         auto future = fakeBlockPromise.get_future();
-        m_ledger->asyncGetBlockHashByNumber(
-            0, [=, &fakeBlockPromise](Error::Ptr, const HashType& _hash) {
-                m_fakeBlocks = fakeEmptyBlocks(
-                    m_blockFactory->cryptoSuite(), m_blockFactory, _number, _hash.hex());
-                fakeBlockPromise.set_value(true);
-            });
+        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise](Error::Ptr, HashType _hash) {
+            m_fakeBlocks = fakeEmptyBlocks(
+                m_blockFactory->cryptoSuite(), m_blockFactory, _number, _hash.hex());
+            fakeBlockPromise.set_value(true);
+        });
         future.get();
     }
 
@@ -279,7 +277,7 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
-    m_ledger->asyncGetBlockHashByNumber(0, [&](Error::Ptr _error, const crypto::HashType _hash) {
+    m_ledger->asyncGetBlockHashByNumber(0, [&](Error::Ptr _error, crypto::HashType _hash) {
         BOOST_CHECK(_error == nullptr);
         BOOST_CHECK(_hash != HashType(""));
         m_ledger->asyncGetBlockNumberByHash(_hash, [&](Error::Ptr _error, BlockNumber _number) {
@@ -709,10 +707,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
 
-            (void)_proof;
-            // TODO: no proof for now
-            // BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) !=
-            // nullptr);
+            BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
             p1.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
@@ -725,10 +720,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
 
-            (void)_proof;
-            // TODO: no proof for now
-            // BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) !=
-            // nullptr);
+            BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
             p2.set_value(true);
         });
     BOOST_CHECK_EQUAL(f2.get(), true);
@@ -743,10 +735,8 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK(_txList != nullptr);
             BOOST_CHECK(_txList->empty());
 
-            (void)_proof;
-            // TODO: no proof for now
-            // BOOST_CHECK(_proof != nullptr);
-            // BOOST_CHECK(_proof->empty());
+            BOOST_CHECK(_proof != nullptr);
+            BOOST_CHECK(_proof->empty());
             p3.set_value(true);
         });
     BOOST_CHECK_EQUAL(f3.get(), true);
@@ -792,9 +782,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
             BOOST_CHECK_EQUAL(
                 _receipt->hash().hex(), m_fakeBlocks->at(3)->receipt(0)->hash().hex());
 
-            (void)_proof;
-            // TODO: no proof for now
-            // BOOST_CHECK(_proof != nullptr);
+            BOOST_CHECK(_proof != nullptr);
             p1.set_value(true);
         });
 
@@ -852,6 +840,17 @@ BOOST_AUTO_TEST_CASE(getNonceList)
             p1.set_value(true);
         });
 
+    std::promise<bool> p3;
+    auto f3 = p3.get_future();
+    m_ledger->asyncGetNonceList(4, 2,
+        [&](Error::Ptr _error,
+            std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>> _nonceMap) {
+            BOOST_CHECK_EQUAL(_error, nullptr);
+            BOOST_CHECK(_nonceMap != nullptr);
+            BOOST_CHECK_EQUAL(_nonceMap->size(), 2);
+            p3.set_value(true);
+        });
+
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     // error param
@@ -864,6 +863,7 @@ BOOST_AUTO_TEST_CASE(getNonceList)
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
+    BOOST_CHECK_EQUAL(f3.get(), true);
 }
 
 BOOST_AUTO_TEST_CASE(preStoreTransaction)
@@ -935,18 +935,6 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
             p1.set_value(true);
         });
     BOOST_CHECK_EQUAL(f1.get(), true);
-
-    // TODO: how & why?
-    // std::promise<bool> pp1;
-    // m_ledger->asyncGetSystemConfigByKey(
-    //     SYSTEM_KEY_TX_COUNT_LIMIT, [&](Error::Ptr _error, std::string _value, BlockNumber
-    //     _number) {
-    //         BOOST_CHECK(_error != nullptr);
-    //         BOOST_CHECK_EQUAL(_value, "");
-    //         BOOST_CHECK_EQUAL(_number, -1);
-    //         pp1.set_value(true);
-    //     });
-    // BOOST_CHECK_EQUAL(pp1.get_future().get(), true);
 
     initChain(5);
 

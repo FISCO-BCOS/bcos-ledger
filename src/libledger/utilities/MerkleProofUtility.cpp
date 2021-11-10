@@ -27,18 +27,18 @@ namespace bcos
 {
 namespace ledger
 {
-void MerkleProofUtility::getMerkleProof(const crypto::HashType& _txHash,
-    const Parent2ChildListMap& parent2ChildList, const Child2ParentMap& child2Parent,
-    MerkleProof& merkleProof)
+void MerkleProofUtility::makeMerkleProof(const crypto::HashType& _txHash,
+    const std::shared_ptr<Parent2ChildListMap>& parent2ChildList,
+    const std::shared_ptr<Child2ParentMap>& child2Parent, const std::shared_ptr<MerkleProof>& merkleProof)
 {
     std::string merkleNode = _txHash.hex();
     // get child=>parent info
-    auto itChild2Parent = child2Parent.find(merkleNode);
-    while (itChild2Parent != child2Parent.end())
+    auto itChild2Parent = child2Parent->find(merkleNode);
+    while (itChild2Parent != child2Parent->end())
     {
         // find parent=>childrenList info
-        auto itParent2ChildList = parent2ChildList.find(itChild2Parent->second);
-        if (itParent2ChildList == parent2ChildList.end())
+        auto itParent2ChildList = parent2ChildList->find(itChild2Parent->second);
+        if (itParent2ChildList == parent2ChildList->end())
         {
             break;
         }
@@ -57,16 +57,16 @@ void MerkleProofUtility::getMerkleProof(const crypto::HashType& _txHash,
         rightPath.insert(rightPath.end(), std::next(itChildList), itParent2ChildList->second.end());
 
         auto singleTree = std::make_pair(std::move(leftPath), std::move(rightPath));
-        merkleProof.emplace_back(singleTree);
+        merkleProof->emplace_back(singleTree);
 
         // node=parent
         merkleNode = itChild2Parent->second;
-        itChild2Parent = child2Parent.find(merkleNode);
+        itChild2Parent = child2Parent->find(merkleNode);
     }
 }
 
 std::shared_ptr<Child2ParentMap> MerkleProofUtility::getChild2Parent(
-    std::shared_ptr<Parent2ChildListMap> _parent2Child)
+    const std::shared_ptr<Parent2ChildListMap>& _parent2Child)
 {
     auto child2Parent = std::make_shared<Child2ParentMap>();
 

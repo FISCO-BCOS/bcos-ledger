@@ -28,12 +28,21 @@
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_for_each.h>
 
+#include <utility>
+
 namespace bcos::ledger
 {
 class MerkleProofUtility
 {
 public:
-    using Ptr = std::shared_ptr<MerkleProofUtility>;
+    template <typename T>
+    void getMerkleProof(const crypto::HashType& _txHash, T _ts, crypto::CryptoSuite::Ptr _crypto,
+        const std::shared_ptr<MerkleProof>& merkleProof)
+    {
+        auto parent2Child = getParent2ChildList(_crypto, _ts);
+        auto child2Parent = getChild2Parent(parent2Child);
+        makeMerkleProof(_txHash, std::move(parent2Child), std::move(child2Parent), merkleProof);
+    }
 
     template <typename T>
     std::shared_ptr<Parent2ChildListMap> getParent2ChildList(
@@ -41,26 +50,26 @@ public:
     {
         auto merklePath = std::make_shared<Parent2ChildListMap>();
         tbb::concurrent_vector<bytes> tsVector;
-        tsVector.resize(_ts->size());
+        tsVector.resize(_ts.size());
         tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, _ts->size()), [&](const tbb::blocked_range<size_t>& _r) {
+            tbb::blocked_range<size_t>(0, _ts.size()), [_ts = std::move(_ts), &tsVector](const tbb::blocked_range<size_t>& _r) {
                 for (uint32_t i = _r.begin(); i < _r.end(); ++i)
                 {
-                    crypto::HashType hash = ((*_ts)[i])->hash();
+                    crypto::HashType hash = ((_ts)[i])->hash();
                     tsVector[i] = hash.asBytes();
                 }
             });
         auto tsList = std::vector<bytes>(tsVector.begin(), tsVector.end());
-        protocol::calculateMerkleProof(_crypto, tsList, merklePath);
+        protocol::calculateMerkleProof(std::move(_crypto), tsList, merklePath);
         return merklePath;
     }
 
-    void getMerkleProof(const crypto::HashType& _txHash,
-        const Parent2ChildListMap& parent2ChildList, const Child2ParentMap& child2Parent,
-        MerkleProof& merkleProof);
+    void makeMerkleProof(const crypto::HashType& _txHash,
+        const std::shared_ptr<Parent2ChildListMap>& parent2ChildList,
+        const std::shared_ptr<Child2ParentMap>& child2Parent, const std::shared_ptr<MerkleProof>& merkleProof);
 
     std::shared_ptr<Child2ParentMap> getChild2Parent(
-        std::shared_ptr<Parent2ChildListMap> _parent2Child);
+        const std::shared_ptr<Parent2ChildListMap>& _parent2Child);
 };
 
 
