@@ -131,13 +131,29 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     // number 2 transactions
     auto transactionsBlock = m_blockFactory->createBlock();
-    for (size_t i = 0; i < block->transactionsHashSize(); ++i)
+    if (block->transactionsMetaDataSize() > 0)
     {
-        auto originTransactionMetaData = block->transactionMetaData(i);
-        auto transactionMetaData = m_blockFactory->createTransactionMetaData(
-            originTransactionMetaData->hash(), std::string(originTransactionMetaData->to()));
-        transactionMetaData->setSource("");
-        transactionsBlock->appendTransactionMetaData(transactionMetaData);
+        for (size_t i = 0; i < block->transactionsMetaDataSize(); ++i)
+        {
+            auto originTransactionMetaData = block->transactionMetaData(i);
+            auto transactionMetaData = m_blockFactory->createTransactionMetaData(
+                originTransactionMetaData->hash(), std::string(originTransactionMetaData->to()));
+            transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
+        }
+    }
+    else if (block->transactionsSize() > 0)
+    {
+        for (size_t i = 0; i < block->transactionsSize(); ++i)
+        {
+            auto transaction = block->transaction(i);
+            auto transactionMetaData = m_blockFactory->createTransactionMetaData(
+                transaction->hash(), std::string(transaction->to()));
+            transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
+        }
+    }
+    else
+    {
+        LEDGER_LOG(WARNING) << "Empty transactions and metadata, empty block?";
     }
     bytes transactionsBuffer;
     transactionsBlock->encode(transactionsBuffer);
@@ -319,44 +335,46 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
     if ((_blockFlag & TRANSACTIONS) || (_blockFlag & RECEIPTS))
     {
         fetchers.push_back([this, block, _blockNumber, finally, _blockFlag]() {
-            asyncGetBlockTransactionHashes(
-                _blockNumber, [this, _blockFlag, block, finally](
-                                  Error::Ptr&& error, std::vector<std::string>&& hashes) {
-                    if (error)
-                    {
-                        if (_blockFlag & TRANSACTIONS)
-                            finally(std::move(error));
-                        if (_blockFlag & RECEIPTS)
-                            finally(std::move(error));
-                        return;
-                    }
-
-                    auto hashesPtr = std::make_shared<std::vector<std::string>>(std::move(hashes));
+            asyncGetBlockTransactionHashes(_blockNumber, [this, _blockFlag, block, finally](
+                                                             Error::Ptr&& error,
+                                                             std::vector<std::string>&& hashes) {
+                if (error)
+                {
                     if (_blockFlag & TRANSACTIONS)
-                    {
-                        asyncBatchGetTransactions(
-                            hashesPtr, [block, finally](Error::Ptr&& error,
-                                           std::vector<protocol::Transaction::Ptr>&& transactions) {
-                                for (auto& it : transactions)
-                                {
-                                    block->appendTransaction(it);
-                                }
-                                finally(std::move(error));
-                            });
-                    }
+                        finally(std::move(error));
                     if (_blockFlag & RECEIPTS)
-                    {
-                        asyncBatchGetReceipts(hashesPtr,
-                            [block, finally](Error::Ptr&& error,
-                                std::vector<protocol::TransactionReceipt::Ptr>&& receipts) {
-                                for (auto& it : receipts)
-                                {
-                                    block->appendReceipt(it);
-                                }
-                                finally(std::move(error));
-                            });
-                    }
-                });
+                        finally(std::move(error));
+                    return;
+                }
+
+                LEDGER_LOG(TRACE) << "Get transactions hash list success, size:" << hashes.size();
+
+                auto hashesPtr = std::make_shared<std::vector<std::string>>(std::move(hashes));
+                if (_blockFlag & TRANSACTIONS)
+                {
+                    asyncBatchGetTransactions(
+                        hashesPtr, [block, finally](Error::Ptr&& error,
+                                       std::vector<protocol::Transaction::Ptr>&& transactions) {
+                            for (auto& it : transactions)
+                            {
+                                block->appendTransaction(it);
+                            }
+                            finally(std::move(error));
+                        });
+                }
+                if (_blockFlag & RECEIPTS)
+                {
+                    asyncBatchGetReceipts(
+                        hashesPtr, [block, finally](Error::Ptr&& error,
+                                       std::vector<protocol::TransactionReceipt::Ptr>&& receipts) {
+                            for (auto& it : receipts)
+                            {
+                                block->appendReceipt(it);
+                            }
+                            finally(std::move(error));
+                        });
+                }
+            });
         });
     }
 
@@ -1006,6 +1024,8 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNum
 void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
     std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback)
 {
+    LEDGER_LOG(TRACE) << "Hashes: " << hashes->size();
+
     m_storage->asyncOpenTable(SYS_HASH_2_TX, [this, hashes, callback](
                                                  auto&& error, std::optional<Table>&& table) {
         auto validError = checkTableValid(std::move(error), table, SYS_HASH_2_TX);
