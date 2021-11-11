@@ -995,5 +995,41 @@ BOOST_AUTO_TEST_CASE(testEmptyBlock)
     BOOST_CHECK(f1.get());
 }
 
+BOOST_AUTO_TEST_CASE(testSyncBlock)
+{
+    auto block = m_blockFactory->createBlock();
+    auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    blockHeader->setNumber(100);
+
+    block->setBlockHeader(blockHeader);
+
+    std::string inputStr = "hello world!";
+    bytes input(inputStr.begin(), inputStr.end());
+
+    auto keyPair = m_blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
+    auto tx = m_blockFactory->transactionFactory()->createTransaction(
+        0, "to", input, 200, 300, "chainid", "groupid", 800, keyPair);
+
+    block->appendTransaction(tx);
+
+    auto txs = std::make_shared<std::vector<bytesConstPtr>>();
+    auto hashList = std::make_shared<crypto::HashList>();
+    auto encoded = tx->encode();
+    txs->emplace_back(std::make_shared<bytes>(encoded.begin(), encoded.end()));
+    hashList->emplace_back(tx->hash());
+
+    initFixture();
+
+    m_ledger->asyncStoreTransactions(txs, hashList, [](Error::Ptr error) { BOOST_CHECK(!error); });
+    m_ledger->asyncPrewriteBlock(m_storage, block, [](Error::Ptr&& error) { BOOST_CHECK(!error); });
+
+    m_ledger->asyncGetBlockDataByNumber(
+        100, TRANSACTIONS, [tx](Error::Ptr error, bcos::protocol::Block::Ptr block) {
+            BOOST_CHECK(!error);
+            BOOST_CHECK_EQUAL(block->transactionsSize(), 1);
+            BOOST_CHECK_EQUAL(block->transaction(0)->hash().hex(), tx->hash().hex());
+        });
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
