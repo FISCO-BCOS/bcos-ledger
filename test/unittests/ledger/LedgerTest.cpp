@@ -443,7 +443,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
             BOOST_CHECK(!error);
             BOOST_CHECK(hashEntry);
             auto hash = bcos::crypto::HashType(
-                std::string(hashEntry->getField(SYS_VALUE)), bcos::crypto::HashType::FromHex);
+                std::string(hashEntry->getField(0)), bcos::crypto::HashType::FromHex);
 
             Entry numberEntry;
             m_storage->asyncSetRow(
@@ -948,7 +948,7 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     auto table = tablePromise.get_future().get();
 
     auto oldEntry = table.getRow(SYSTEM_KEY_TX_COUNT_LIMIT);
-    BOOST_CHECK_EQUAL(oldEntry->getField(SYS_VALUE), "1000");
+    BOOST_CHECK_EQUAL(oldEntry->getField(0), "1000");
 
     Entry newEntry = table.newEntry();
     newEntry.setField(SYS_VALUE, "2000");
