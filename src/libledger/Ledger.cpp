@@ -404,13 +404,13 @@ void Ledger::asyncGetBlockNumber(
             try
             {
                 blockNumber =
-                    boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(SYS_VALUE));
+                    boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
             }
             catch (boost::bad_lexical_cast& e)
             {
                 // Ignore the exception
                 LEDGER_LOG(INFO) << "Cast blocknumber failed, may be empty, set to default value -1"
-                                 << LOG_KV("blocknumber str", entry->getField(SYS_VALUE));
+                                 << LOG_KV("blocknumber str", entry->getField(0));
             }
 
             LEDGER_LOG(INFO) << "GetBlockNumber success" << LOG_KV("number", blockNumber);
@@ -446,7 +446,7 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
                     return;
                 }
 
-                auto hashStr = entry->getField(SYS_VALUE);
+                auto hashStr = entry->getField(0);
                 bcos::crypto::HashType hash(std::string(hashStr), bcos::crypto::HashType::FromHex);
 
                 LEDGER_LOG(INFO) << "GetBlockHashByNumber success" << LOG_KV("hash", hashStr);
@@ -486,14 +486,14 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                 try
                 {
                     blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(
-                        entry->getField(SYS_VALUE));
+                        entry->getField(0));
                 }
                 catch (boost::bad_lexical_cast& e)
                 {
                     // Ignore the exception
                     LEDGER_LOG(INFO)
                         << "Cast blocknumber failed, may be empty, set to default value -1"
-                        << LOG_KV("blocknumber str", entry->getField(SYS_VALUE));
+                        << LOG_KV("blocknumber str", entry->getField(0));
                 }
                 LEDGER_LOG(INFO) << "GetBlockNumberByHash success" << LOG_KV("number", blockNumber);
                 callback(nullptr, blockNumber);
