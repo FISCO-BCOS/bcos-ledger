@@ -186,10 +186,13 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
     }
 
+    LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
+                      << LOG_KV("number", blockNumberStr) << LOG_KV("totalCount", totalCount)
+                      << LOG_KV("failedCount", failedCount);
+
     // total transaction count
     asyncGetTotalTransactionCount(
-        [storage, mutableBlock, setRowCallback, totalCount = std::move(totalCount),
-            failedCount = std::move(failedCount)](
+        [storage, mutableBlock, setRowCallback, totalCount, failedCount](
             Error::Ptr error, int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
             if (error)
             {
