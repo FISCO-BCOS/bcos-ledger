@@ -40,8 +40,10 @@ class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledge
 {
 public:
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::storage::StorageInterface::Ptr _storage)
-      : m_blockFactory(std::move(_blockFactory)), m_storage(std::move(_storage))
+        bcos::storage::StorageInterface::Ptr _storage, bool _isAuthCheck)
+      : m_blockFactory(std::move(_blockFactory)),
+        m_storage(std::move(_storage)),
+        m_isAuthCheck(_isAuthCheck)
     {
         assert(m_blockFactory);
         assert(m_storage);
@@ -131,5 +133,6 @@ private:
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;
+    bool m_isAuthCheck = false;
 };
 }  // namespace bcos::ledger
