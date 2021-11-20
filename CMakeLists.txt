@@ -73,6 +73,8 @@ set(INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/include)
 # set library target name
 set(BCOS_LEDGER_TARGET "bcos-ledger")
 
+include(AuthInfoGenerator)
+
 # add subdirectories to build the libraries
 add_subdirectory(src/libledger)
 

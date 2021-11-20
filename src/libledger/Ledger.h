@@ -27,6 +27,7 @@
 #include "bcos-framework/libutilities/Common.h"
 #include "bcos-framework/libutilities/Exceptions.h"
 #include "bcos-framework/libutilities/ThreadPool.h"
+#include "include/AuthBuiltInInfo.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
 #include "utilities/Common.h"
 #include "utilities/MerkleProofUtility.h"
@@ -130,6 +131,7 @@ private:
 
     void createFileSystemTables();
     void recursiveBuildDir(const std::string& _absoluteDir);
+    void createAuthContractTables();
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;
