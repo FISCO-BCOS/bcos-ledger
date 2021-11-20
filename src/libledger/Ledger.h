@@ -27,7 +27,7 @@
 #include "bcos-framework/libutilities/Common.h"
 #include "bcos-framework/libutilities/Exceptions.h"
 #include "bcos-framework/libutilities/ThreadPool.h"
-#include "include/AuthBuiltInInfo.h"
+#include "bcos-ledger/libledger/AuthBuiltInInfo.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
 #include "utilities/Common.h"
 #include "utilities/MerkleProofUtility.h"

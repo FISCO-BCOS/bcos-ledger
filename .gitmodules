@@ -1,3 +1,0 @@
-[submodule "bcos-auth"]
-	path = bcos-auth
-	url = https://github.com/FISCO-BCOS/bcos-auth
