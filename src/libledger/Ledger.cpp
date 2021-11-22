@@ -22,14 +22,15 @@
  */
 
 #include "Ledger.h"
-#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
-#include "interfaces/crypto/CommonType.h"
-#include "interfaces/ledger/LedgerTypeDef.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
 #include "libutilities/BoostLog.h"
 #include "libutilities/Common.h"
 #include "libutilities/DataConvertUtility.h"
+#include <bcos-framework/interfaces/consensus/ConsensusNode.h>
+#include <bcos-framework/interfaces/crypto/CommonType.h>
+#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-framework/libprotocol/ParallelMerkleProof.h>
 #include <bcos-framework/libtool/ConsensusNode.h>
@@ -406,8 +407,7 @@ void Ledger::asyncGetBlockNumber(
             bcos::protocol::BlockNumber blockNumber = -1;
             try
             {
-                blockNumber =
-                    boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
+                blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
             }
             catch (boost::bad_lexical_cast& e)
             {
@@ -488,8 +488,8 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                 bcos::protocol::BlockNumber blockNumber = -1;
                 try
                 {
-                    blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(
-                        entry->getField(0));
+                    blockNumber =
+                        boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
                 }
                 catch (boost::bad_lexical_cast& e)
                 {
@@ -1317,6 +1317,7 @@ bool Ledger::buildGenesisBlock(
     }
 
     createFileSystemTables();
+    createAuthContractTables();
 
     auto txLimit = _ledgerConfig->blockTxCountLimit();
     LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit);
@@ -1357,26 +1358,29 @@ bool Ledger::buildGenesisBlock(
         BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::OpenTableFailed, "Open SYS_CONFIG failed!"));
     }
 
+    // tx count limit
     Entry txLimitEntry;
     txLimitEntry.importFields(
         {boost::lexical_cast<std::string>(_ledgerConfig->blockTxCountLimit()), "0"});
     sysTable->setRow(SYSTEM_KEY_TX_COUNT_LIMIT, std::move(txLimitEntry));
 
+    // tx gas limit
     Entry gasLimitEntry;
     gasLimitEntry.importFields({boost::lexical_cast<std::string>(_gasLimit), "0"});
     sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
 
+    // consensus leader period
     Entry leaderPeriodEntry;
     leaderPeriodEntry.importFields(
         {boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), "0"});
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
-    // write consensus config
+    // write consensus node list
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> consensusTablePromise;
-    m_storage->asyncOpenTable(
-        SYS_CONSENSUS, [&consensusTablePromise](auto&& error, std::optional<Table>&& table) {
-            consensusTablePromise.set_value({std::move(error), std::move(table)});
-        });
+    m_storage->asyncOpenTable(SYS_CONSENSUS, [&consensusTablePromise](
+                                                 auto&& error, std::optional<Table>&& table) {
+        consensusTablePromise.set_value({std::forward<decltype(error)>(error), std::move(table)});
+    });
 
     auto [consensusError, consensusTable] = consensusTablePromise.get_future().get();
     if (consensusError)
@@ -1423,7 +1427,7 @@ bool Ledger::buildGenesisBlock(
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> stateTablePromise;
     m_storage->asyncOpenTable(
         SYS_CURRENT_STATE, [&stateTablePromise](auto&& error, std::optional<Table>&& table) {
-            stateTablePromise.set_value({std::move(error), std::move(table)});
+            stateTablePromise.set_value({std::forward<decltype(error)>(error), std::move(table)});
         });
 
     auto [stateError, stateTable] = stateTablePromise.get_future().get();
@@ -1488,6 +1492,7 @@ void Ledger::createFileSystemTables()
     recursiveBuildDir(FS_APPS);
     recursiveBuildDir(FS_USER_TABLE);
 }
+
 void Ledger::recursiveBuildDir(const std::string& _absoluteDir)
 {
     if (_absoluteDir.empty())
@@ -1562,5 +1567,41 @@ void Ledger::recursiveBuildDir(const std::string& _absoluteDir)
         }
 
         root += dir;
+    }
+}
+
+void Ledger::createAuthContractTables()
+{
+    if (m_isAuthCheck)
+    {
+        const std::vector<std::string> authTables = {bcos::precompiled::AUTH_INTERCEPT_ADDRESS,
+            bcos::precompiled::AUTH_PROPOSAL_ADDRESS, bcos::precompiled::AUTH_COMMITTEE_ADDRESS};
+        bool isSM =
+            (m_blockFactory->cryptoSuite()->hashImpl()->getHashImplType() == HashImplType::Sm3Hash);
+        std::string authCode[] = {
+            AUTH_INTERCEPT_BIN(isSM), AUTH_PROPOSAL_BIN(isSM), AUTH_COMMITTEE_BIN(isSM)};
+        for (size_t i = 0; i < authTables.size(); i++)
+        {
+            std::promise<Error::UniquePtr> createPromise;
+            m_storage->asyncCreateTable(
+                authTables[i], SYS_VALUE, [&createPromise](auto&& error, std::optional<Table>&&) {
+                    createPromise.set_value({std::forward<decltype(error)>(error)});
+                });
+            auto createError = createPromise.get_future().get();
+            if (createError)
+            {
+                BOOST_THROW_EXCEPTION(*createError);
+            }
+            std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> openPromise;
+            m_storage->asyncOpenTable(
+                authTables[i], [&openPromise](auto&& error, std::optional<Table>&& table) {
+                    openPromise.set_value({std::forward<decltype(error)>(error), std::move(table)});
+                });
+            auto [openError, table] = openPromise.get_future().get();
+            assert(table);
+            auto codeEntry = table->newEntry();
+            codeEntry.setField(SYS_VALUE, authCode[i]);
+            table->setRow("code", codeEntry);
+        }
     }
 }

@@ -28,6 +28,7 @@
 #include "libtool/ConsensusNode.h"
 #include "mock/MockKeyFactor.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
+#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-framework/libstorage/StateStorage.h>
@@ -91,7 +92,7 @@ public:
         storage->setEnableTraverse(true);
         m_storage = storage;
         BOOST_TEST(m_storage != nullptr);
-        m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage);
+        m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage, true);
         BOOST_CHECK(m_ledger != nullptr);
     }
 
@@ -103,7 +104,7 @@ public:
         storage->setEnableTraverse(true);
         m_storage = storage;
         BOOST_TEST(m_storage != nullptr);
-        m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage);
+        m_ledger = std::make_shared<Ledger>(m_blockFactory, m_storage, true);
         BOOST_CHECK(m_ledger != nullptr);
     }
 
@@ -1029,6 +1030,55 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
             BOOST_CHECK_EQUAL(block->transactionsSize(), 1);
             BOOST_CHECK_EQUAL(block->transaction(0)->hash().hex(), tx->hash().hex());
         });
+}
+
+BOOST_AUTO_TEST_CASE(testAuthTable)
+{
+    initFixture();
+    // interceptor
+    {
+        std::promise<std::optional<Entry>> getPromise;
+        m_storage->asyncGetRow(bcos::precompiled::AUTH_INTERCEPT_ADDRESS, "code",
+            [&](Error::UniquePtr _error, std::optional<Entry> _entry) {
+                BOOST_CHECK(_error == nullptr);
+                getPromise.set_value(std::move(_entry));
+            });
+        auto entry = getPromise.get_future().get();
+        BOOST_CHECK(entry.has_value());
+        auto code = std::string(entry->getField(SYS_VALUE));
+        std::string codes = AUTH_INTERCEPT_BIN(false);
+        BOOST_CHECK(code == codes);
+    }
+
+    // committee
+    {
+        std::promise<std::optional<Entry>> getPromise;
+        m_storage->asyncGetRow(bcos::precompiled::AUTH_COMMITTEE_ADDRESS, "code",
+            [&](Error::UniquePtr _error, std::optional<Entry> _entry) {
+                BOOST_CHECK(_error == nullptr);
+                getPromise.set_value(std::move(_entry));
+            });
+        auto entry = getPromise.get_future().get();
+        BOOST_CHECK(entry.has_value());
+        auto code = std::string(entry->getField(SYS_VALUE));
+        std::string codes = AUTH_COMMITTEE_BIN(false);
+        BOOST_CHECK(code == codes);
+    }
+
+    // proposal
+    {
+        std::promise<std::optional<Entry>> getPromise;
+        m_storage->asyncGetRow(bcos::precompiled::AUTH_PROPOSAL_ADDRESS, "code",
+            [&](Error::UniquePtr _error, std::optional<Entry> _entry) {
+                BOOST_CHECK(_error == nullptr);
+                getPromise.set_value(std::move(_entry));
+            });
+        auto entry = getPromise.get_future().get();
+        BOOST_CHECK(entry.has_value());
+        auto code = std::string(entry->getField(SYS_VALUE));
+        std::string codes = AUTH_PROPOSAL_BIN(false);
+        BOOST_CHECK(code == codes);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

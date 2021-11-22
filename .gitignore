@@ -52,3 +52,4 @@ bcos-cmake-scripts/
 
 # macOS
 .DS_Store
+src/libledger/AuthBuiltInInfo.h**
