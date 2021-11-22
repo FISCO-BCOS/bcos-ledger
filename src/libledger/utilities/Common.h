@@ -47,13 +47,13 @@ static const char FS_USER[] = "/usr";
 static const char FS_SYS_BIN[] = "/sys";
 static const char FS_USER_TABLE[] = "/tables";
 // FileSystem keys
-static const char FS_KEY_NAME[] = "name";
-static const char FS_FIELD_TYPE[] = "type";
-static const char FS_FIELD_ACCESS[] = "access";
-static const char FS_FIELD_OWNER[] = "uid";
-static const char FS_FIELD_GID[] = "gid";
-static const char FS_FIELD_EXTRA[] = "extra";
-static const char FS_FIELD_COMBINED[] = "type,access,uid,gid,extra";
+static const char* const FS_KEY_NAME = "name";
+static const char* const FS_FIELD_TYPE = "type";
+static const char* const FS_ACL_TYPE = "acl_type";
+static const char* const FS_ACL_WHITE = "acl_white";
+static const char* const FS_ACL_BLACK = "acl_black";
+static const char* const FS_FIELD_EXTRA = "extra";
+static const char* const FS_FIELD_COMBINED = "type,acl_type,acl_white,acl_black,extra";
 
 // FileSystem file type
 static const char FS_TYPE_DIR[] = "directory";

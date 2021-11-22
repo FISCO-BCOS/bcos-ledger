@@ -1481,9 +1481,9 @@ void Ledger::createFileSystemTables()
     assert(table);
     auto rootEntry = table->newEntry();
     rootEntry.setField(FS_FIELD_TYPE, FS_TYPE_DIR);
-    rootEntry.setField(FS_FIELD_ACCESS, "");
-    rootEntry.setField(FS_FIELD_OWNER, "root");
-    rootEntry.setField(FS_FIELD_GID, "/usr");
+    rootEntry.setField(FS_ACL_TYPE, "0");
+    rootEntry.setField(FS_ACL_WHITE, "");;
+    rootEntry.setField(FS_ACL_BLACK, "");
     rootEntry.setField(FS_FIELD_EXTRA, "");
     table->setRow(FS_ROOT, rootEntry);
 
@@ -1548,9 +1548,9 @@ void Ledger::recursiveBuildDir(const std::string& _absoluteDir)
         // not exist, then create table and write in parent dir
         auto newFileEntry = table->newEntry();
         newFileEntry.setField(FS_FIELD_TYPE, FS_TYPE_DIR);
-        newFileEntry.setField(FS_FIELD_ACCESS, "");
-        newFileEntry.setField(FS_FIELD_OWNER, "root");
-        newFileEntry.setField(FS_FIELD_GID, "/usr");
+        newFileEntry.setField(FS_ACL_TYPE, "0");
+        newFileEntry.setField(FS_ACL_WHITE, "");
+        newFileEntry.setField(FS_ACL_BLACK, "");
         newFileEntry.setField(FS_FIELD_EXTRA, "");
         table->setRow(dir, newFileEntry);
 
