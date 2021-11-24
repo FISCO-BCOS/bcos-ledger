@@ -27,7 +27,6 @@
 #include "bcos-framework/libutilities/Common.h"
 #include "bcos-framework/libutilities/Exceptions.h"
 #include "bcos-framework/libutilities/ThreadPool.h"
-#include "bcos-ledger/libledger/AuthBuiltInInfo.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
 #include "utilities/Common.h"
 #include "utilities/MerkleProofUtility.h"
@@ -41,10 +40,8 @@ class Ledger : public LedgerInterface, public std::enable_shared_from_this<Ledge
 {
 public:
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::storage::StorageInterface::Ptr _storage, bool _isAuthCheck)
-      : m_blockFactory(std::move(_blockFactory)),
-        m_storage(std::move(_storage)),
-        m_isAuthCheck(_isAuthCheck)
+        bcos::storage::StorageInterface::Ptr _storage)
+      : m_blockFactory(std::move(_blockFactory)), m_storage(std::move(_storage))
     {
         assert(m_blockFactory);
         assert(m_storage);
@@ -131,10 +128,8 @@ private:
 
     void createFileSystemTables();
     void recursiveBuildDir(const std::string& _absoluteDir);
-    void createAuthContractTables();
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;
-    bool m_isAuthCheck = false;
 };
 }  // namespace bcos::ledger
