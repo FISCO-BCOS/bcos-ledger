@@ -61,7 +61,6 @@ configure_project()
 include(CompilerSettings)
 
 # install headers firstly
-include(AuthInfoGenerator)
 include(CopyInclude)
 
 # install dependencies

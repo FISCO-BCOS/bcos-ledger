@@ -1317,7 +1317,6 @@ bool Ledger::buildGenesisBlock(
     }
 
     createFileSystemTables();
-    createAuthContractTables();
 
     auto txLimit = _ledgerConfig->blockTxCountLimit();
     LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit);
@@ -1482,7 +1481,7 @@ void Ledger::createFileSystemTables()
     auto rootEntry = table->newEntry();
     rootEntry.setField(FS_FIELD_TYPE, FS_TYPE_DIR);
     rootEntry.setField(FS_ACL_TYPE, "0");
-    rootEntry.setField(FS_ACL_WHITE, "");;
+    rootEntry.setField(FS_ACL_WHITE, "");
     rootEntry.setField(FS_ACL_BLACK, "");
     rootEntry.setField(FS_FIELD_EXTRA, "");
     table->setRow(FS_ROOT, rootEntry);
@@ -1567,41 +1566,5 @@ void Ledger::recursiveBuildDir(const std::string& _absoluteDir)
         }
 
         root += dir;
-    }
-}
-
-void Ledger::createAuthContractTables()
-{
-    if (m_isAuthCheck)
-    {
-        const std::vector<std::string> authTables = {bcos::precompiled::AUTH_INTERCEPT_ADDRESS,
-            bcos::precompiled::AUTH_PROPOSAL_ADDRESS, bcos::precompiled::AUTH_COMMITTEE_ADDRESS};
-        bool isSM =
-            (m_blockFactory->cryptoSuite()->hashImpl()->getHashImplType() == HashImplType::Sm3Hash);
-        std::string authCode[] = {
-            AUTH_INTERCEPT_BIN(isSM), AUTH_PROPOSAL_BIN(isSM), AUTH_COMMITTEE_BIN(isSM)};
-        for (size_t i = 0; i < authTables.size(); i++)
-        {
-            std::promise<Error::UniquePtr> createPromise;
-            m_storage->asyncCreateTable(
-                authTables[i], SYS_VALUE, [&createPromise](auto&& error, std::optional<Table>&&) {
-                    createPromise.set_value({std::forward<decltype(error)>(error)});
-                });
-            auto createError = createPromise.get_future().get();
-            if (createError)
-            {
-                BOOST_THROW_EXCEPTION(*createError);
-            }
-            std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> openPromise;
-            m_storage->asyncOpenTable(
-                authTables[i], [&openPromise](auto&& error, std::optional<Table>&& table) {
-                    openPromise.set_value({std::forward<decltype(error)>(error), std::move(table)});
-                });
-            auto [openError, table] = openPromise.get_future().get();
-            assert(table);
-            auto codeEntry = table->newEntry();
-            codeEntry.setField(SYS_VALUE, authCode[i]);
-            table->setRow("code", codeEntry);
-        }
     }
 }
