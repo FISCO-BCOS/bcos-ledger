@@ -59,6 +59,12 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     }
 
     auto mutableBlock = std::const_pointer_cast<bcos::protocol::Block>(block);
+    if (mutableBlock->blockHeader()->number() == 0 && mutableBlock->transactionsSize() > 0)
+    {
+        // sys contract deploy
+        callback(nullptr);
+        return;
+    }
     auto header = mutableBlock->blockHeader();
 
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
