@@ -28,7 +28,7 @@ include(FetchContent)
 set(BCOS_CMAKE_SCRIPTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts)
 FetchContent_Declare(bcos-cmake-scripts
     GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-cmake-scripts.git
-    GIT_TAG 08292fda15eea792a90254b3d1c4c80a7595c722
+    GIT_TAG 2d25e8957323ffa86a55528c22348088ba99e9c6
     SOURCE_DIR ${BCOS_CMAKE_SCRIPTS_DIR}
     LOG_CONFIGURE 1
     LOG_DOWNLOAD 1
@@ -46,8 +46,8 @@ list(APPEND CMAKE_MODULE_PATH ${BCOS_LEDGER_CMAKE_DIR})
 # init hunter
 include(HunterGate)
 HunterGate(
-        URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/8c81ea454c0c268b257da1fe3e3f2f69bd59a67d.tar.gz"
-        SHA1 "13292adf48c4c053ff2ceb7173631a296c08d1ac"
+        URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/858de38e7c4c654499f36171feb1057f59e88b71.tar.gz"
+        SHA1 "19eeb6de3c56397e7ed6b45bbc57f2b4000e5b97"
         FILEPATH "${BCOS_LEDGER_CMAKE_DIR}/config.cmake"
 )
 
