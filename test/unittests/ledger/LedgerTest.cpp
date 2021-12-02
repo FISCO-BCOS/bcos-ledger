@@ -31,7 +31,9 @@
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework/libcodec/scale/Scale.h>
 #include <bcos-framework/libstorage/StateStorage.h>
+#include <bcos-framework/libutilities/DataConvertUtility.h>
 #include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <boost/lexical_cast.hpp>
@@ -81,7 +83,7 @@ public:
         BOOST_CHECK(m_blockFactory->transactionFactory() != nullptr);
         initStorage();
     }
-    ~LedgerFixture() {}
+    ~LedgerFixture() = default;
 
     inline void initStorage()
     {
@@ -330,16 +332,25 @@ BOOST_AUTO_TEST_CASE(testFixtureLedger)
         });
 
     std::promise<bool> p7;
-    std::vector<std::string_view> v = {"apps", "usr", "sys", "tables"};
-    m_storage->asyncGetRows(
-        FS_ROOT, v, [&](Error::UniquePtr _error, std::vector<std::optional<Entry>> _entries) {
-            BOOST_CHECK(!_error);
-            for (auto& entry : _entries)
-            {
-                BOOST_CHECK(entry != std::nullopt);
-            }
-            p7.set_value(true);
-        });
+    std::vector<std::string> v = {"apps", "usr", "sys", "tables"};
+    m_storage->asyncGetRow(FS_ROOT, FS_KEY_SUB, [&](Error::UniquePtr, std::optional<Entry> _entry) {
+        std::map<std::string, std::string> bfsInfos;
+        auto&& out = asBytes(std::string(_entry->getField(0)));
+        codec::scale::decode(bfsInfos, gsl::make_span(out));
+        for (const auto& item : v)
+        {
+            BOOST_CHECK(bfsInfos.find(item) != bfsInfos.end());
+            std::promise<bool> p;
+            m_storage->asyncOpenTable(
+                "/" + item, [&](Error::UniquePtr _error, std::optional<Table> _table) {
+                    BOOST_CHECK(!_error);
+                    BOOST_CHECK(_table.has_value());
+                    p.set_value(true);
+                });
+            p.get_future().get();
+        }
+        p7.set_value(true);
+    });
     p7.get_future().get();
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
