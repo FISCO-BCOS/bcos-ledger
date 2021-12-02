@@ -127,7 +127,11 @@ private:
         std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
 
     void createFileSystemTables();
-    void recursiveBuildDir(const std::string& _absoluteDir);
+
+    void buildDir(const std::string& _absoluteDir);
+
+    // only for /sys/
+    inline std::string getSysBaseName(std::string _s) { return _s.substr(_s.find_last_of('/')); }
 
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::storage::StorageInterface::Ptr m_storage;

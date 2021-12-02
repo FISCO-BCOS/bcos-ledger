@@ -32,6 +32,7 @@
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/storage/Table.h>
+#include <bcos-framework/libcodec/scale/Scale.h>
 #include <bcos-framework/libprotocol/ParallelMerkleProof.h>
 #include <bcos-framework/libtool/ConsensusNode.h>
 #include <tbb/parallel_for.h>
@@ -1465,112 +1466,89 @@ bool Ledger::buildGenesisBlock(
 void Ledger::createFileSystemTables()
 {
     // create / dir
-    std::promise<Error::UniquePtr> createPromise;
+    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> createPromise;
     m_storage->asyncCreateTable(
-        FS_ROOT, FS_FIELD_COMBINED, [&createPromise](auto&& error, std::optional<Table>&&) {
-            createPromise.set_value({std::move(error)});
+        FS_ROOT, SYS_VALUE, [&createPromise](auto&& error, std::optional<Table>&& _table) {
+            createPromise.set_value({std::forward<decltype(error)>(error), std::move(_table)});
         });
-    auto createError = createPromise.get_future().get();
+    auto [createError, rootTable] = createPromise.get_future().get();
     if (createError)
     {
         BOOST_THROW_EXCEPTION(*createError);
     }
 
-    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> openPromise;
-    m_storage->asyncOpenTable(FS_ROOT, [&openPromise](auto&& error, std::optional<Table>&& table) {
-        openPromise.set_value({std::move(error), std::move(table)});
-    });
+    // root table must exist
 
-    auto [openError, table] = openPromise.get_future().get();
+    Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
+    std::map<std::string, std::string> newSubMap;
+    newSubMap.insert(std::make_pair("usr", FS_TYPE_DIR));
+    newSubMap.insert(std::make_pair("apps", FS_TYPE_DIR));
+    newSubMap.insert(std::make_pair("sys", FS_TYPE_DIR));
+    newSubMap.insert(std::make_pair("tables", FS_TYPE_DIR));
 
-    assert(table);
-    auto rootEntry = table->newEntry();
-    rootEntry.setField(FS_FIELD_TYPE, FS_TYPE_DIR);
-    rootEntry.setField(FS_ACL_TYPE, "0");
-    rootEntry.setField(FS_ACL_WHITE, "");
-    rootEntry.setField(FS_ACL_BLACK, "");
-    rootEntry.setField(FS_FIELD_EXTRA, "");
-    table->setRow(FS_ROOT, rootEntry);
+    tEntry.importFields({FS_TYPE_DIR});
+    newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
+    aclTypeEntry.importFields({"0"});
+    aclWEntry.importFields({""});
+    aclBEntry.importFields({""});
+    extraEntry.importFields({""});
+    rootTable->setRow(FS_KEY_TYPE, std::move(tEntry));
+    rootTable->setRow(FS_KEY_SUB, std::move(newSubEntry));
+    rootTable->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
+    rootTable->setRow(FS_ACL_WHITE, std::move(aclWEntry));
+    rootTable->setRow(FS_ACL_BLACK, std::move(aclBEntry));
+    rootTable->setRow(FS_KEY_EXTRA, std::move(extraEntry));
 
-    recursiveBuildDir(FS_USER);
-    recursiveBuildDir(FS_SYS_BIN);
-    recursiveBuildDir(FS_APPS);
-    recursiveBuildDir(FS_USER_TABLE);
+    buildDir(FS_USER);
+    buildDir(FS_SYS_BIN);
+    buildDir(FS_APPS);
+    buildDir(FS_USER_TABLE);
 }
 
-void Ledger::recursiveBuildDir(const std::string& _absoluteDir)
+void Ledger::buildDir(const std::string& _absoluteDir)
 {
-    if (_absoluteDir.empty())
-    {
-        return;
-    }
-    // transfer /usr/local/bin => ["usr", "local", "bin"]
-    auto dirList = std::make_shared<std::vector<std::string>>();
-    std::string absoluteDir = _absoluteDir;
-    if (absoluteDir[0] == '/')
-    {
-        absoluteDir = absoluteDir.substr(1);
-    }
-    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
-    {
-        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
-    }
-    boost::split(*dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
-    std::string root = "/";
-    for (auto& dir : *dirList)
-    {
-        std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> openPromise;
-        m_storage->asyncOpenTable(root, [&openPromise](auto&& error, std::optional<Table>&& table) {
-            openPromise.set_value({std::move(error), std::move(table)});
+    std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> createPromise;
+    m_storage->asyncCreateTable(
+        _absoluteDir, SYS_VALUE, [&createPromise](auto&& error, std::optional<Table>&& _table) {
+            createPromise.set_value({std::forward<decltype(error)>(error), std::move(_table)});
         });
-
-        auto [openError, table] = openPromise.get_future().get();
-
-        if (openError)
-        {
-            BOOST_THROW_EXCEPTION(*openError);
-        }
-
-        if (!table)
-        {
-            LEDGER_LOG(ERROR) << LOG_BADGE("recursiveBuildDir")
-                              << LOG_DESC("can not open path table") << LOG_KV("tableName", root);
-            return;
-        }
-        if (root != "/")
-        {
-            root += "/";
-        }
-        auto entry = table->getRow(dir);
-        if (entry)
-        {
-            LEDGER_LOG(DEBUG) << LOG_BADGE("recursiveBuildDir")
-                              << LOG_DESC("dir already existed in parent dir, continue")
-                              << LOG_KV("parentDir", root) << LOG_KV("dir", dir);
-            root += dir;
-            continue;
-        }
-        // not exist, then create table and write in parent dir
-        auto newFileEntry = table->newEntry();
-        newFileEntry.setField(FS_FIELD_TYPE, FS_TYPE_DIR);
-        newFileEntry.setField(FS_ACL_TYPE, "0");
-        newFileEntry.setField(FS_ACL_WHITE, "");
-        newFileEntry.setField(FS_ACL_BLACK, "");
-        newFileEntry.setField(FS_FIELD_EXTRA, "");
-        table->setRow(dir, newFileEntry);
-
-        std::promise<Error::UniquePtr> createPromise;
-        m_storage->asyncCreateTable(
-            root + dir, FS_FIELD_COMBINED, [&createPromise](auto&& error, std::optional<Table>&&) {
-                createPromise.set_value({std::move(error)});
-            });
-
-        auto createError = createPromise.get_future().get();
-        if (createError)
-        {
-            BOOST_THROW_EXCEPTION(*createError);
-        }
-
-        root += dir;
+    auto [createError, table] = createPromise.get_future().get();
+    if (createError)
+    {
+        BOOST_THROW_EXCEPTION(*createError);
     }
+    Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
+    std::map<std::string, std::string> newSubMap;
+    if (_absoluteDir == FS_SYS_BIN)
+    {
+        // clang-format off
+        std::vector sysContracts({
+            getSysBaseName(precompiled::SYS_CONFIG_NAME),
+            getSysBaseName(precompiled::CONSENSUS_NAME),
+            getSysBaseName(precompiled::CNS_NAME),
+            getSysBaseName(precompiled::CONTRACT_AUTH_NAME),
+            getSysBaseName(precompiled::PARALLEL_CONFIG_NAME),
+            getSysBaseName(precompiled::KV_TABLE_NAME),
+            getSysBaseName(precompiled::CRYPTO_NAME),
+            getSysBaseName(precompiled::BFS_NAME),
+            getSysBaseName(precompiled::TABLE_NAME)
+        });
+        // clang-format on
+        for (const auto& contract : sysContracts)
+        {
+            newSubMap.insert(std::make_pair(contract, FS_TYPE_CONTRACT));
+        }
+    }
+    tEntry.importFields({FS_TYPE_DIR});
+    newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
+    aclTypeEntry.importFields({"0"});
+    aclWEntry.importFields({""});
+    aclBEntry.importFields({""});
+    extraEntry.importFields({""});
+    table->setRow(FS_KEY_TYPE, std::move(tEntry));
+    table->setRow(FS_KEY_SUB, std::move(newSubEntry));
+    table->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
+    table->setRow(FS_ACL_WHITE, std::move(aclWEntry));
+    table->setRow(FS_ACL_BLACK, std::move(aclBEntry));
+    table->setRow(FS_KEY_EXTRA, std::move(extraEntry));
 }
