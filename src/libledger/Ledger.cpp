@@ -38,6 +38,7 @@
 #include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/lexical_cast/bad_lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <future>
 #include <memory>
@@ -698,7 +699,16 @@ void Ledger::asyncGetTotalTransactionCount(
                 }
                 else
                 {
-                    value = boost::lexical_cast<int64_t>(entry->getField(0));
+                    try
+                    {
+                        value = boost::lexical_cast<int64_t>(entry->getField(0));
+                    }
+                    catch (boost::bad_lexical_cast& e)
+                    {
+                        LEDGER_LOG(ERROR) << "Lexical cast transaction count failed, entry value: "
+                                          << entry->get();
+                        BOOST_THROW_EXCEPTION(e);
+                    }
                 }
                 switch (i++)
                 {
@@ -751,6 +761,13 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                         return;
                     }
 
+                    if (!entry)
+                    {
+                        LEDGER_LOG(WARNING) << "Entry doesn't exists";
+                    }
+
+                    LEDGER_LOG(TRACE) << "Entry value: " << entry->get();
+
                     auto [value, number] = entry->getObject<SystemConfigEntry>();
 
                     // The param was reset at height getLatestBlockNumber(), and takes effect in
@@ -768,7 +785,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
 
                     LEDGER_LOG(INFO) << "GetSystemConfigByKey success" << LOG_KV("value", value)
                                      << LOG_KV("number", number);
-                    callback(nullptr, std::string(value), number);
+                    callback(nullptr, std::move(value), number);
                 }
                 catch (std::exception& e)
                 {
