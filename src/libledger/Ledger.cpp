@@ -263,7 +263,7 @@ void Ledger::asyncStoreTransactions(std::shared_ptr<std::vector<bytesConstPtr>> 
             for (size_t i = 0; i < txList->size(); ++i)
             {
                 auto entry = table->newEntry();
-                entry.setField(SYS_VALUE, *((*txList)[i]));  // copy the bytes entry
+                entry.setField(0, *((*txList)[i]));  // copy the bytes entry
 
                 LEDGER_LOG(TRACE) << "Write transaction" << LOG_KV("hash", (*hashList)[i].hex());
                 table->asyncSetRow(
@@ -627,7 +627,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
                 return;
             }
 
-            auto value = entry->getField(SYS_VALUE);
+            auto value = entry->getField(0);
             auto receipt = m_blockFactory->receiptFactory()->createReceipt(
                 bcos::bytesConstRef((bcos::byte*)value.data(), value.size()));
 
@@ -698,7 +698,7 @@ void Ledger::asyncGetTotalTransactionCount(
                 }
                 else
                 {
-                    value = boost::lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+                    value = boost::lexical_cast<int64_t>(entry->getField(0));
                 }
                 switch (i++)
                 {
@@ -751,9 +751,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                         return;
                     }
 
-                    auto value = entry->getField(SYS_VALUE);
-                    auto number = boost::lexical_cast<bcos::protocol::BlockNumber>(
-                        entry->getField(SYS_CONFIG_ENABLE_BLOCK_NUMBER));
+                    auto [value, number] = entry->getObject<SystemConfigEntry>();
 
                     // The param was reset at height getLatestBlockNumber(), and takes effect in
                     // next block. So we query the status of getLatestBlockNumber() + 1.
@@ -840,7 +838,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                         continue;
                     }
 
-                    auto value = entry->getField(SYS_VALUE);
+                    auto value = entry->getField(0);
                     auto block = m_blockFactory->createBlock(
                         bcos::bytesConstRef((bcos::byte*)value.data(), value.size()), false, false);
 
@@ -983,7 +981,7 @@ void Ledger::asyncGetBlockHeader(bcos::protocol::Block::Ptr block,
                         return;
                     }
 
-                    auto field = entry->getField(SYS_VALUE);
+                    auto field = entry->getField(0);
                     auto headerPtr = m_blockFactory->blockHeaderFactory()->createBlockHeader(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
 
@@ -1015,7 +1013,7 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNum
                         return;
                     }
 
-                    auto txs = entry->getField(SYS_VALUE);
+                    auto txs = entry->getField(0);
                     auto blockWithTxs = m_blockFactory->createBlock(
                         bcos::bytesConstRef((bcos::byte*)txs.data(), txs.size()));
 
@@ -1075,7 +1073,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                 }
                 else
                 {
-                    auto field = entry->getField(SYS_VALUE);
+                    auto field = entry->getField(0);
                     auto transaction = m_blockFactory->transactionFactory()->createTransaction(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
                     transactions.push_back(std::move(transaction));
@@ -1128,7 +1126,7 @@ void Ledger::asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> has
                         return;
                     }
 
-                    auto field = entry->getField(SYS_VALUE);
+                    auto field = entry->getField(0);
                     auto receipt = m_blockFactory->receiptFactory()->createReceipt(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
                     receipts.push_back(std::move(receipt));
@@ -1366,19 +1364,19 @@ bool Ledger::buildGenesisBlock(
 
     // tx count limit
     Entry txLimitEntry;
-    txLimitEntry.importFields(
-        {boost::lexical_cast<std::string>(_ledgerConfig->blockTxCountLimit()), "0"});
+    txLimitEntry.setObject(
+        SystemConfigEntry{boost::lexical_cast<std::string>(_ledgerConfig->blockTxCountLimit()), 0});
     sysTable->setRow(SYSTEM_KEY_TX_COUNT_LIMIT, std::move(txLimitEntry));
 
     // tx gas limit
     Entry gasLimitEntry;
-    gasLimitEntry.importFields({boost::lexical_cast<std::string>(_gasLimit), "0"});
+    gasLimitEntry.setObject(SystemConfigEntry{boost::lexical_cast<std::string>(_gasLimit), 0});
     sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
 
     // consensus leader period
     Entry leaderPeriodEntry;
-    leaderPeriodEntry.importFields(
-        {boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), "0"});
+    leaderPeriodEntry.setObject(SystemConfigEntry{
+        boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), 0});
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
     // write consensus node list

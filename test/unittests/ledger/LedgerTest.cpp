@@ -464,7 +464,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
 
                     m_ledger->asyncGetBlockNumberByHash(
                         hash, [&](Error::Ptr error, BlockNumber number) {
-                            BOOST_CHECK(error);
+                            BOOST_CHECK(!error);
                             BOOST_CHECK_EQUAL(number, -1);
 
                             p3.set_value(true);
@@ -960,11 +960,12 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     auto table = tablePromise.get_future().get();
 
     auto oldEntry = table.getRow(SYSTEM_KEY_TX_COUNT_LIMIT);
-    BOOST_CHECK_EQUAL(oldEntry->getField(0), "1000");
+    auto [txCountLimit, enableNum] = oldEntry->getObject<SystemConfigEntry>();
+    BOOST_CHECK_EQUAL(txCountLimit, "1000");
+    BOOST_CHECK_EQUAL(enableNum, 0);
 
     Entry newEntry = table.newEntry();
-    newEntry.setField(SYS_VALUE, "2000");
-    newEntry.setField(SYS_CONFIG_ENABLE_BLOCK_NUMBER, "5");
+    newEntry.setObject(SystemConfigEntry{"2000", 5});
 
     table.setRow(SYSTEM_KEY_TX_COUNT_LIMIT, newEntry);
 
