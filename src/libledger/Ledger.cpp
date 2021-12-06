@@ -1537,7 +1537,7 @@ void Ledger::buildDir(const std::string& _absoluteDir)
     if (_absoluteDir == FS_SYS_BIN)
     {
         // clang-format off
-        std::vector sysContracts({
+        std::vector<std::string> sysContracts({
             getSysBaseName(precompiled::SYS_CONFIG_NAME),
             getSysBaseName(precompiled::CONSENSUS_NAME),
             getSysBaseName(precompiled::CNS_NAME),
