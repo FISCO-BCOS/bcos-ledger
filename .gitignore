@@ -30,3 +30,25 @@
 *.exe
 *.out
 *.app
+
+# ignore some directory
+build**
+deps
+deps/**
+
+# vs
+*.sln
+*.vcxproj*
+.vs/
+.vscode/**
+
+# jetbrain
+.idea
+build/**
+
+# submodules
+bcos-cmake-scripts/**
+bcos-cmake-scripts/
+
+# macOS
+.DS_Store
