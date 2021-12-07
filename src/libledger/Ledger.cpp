@@ -60,19 +60,18 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         return;
     }
 
-    auto mutableBlock = std::const_pointer_cast<bcos::protocol::Block>(block);
-    if (mutableBlock->blockHeader()->number() == 0 && mutableBlock->transactionsSize() > 0)
+    if (block->blockHeaderConst()->number() == 0 && block->transactionsSize() > 0)
     {
         // sys contract deploy
         callback(nullptr);
         return;
     }
-    auto header = mutableBlock->blockHeader();
+    auto header = block->blockHeaderConst();
 
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
 
     // 8 storage callbacks and write hash=>receipt
-    size_t TOTAL_CALLBACK = 8 + mutableBlock->receiptsSize();
+    size_t TOTAL_CALLBACK = 8 + block->receiptsSize();
     auto setRowCallback = [total = std::make_shared<std::atomic<size_t>>(TOTAL_CALLBACK),
                               failed = std::make_shared<bool>(false),
                               callback = std::move(callback)](
@@ -129,7 +128,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     // number 2 nonce
     auto nonceBlock = m_blockFactory->createBlock();
-    nonceBlock->setNonceList(mutableBlock->nonceList());
+    nonceBlock->setNonceList(block->nonceList());
     bytes nonceBuffer;
     nonceBlock->encode(nonceBuffer);
 
@@ -173,27 +172,33 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
 
     // hash 2 receipts
-    bytes receiptBuffer;
+
     int64_t totalCount = 0;
     int64_t failedCount = 0;
-    for (size_t i = 0; i < mutableBlock->receiptsSize(); ++i)
-    {
-        auto hash = mutableBlock->transactionHash(i);
-        auto receipt = mutableBlock->receipt(i);
-        if (receipt->status() != 0)
-        {
-            failedCount++;
-        }
-        totalCount++;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, block->receiptsSize()),
+        [&storage, &transactionsBlock, &block, &failedCount, &totalCount, &setRowCallback](
+            const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end(); ++i)
+            {
+                auto hash = transactionsBlock->transactionHash(i);
 
-        receiptBuffer.clear();
-        receipt->encode(receiptBuffer);
+                auto receipt = block->receipt(i);
+                if (receipt->status() != 0)
+                {
+                    failedCount++;
+                }
+                totalCount++;
 
-        Entry receiptEntry;
-        receiptEntry.importFields({std::move(receiptBuffer)});
-        storage->asyncSetRow(SYS_HASH_2_RECEIPT, hash.hex(), std::move(receiptEntry),
-            [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
-    }
+                bytes receiptBuffer;
+                receipt->encode(receiptBuffer);
+
+                Entry receiptEntry;
+                receiptEntry.importFields({std::move(receiptBuffer)});
+                storage->asyncSetRow(SYS_HASH_2_RECEIPT, hash.hex(), std::move(receiptEntry),
+                    [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
+            }
+        });
+
 
     LEDGER_LOG(DEBUG) << LOG_DESC("Calculate tx counts in block")
                       << LOG_KV("number", blockNumberStr) << LOG_KV("totalCount", totalCount)
@@ -201,7 +206,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     // total transaction count
     asyncGetTotalTransactionCount(
-        [storage, mutableBlock, setRowCallback, totalCount, failedCount](
+        [storage, block, setRowCallback, totalCount, failedCount](
             Error::Ptr error, int64_t total, int64_t failed, bcos::protocol::BlockNumber) {
             if (error)
             {
