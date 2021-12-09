@@ -225,7 +225,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             {
                 Entry failedEntry;
                 failedEntry.importFields({boost::lexical_cast<std::string>(failed + failedCount)});
-                storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
+                storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
                     std::move(failedEntry),
                     [setRowCallback](auto&& error) { setRowCallback(std::move(error)); });
             }
